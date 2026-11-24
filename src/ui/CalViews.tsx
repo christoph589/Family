@@ -7,7 +7,7 @@ import { Avatar } from './Avatar';
 import { C, s } from './theme';
 
 export type CalMode = 'tag' | '3tage' | 'woche' | 'monat';
-export type CalItem = { key: string; time?: string; end?: string; title: string; color: string; tag?: string; badge?: string; who?: string[]; people?: { id: string; name: string; color: string; photo?: string }[] };
+export type CalItem = { key: string; time?: string; end?: string; title: string; color: string; tag?: string; badge?: string; who?: string[]; people?: { id: string; name: string; color: string; photo?: string }[]; drive?: string; note?: string };
 /** Filter nach Personen: leer = alle. Familientermine (ohne Personen) bleiben immer sichtbar. */
 export const matchesPeople = (it: CalItem, ids: string[]) => !ids.length || !it.who?.length || it.who.some(w => ids.includes(w));
 export const CAL_MODES: { value: CalMode; label: string }[] = [
@@ -40,10 +40,10 @@ export function stepAnchor(mode: CalMode, anchor: string, dir: 1 | -1) {
 }
 export function rangeLabel(mode: CalMode, anchor: string) {
   const f = (d: string, o: Intl.DateTimeFormatOptions) => parse(d).toLocaleDateString('de-DE', o);
-  if (mode === 'tag') return f(anchor, { weekday: 'long', day: 'numeric', month: 'long' });
+  if (mode === 'tag') return f(anchor, { weekday: 'short', day: 'numeric', month: 'long' });
   if (mode === 'monat') return f(anchor, { month: 'long', year: 'numeric' });
-  const ds = daysOf(mode, anchor);
-  return `${f(ds[0], { day: 'numeric', month: 'short' })} bis ${f(ds[ds.length - 1], { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const ds = daysOf(mode, anchor), a = ds[0], b = ds[ds.length - 1];
+  return a.slice(0, 7) === b.slice(0, 7) ? `${parse(a).getDate()}.–${f(b, { day: 'numeric', month: 'short' })}` : `${f(a, { day: 'numeric', month: 'short' })} – ${f(b, { day: 'numeric', month: 'short' })}`;
 }
 
 /** Alle Einträge eines Tages aus den Familiendaten. childIds = null zeigt alles (Eltern, Wandansicht). */
@@ -59,7 +59,10 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
   });
   const ev = eventsOn(data, date, childIds).map(e => {
     const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
-    return { key: e.id, time: e.time, end: e.end, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, tag: ps.length ? ps.map(p => p.name).join(', ') : 'Alle', who: e.who, people: ps };
+    const nm = (id?: string) => people.find(p => p.id === id)?.name;
+    const b = nm(e.bring), pk = nm(e.pick);
+    const drive = b && pk && b === pk ? `🚗 ${b} hin und zurück` : [b && `🚗 ${b}`, pk && `🏠 ${pk}`].filter(Boolean).join(' · ') || undefined;
+    return { key: e.id, time: e.time, end: e.end, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, tag: ps.length ? ps.map(p => p.name).join(', ') : 'Alle', who: e.who, people: ps, drive, note: e.note };
   });
   const tasks = data.tasks
     .filter(t => t.repeat === 'einmal' && t.date === date && isDueOn(t, date, data) && (!childIds || childIds.includes(t.childId)))
@@ -169,19 +172,46 @@ export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat, 
 
   if (mode !== 'woche' || width >= 700) return <TimeGrid days={days} itemsFor={itemsFor} flat={flat} onItemPress={onItemPress} />;
 
-  const big = false;
+  return <Agenda days={days} itemsFor={itemsFor} onItemPress={onItemPress} onPickDay={onPickDay} />;
+}
+
+/** Woche am Handy: eine Zeile pro Tag. Schule wird zu einer kurzen Zeile zusammengefasst, Termine stehen darunter. */
+function Agenda({ days, itemsFor, onItemPress, onPickDay }: { days: string[]; itemsFor: (d: string) => CalItem[]; onItemPress?: (it: CalItem, date: string) => void; onPickDay?: (date: string) => void }) {
+  const t = today();
   return (
-    <View style={[s.row, { alignItems: 'stretch', gap: 10 }]}>
-      {days.map(d => {
+    <View style={[s.card, { padding: 6, gap: 0 }]}>
+      {days.map((d, i) => {
         const items = itemsFor(d);
-        const isToday = d === t;
+        const school = items.filter(it => it.key.startsWith('s') && it.tag === 'Schule');
+        const rest = items.filter(it => !school.includes(it));
+        const isToday = d === t, wd = parse(d).getDay(), weekend = wd === 0 || wd === 6;
+        const from = school.map(x => x.time).filter(Boolean).sort()[0], to = school.map(x => x.end).filter(Boolean).sort().pop();
         return (
-          <View key={d} style={[s.card, flat && { backgroundColor: C.bg }, { flexGrow: 1, flexBasis: mode === 'woche' ? 140 : 220, minWidth: 0, padding: 12, gap: 8, borderWidth: isToday ? 2 : 0, borderColor: C.accent }]}>
-            <Text style={{ fontWeight: '800', fontSize: big ? 20 : 15, color: isToday ? C.accent : C.fg }}>
-              {parse(d).toLocaleDateString('de-DE', big ? { weekday: 'long', day: 'numeric', month: 'long' } : { weekday: 'short', day: 'numeric', month: 'numeric' })}
-            </Text>
-            {items.length === 0 && <Text style={[s.muted, { fontSize: big ? 16 : 13 }]}>Keine Termine</Text>}
-            {items.map(it => render(it, big))}
+          <View key={d} style={{ flexDirection: 'row', gap: 10, paddingVertical: 10, paddingHorizontal: 8, borderTopWidth: i ? 1 : 0, borderTopColor: C.line, backgroundColor: isToday ? C.accentSoft : 'transparent', borderRadius: isToday ? 14 : 0 }}>
+            <Pressable disabled={!onPickDay} onPress={() => onPickDay?.(d)} accessibilityRole="button" accessibilityLabel={`${parse(d).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })} öffnen`}
+              style={{ width: 44, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: isToday ? C.accent : weekend ? C.accent2 : C.muted }}>{WD[(wd + 6) % 7]}</Text>
+              <Text style={{ fontSize: 22, fontWeight: '800', color: isToday ? C.accent : C.fg }}>{parse(d).getDate()}</Text>
+            </Pressable>
+            <View style={{ flex: 1, minWidth: 0, gap: 5, justifyContent: 'center' }}>
+              {school.length > 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', gap: 2 }}>{school.map(x => <View key={x.key} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: x.color }} />)}</View>
+                  <Text style={{ fontSize: 12.5, color: C.muted }} numberOfLines={1}>🏫 Schule {from ?? ''}{to ? `–${to}` : ''}{school.length === 1 ? ` · ${school[0].title.replace('🏫 ', '')}` : ''}</Text>
+                </View>
+              )}
+              {rest.map(it => (
+                <Pressable key={it.key} disabled={!onItemPress} onPress={() => onItemPress?.(it, d)} accessibilityRole="button" accessibilityLabel={`${it.time ?? ''} ${it.title}`}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderLeftWidth: 4, borderLeftColor: it.color, backgroundColor: it.color + '14', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: C.muted, width: 40 }}>{it.time ?? 'ganzt.'}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 14.5, fontWeight: '700', color: C.fg }} numberOfLines={1}>{it.title}</Text>
+                    {(it.tag || it.drive) ? <Text style={{ fontSize: 12, color: C.muted }} numberOfLines={1}>{[it.tag, it.drive].filter(Boolean).join(' · ')}</Text> : null}
+                  </View>
+                </Pressable>
+              ))}
+              {!items.length && <Text style={{ fontSize: 13, color: C.muted }}>frei</Text>}
+            </View>
           </View>
         );
       })}
@@ -206,7 +236,8 @@ function TimeGrid({ days, itemsFor, flat, onItemPress }: { days: string[]; items
   const GUTTER = 34;
   // Schulzeiten als schmale Streifen am linken Rand, sobald mehr als ein Tag zu sehen ist.
   // So bleibt auch bei vielen Kindern Platz für die eigentlichen Termine.
-  const stripes = days.length > 1;
+  const { width } = useWindowDimensions();
+  const stripes = days.length > 1 || width < 600;
   let pad = 0;
   const isSchool = (i: CalItem) => i.key.startsWith('s') && i.tag === 'Schule';
 

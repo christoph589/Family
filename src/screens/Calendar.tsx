@@ -10,6 +10,7 @@ import { guessIcon, IconPicker } from '../ui/IconPicker';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 import { useFeedItems } from '../data/feeds';
+import { LetterImport } from './Letter';
 
 const parse = (d: string) => new Date(d + 'T12:00:00');
 
@@ -25,6 +26,8 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
   const [gMsg, setGMsg] = useState('');
   const [cals, setCals] = useState<GCal[] | null>(null);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<CalEvent | null>(null);
+  const [letter, setLetter] = useState(false);
   const days = daysOf(mode, anchor);
   const calId = data?.settings?.googleCalendarId;
 
@@ -63,15 +66,23 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
 
   return (
     <View style={{ gap: 16 }}>
-      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <Button title="+ Termin" onPress={() => setAdding(true)} /> : undefined} />
+      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} /><Button title="+ Termin" onPress={() => setAdding(true)} /></View> : undefined} />
 
       {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
+
+      {editing && <EventForm key={editing.id} initial={editing} people={people} days={daysOf('woche', anchor)} onCancel={() => setEditing(null)} onSave={ev => { update(d => ({ ...d, events: (d.events ?? []).map(e => (e.id === ev.id ? ev : e)) })); setEditing(null); }} />}
+      {letter && <LetterImport onDone={n => { setLetter(false); }} />}
 
       {sel && (
         <View style={[s.card, { borderLeftWidth: 6, borderLeftColor: sel.it.color }]}>
           <Text style={s.h2}>{sel.it.title}</Text>
           <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
+          {(() => { const ev = (data.events ?? []).find(e => e.id === sel.it.key); if (!ev) return null; const dt = driveText(ev, people); return (<>
+            {dt ? <Text style={[s.text, { fontWeight: '700' }]}>{dt}</Text> : null}
+            {ev.note ? <Text style={s.text}>📝 {ev.note}</Text> : null}
+          </>); })()}
           <View style={s.row}>
+            {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button ghost title="✏️ Bearbeiten" onPress={() => { setEditing((data.events ?? []).find(e => e.id === sel.it.key) ?? null); setSel(null); }} />}
             {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button title="Termin löschen" color={C.danger} onPress={() => { update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
             <Button ghost title="Schließen" onPress={() => setSel(null)} />
           </View>
@@ -124,22 +135,26 @@ function EventRow({ item, canDelete, onDelete }: { item: Item; canDelete: boolea
   );
 }
 
-export function EventForm({ people, days, onSave, onCancel }: { people: Person[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void }) {
-  const [title, setTitle] = useState('');
-  const [icon, setIcon] = useState('');
-  const [iconTouched, setIconTouched] = useState(false);
-  const [date, setDate] = useState(days.includes(today()) ? today() : days[0]);
-  const [time, setTime] = useState('');
-  const [end, setEnd] = useState('');
-  const [who, setWho] = useState<string[]>([]);
-  const [weekly, setWeekly] = useState(false);
+export function EventForm({ people, days, onSave, onCancel, initial }: { people: Person[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void; initial?: CalEvent }) {
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [icon, setIcon] = useState(initial?.icon ?? '');
+  const [iconTouched, setIconTouched] = useState(!!initial);
+  const [date, setDate] = useState(initial?.date ?? (days.includes(today()) ? today() : days[0]));
+  const [time, setTime] = useState(initial?.time ?? '');
+  const [end, setEnd] = useState(initial?.end ?? '');
+  const [who, setWho] = useState<string[]>(initial?.who ?? []);
+  const [weekly, setWeekly] = useState(!!initial?.weekly);
+  const [bring, setBring] = useState(initial?.bring ?? '');
+  const [pick, setPick] = useState(initial?.pick ?? '');
+  const [note, setNote] = useState(initial?.note ?? '');
+  const adults = people.filter(p => p.role === 'eltern');
   const re = /^([01]?\d|2[0-3]):[0-5]\d$/;
   const fix = (t: string) => t.padStart(5, '0');
   const addMin = (t: string, n: number) => { const x = Math.min(23 * 60 + 59, +t.slice(0, 2) * 60 + +t.slice(3, 5) + n); return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
   const timeOk = (!time || re.test(time)) && (!end || (re.test(end) && !!time && fix(end) > fix(time)));
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
-      <Text style={s.h2}>Neuer Termin</Text>
+      <Text style={s.h2}>{initial ? 'Termin bearbeiten' : 'Neuer Termin'}</Text>
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
         <IconPicker value={icon} onChange={v => { setIcon(v); setIconTouched(true); }} />
         <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={t => { setTitle(t); if (!iconTouched) setIcon(guessIcon(t)); }} placeholder="z. B. Fußballtraining" accessibilityLabel="Titel" />
@@ -183,6 +198,11 @@ export function EventForm({ people, days, onSave, onCancel }: { people: Person[]
           );
         })}
       </View>
+      <Text style={s.label}>Wer fährt? (optional)</Text>
+      <DriverRow label="🚗 Bringt" adults={adults} value={bring} onChange={setBring} />
+      <DriverRow label="🏠 Holt ab" adults={adults} value={pick} onChange={setPick} />
+      <Text style={s.label}>Notiz (optional)</Text>
+      <TextInput style={s.input} value={note} onChangeText={setNote} placeholder="z. B. Mitbringen: Turnbeutel, 5 €" accessibilityLabel="Notiz" />
       <Pressable onPress={() => setWeekly(v => !v)} style={s.row} accessibilityRole="checkbox" accessibilityState={{ checked: weekly }}>
         <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: C.accent, backgroundColor: weekly ? C.accent : C.surface, alignItems: 'center', justifyContent: 'center' }}>
           {weekly && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
@@ -191,8 +211,33 @@ export function EventForm({ people, days, onSave, onCancel }: { people: Person[]
       </Pressable>
       <View style={s.row}>
         <Button ghost title="Abbrechen" onPress={onCancel} />
-        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly })} />
+        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: initial?.id ?? uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly, bring: bring || undefined, pick: pick || undefined, note: note.trim() || undefined })} />
       </View>
     </View>
   );
+}
+
+function DriverRow({ label, adults, value, onChange }: { label: string; adults: Person[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <View style={[s.row, { gap: 8, alignItems: 'center' }]}>
+      <Text style={[s.text, { width: 84, fontWeight: '700' }]}>{label}</Text>
+      {adults.map(a => {
+        const on = value === a.id;
+        return (
+          <Pressable key={a.id} onPress={() => onChange(on ? '' : a.id)} accessibilityRole="button" accessibilityState={{ selected: on }}
+            style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 99, borderWidth: 2, borderColor: a.color, backgroundColor: on ? a.color : C.surface }}>
+            <Text style={{ color: on ? '#fff' : C.fg, fontWeight: '700' }}>{a.name}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** "🚗 Papa bringt · 🏠 Mama holt ab" */
+export function driveText(e: { bring?: string; pick?: string }, people: { id: string; name: string }[]) {
+  const n = (id?: string) => people.find(p => p.id === id)?.name;
+  const b = n(e.bring), p = n(e.pick);
+  if (b && p && b === p) return `🚗 ${b} fährt hin und zurück`;
+  return [b && `🚗 ${b} bringt`, p && `🏠 ${p} holt ab`].filter(Boolean).join(' · ');
 }

@@ -177,3 +177,34 @@ Antworte nur mit JSON: {"title":"...","lang":"...","cards":[{"front":"...","back
   if (!cards.length) throw { code: 'invalid_json' };
   return { title: str(res?.title, 60), lang: str(res?.lang, 30), cards };
 }
+
+export interface LetterEvent { title: string; date: string; time?: string; end?: string; note?: string; child?: string; icon?: string }
+
+/** Liest Termine aus Fotos eines Elternbriefs, einer Einladung oder eines Aushangs. */
+export async function extractLetter(photos: string[], kids: { name: string; grade?: string }[], todayIso: string, signal?: AbortSignal): Promise<{ summary: string; events: LetterEvent[] }> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  if (!images.length) throw { code: 'image_rejected' };
+  const prompt = `Auf den Fotos ist ein Elternbrief, eine Einladung oder ein Aushang (Schule, Kita, Verein).
+Heute ist ${todayIso}. Kinder der Familie: ${kids.map(k => `${k.name}${k.grade ? ` (Klasse ${k.grade})` : ''}`).join(', ') || 'unbekannt'}.
+
+Finde ALLE Termine mit Datum (Ausflug, Elternabend, Wandertag, Fotograf, Abgabefrist, Feier, unterrichtsfrei ...).
+- "date": YYYY-MM-DD. Fehlt das Jahr, nimm das nächste passende Datum ab heute.
+- "time"/"end": HH:MM, nur wenn angegeben.
+- "title": kurz und klar, z. B. "Wandertag Klasse 4b".
+- "note": was man mitbringen, bezahlen, unterschreiben oder beachten muss, kurz. Sonst weglassen.
+- "child": Name des Kindes aus der Liste, wenn der Brief klar zu einer Klasse oder einem Namen passt. Sonst weglassen.
+- "icon": ein passendes Emoji.
+- Nichts erfinden. Keine Termine ohne Datum.
+"summary": ein Satz, worum es im Brief geht.
+Antworte nur mit JSON: {"summary":"...","events":[{"title":"...","date":"YYYY-MM-DD","time":"HH:MM","end":"HH:MM","note":"...","child":"...","icon":"..."}]}`;
+  const res = await sample.json<{ summary: string; events: LetterEvent[] }>(prompt, { images, signal, cache: false });
+  const hm = (v: unknown) => (typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v.trim()) ? v.trim().padStart(5, '0') : undefined);
+  const events = (Array.isArray(res?.events) ? res.events : [])
+    .map(e => ({ title: str(e?.title, 80), date: str(e?.date, 10), time: hm(e?.time), end: hm(e?.end), note: str(e?.note, 200) || undefined, child: str(e?.child, 40) || undefined, icon: str(e?.icon, 8) || undefined }))
+    .filter(e => e.title && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
+    .slice(0, 20);
+  return { summary: str(res?.summary, 200), events };
+}

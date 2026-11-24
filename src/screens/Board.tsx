@@ -160,6 +160,8 @@ export function Board({ onExit }: { onExit: () => void }) {
           <View style={{ backgroundColor: C.bg, borderRadius: 12, padding: 12, gap: 8, borderLeftWidth: 6, borderLeftColor: sel.it.color }}>
             <Text style={s.h2}>{sel.it.title}</Text>
             <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
+            {sel.it.drive ? <Text style={[s.text, { fontWeight: '700' }]}>{sel.it.drive}</Text> : null}
+            {sel.it.note ? <Text style={s.text}>📝 {sel.it.note}</Text> : null}
             <View style={s.row}>
               {(data.events ?? []).some(e => e.id === sel.it.key) && (confirmDel
                 ? <><Text style={s.text}>Wirklich löschen?</Text><Button title="Ja, löschen" color={C.danger} onPress={() => { update(d => ({ ...d, events: (d.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); setConfirmDel(false); }} /></>
@@ -184,7 +186,7 @@ function DayEvents({ data, date, big, filter }: { data: FamilyData; date: string
       {all.map(e => (
         <View key={e.key} style={{ borderLeftWidth: 4, borderLeftColor: e.color, paddingLeft: 8 }}>
           <Text style={{ fontWeight: '700', color: C.fg, fontSize: big ? 17 : 13 }}>{e.time ? `${e.time}${e.end ? '–' + e.end : ''} ` : ''}{e.title}</Text>
-          <Text style={{ color: C.muted, fontSize: big ? 13 : 11 }}>{e.tag}</Text>
+          <Text style={{ color: C.muted, fontSize: big ? 13 : 11 }}>{e.tag}{e.drive ? `  ${e.drive}` : ''}</Text>
         </View>
       ))}
     </View>

@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn, gradeLabel, ageOf, birthdaysOn, giveBirthdayBonus, BIRTHDAY_BONUS } from '../data/logic';
 import { Child, TaskKind } from '../data/types';
 import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar } from '../ui/Avatar';
+import { driveText } from './Calendar';
+import { EmergencyCard } from './Emergency';
+import { QuestStrip } from './Quest';
 import { shoppingFor, untilLabel } from './Food';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
 import { dueCount, liveStreak } from '../data/vocab';
@@ -56,6 +60,8 @@ export function Today({ childIds, parent }: { childIds: string[]; parent: boolea
                       {ps.length ? ps.map(p => <Avatar key={p.id} name={p.name} color={p.color} photo={p.photo} size={20} />) : null}
                       <Text style={[s.muted, { fontSize: 12 }]} numberOfLines={1}>{ps.length ? ps.map(p => p.name).join(', ') : 'Ganze Familie'}{e.end ? ` · bis ${e.end}` : ''}</Text>
                     </View>
+                    {driveText(e, people) ? <Text style={[s.text, { fontSize: 13, fontWeight: '700', marginTop: 4 }]} numberOfLines={1}>{driveText(e, people)}</Text> : null}
+                    {e.note ? <Text style={[s.muted, { fontSize: 12, marginTop: 2 }]} numberOfLines={2}>📝 {e.note}</Text> : null}
                   </View>
                 </View>
               );
@@ -72,6 +78,7 @@ export function Today({ childIds, parent }: { childIds: string[]; parent: boolea
 
 function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
   const { data, update } = useFamily();
+  const [sos, setSos] = useState(false);
   const date = today();
   const items = tasksFor(data!, child.id, date);
   const done = items.filter(i => i.completion?.status === 'bestaetigt').length;
@@ -121,6 +128,13 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
             <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800', letterSpacing: -0.3 }} numberOfLines={1}>{child.name}</Text>
             {gradeLabel(child) ? <Text style={{ color: '#ffffffd0', fontSize: 13, fontWeight: '600' }}>{gradeLabel(child)}{ageOf(child) !== undefined ? ` · ${ageOf(child)} Jahre` : ''}</Text> : null}
           </View>
+          {parent && (
+            <Pressable onPress={() => setSos(true)} accessibilityRole="button" accessibilityLabel={`Notfall-Karte ${child.name}`}
+              style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: '#ffffff33', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 18 }}>🆘</Text>
+            </Pressable>
+          )}
+          {sos && <EmergencyCard child={child} onClose={() => setSos(false)} />}
           <View style={{ backgroundColor: '#ffffff', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, alignItems: 'center' }}>
             <Text style={{ fontSize: 20, fontWeight: '800', color: child.color }}>⭐ {pointsOf(data!, child.id)}</Text>
           </View>
@@ -136,6 +150,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
         </View>
       </View>
       <View style={{ padding: 16, gap: 14 }}>
+      <QuestStrip child={child} parent={parent} />
       {(() => {
         const lessons = (schoolOn(data!, child.id, date)?.lessons ?? []).filter(Boolean);
         return lessons.length ? <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>📖 {lessons.join(' · ')}</Text> : null;

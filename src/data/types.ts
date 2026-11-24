@@ -18,7 +18,17 @@ export interface Child {
   birthday?: string; // YYYY-MM-DD
   gender?: Gender;
   timetable?: Timetable;
+  /** Notfall-Karte: nur das Nötigste, sieht jeder Erwachsene der Familie */
+  emergency?: Emergency;
+  /** Begleiter-Tier, das mit Punkten wächst */
+  buddy?: { kind: string; name?: string; since: string };
+  /** Abzeichen, die das Kind schon gesehen hat (für "Neu!") */
+  seenBadges?: string[];
+  /** Woche (Montag YYYY-MM-DD), deren Überraschungskiste geöffnet wurde */
+  surpriseWeek?: string;
 }
+
+export interface Emergency { doctor?: string; doctorPhone?: string; allergies?: string; meds?: string; blood?: string; insurance?: string; school?: string; schoolPhone?: string; contacts?: string; notes?: string }
 
 /** Taschengeld, bewusst getrennt von Punkten. Beträge in Cent. */
 export interface MoneyTx { id: string; date: string; cents: number; note: string; kind: 'taschengeld' | 'geschenk' | 'verdient' | 'ausgabe' | 'korrektur' }
@@ -86,6 +96,11 @@ export interface CalEvent {
   who: string[]; // leer = ganze Familie, sonst IDs von Kindern oder Eltern
   weekly?: boolean;
   icon?: string;
+  /** Wer fährt hin, wer holt ab (Person-IDs von Erwachsenen) */
+  bring?: string;
+  pick?: string;
+  /** z. B. "Mitbringen: 5 €, Turnbeutel" (aus Elternbrief) */
+  note?: string;
 }
 
 export interface FamilyData {

@@ -11,6 +11,7 @@ import { FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { Avatar, PhotoCropper, pickImageFile } from '../ui/Avatar';
+import { EmergencyEdit } from './Emergency';
 
 /** Familienmitglieder: Namen und Farben von Eltern und Kindern. */
 export function Family() {
@@ -102,6 +103,7 @@ export function Family() {
             );
           })()}
           {r.role === 'kind' && <KidProfileEdit child={data.children.find(c => c.id === r.id)!} />}
+          {r.role === 'kind' && <EmergencyEdit child={data.children.find(c => c.id === r.id)!} />}
           {crop?.id === r.id && (
             <View style={{ paddingLeft: 50 }}>
               {crop.error ? <View style={s.row}><Text style={{ color: C.danger, flexShrink: 1 }}>{crop.error}</Text><Button ghost title="OK" onPress={() => setCrop(null)} /></View>

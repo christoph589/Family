@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
 import { FamilyData, MealSlot, Recipe, ShopItem } from '../data/types';
@@ -41,6 +41,7 @@ export function MealPlan({ who }: { who: string }) {
   const [anchor, setAnchor] = useState(today());
   const [edit, setEdit] = useState<{ date: string; slot: MealSlot } | null>(null);
   const [msg, setMsg] = useState('');
+  const narrow = useWindowDimensions().width < 600;
   if (!data) return null;
   const days = daysOf('woche', anchor);
   const recipes = data.recipes ?? [];
@@ -53,10 +54,35 @@ export function MealPlan({ who }: { who: string }) {
         <Button ghost title="Diese Woche" onPress={() => setAnchor(today())} />
         <Button ghost title="›" accessibilityLabel="Nächste Woche" onPress={() => setAnchor(a => addDays(a, 7))} style={{ paddingHorizontal: 14 }} />
         <Text style={[s.text, { fontWeight: '800', flex: 1, textAlign: 'right' }]} numberOfLines={1}>
-          {parse(days[0]).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} bis {parse(days[6]).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
+          {parse(days[0]).getDate()}.–{parse(days[6]).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
         </Text>
       </View>
       {edit && <MealEditor key={edit.date + edit.slot} date={edit.date} slot={edit.slot} onDone={() => setEdit(null)} />}
+      {narrow ? (
+        <View style={[s.card, { padding: 6, gap: 0 }]}>
+          {days.map((d, i) => {
+            const isToday = d === today();
+            return (
+              <View key={d} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 6, borderTopWidth: i ? 1 : 0, borderTopColor: C.line, backgroundColor: isToday ? C.accentSoft : 'transparent', borderRadius: isToday ? 14 : 0 }}>
+                <View style={{ width: 38, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: isToday ? C.accent : C.muted }}>{parse(d).toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '')}</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: isToday ? C.accent : C.fg }}>{parse(d).getDate()}</Text>
+                </View>
+                {SLOTS.map(sl => {
+                  const m = (data.meals ?? []).find(x => x.date === d && x.slot === sl.value);
+                  return (
+                    <Pressable key={sl.value} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
+                      style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent' }}>
+                      <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
+                      <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? '+'}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            );
+          })}
+        </View>
+      ) : (
       <View style={[s.row, { alignItems: 'stretch', gap: 10 }]}>
         {days.map(d => {
           const isToday = d === today();
@@ -77,6 +103,7 @@ export function MealPlan({ who }: { who: string }) {
           );
         })}
       </View>
+      )}
       {weekIngredients.length > 0 && (
         <Button title={`🛒 Zutaten der Woche auf die Einkaufsliste (${weekIngredients.length})`} onPress={() => { update(d => addToShopping(d, weekIngredients, who)); setMsg('Zutaten sind auf der Einkaufsliste. Doppelte habe ich weggelassen.'); }} />
       )}

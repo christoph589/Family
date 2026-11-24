@@ -249,7 +249,7 @@ function DeckEditor({ deck, childId, meId, onDone }: { deck?: VocabDeck; childId
 
 // ---------------- Üben ----------------
 
-function Confetti() {
+export function Confetti() {
   const pieces = useMemo(() => Array.from({ length: 22 }, (_, i) => ({ x: Math.random() * 100, d: 900 + Math.random() * 900, e: ['🎉', '⭐', '✨', '🟣', '🟠', '💛'][i % 6], r: Math.random() * 360 })), []);
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: false }).start(); }, [v]);
