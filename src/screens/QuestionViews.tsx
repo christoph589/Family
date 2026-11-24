@@ -6,16 +6,25 @@ import { C, s } from '../ui/theme';
 export const SEP = ' | ';
 export const norm = (v: string) => v.toLowerCase().replace(/\s+/g, '').replace(/,/g, '.').replace(/[×*]/g, '·').replace(/^(ja|yes)$/, 'ja');
 
+/** Ankreuz-Tabelle: alle Lösungen sind "x" oder "-". Dann gibt es Kästchen statt Tippen. */
+export function isCheckTable(q: Question) {
+  return q.type === 'table' && q.solution.split('|').every(p => ['x', '-', '✓', ''].includes(p.trim().toLowerCase()));
+}
+const qText = (q: Question) => (isCheckTable(q) ? q.q.replace(/\s*\(\s*x\s*oder\s*-\s*\)/i, '') : q.q);
+const checked = (v: string) => ['x', '✓'].includes(v.trim().toLowerCase());
+
 export function inputCount(q: Question) {
   return q.type === 'table' && q.table ? q.table.rows.flat().filter(c => c.trim() === '?').length : 1;
 }
 export function isAnswered(q: Question, a: string) {
+  if (isCheckTable(q)) return true; // leeres Kästchen heißt "nicht teilbar"
   if (q.type === 'table') { const parts = a.split(SEP); return parts.length === inputCount(q) && parts.every(p => p.trim()); }
   return !!a.trim();
 }
 export function isCorrect(q: Question, a: string) {
   if (q.type === 'table') {
-    const want = q.solution.split('|').map(norm), got = a.split('|').map(norm);
+    const fix = (v: string) => (isCheckTable(q) ? (checked(v) ? 'x' : '-') : norm(v));
+    const want = q.solution.split('|').map(fix), got = splitAnswer(q, a).map(fix);
     return want.length === got.length && want.every((w, i) => w === got[i]);
   }
   return norm(a) === norm(q.solution);
@@ -25,7 +34,7 @@ export function isCorrect(q: Question, a: string) {
 export function QuestionInput({ q, value, onChange }: { q: Question; value: string; onChange: (v: string) => void }) {
   return (
     <View style={{ gap: 10 }}>
-      <MathText text={q.q} style={{ ...s.text, fontWeight: '700', fontSize: 18 }} />
+      <MathText text={qText(q)} style={{ ...s.text, fontWeight: '700', fontSize: 18 }} />
       <Figure svg={q.figure} />
       {q.type === 'choice' && q.options?.length ? (
         <View style={{ gap: 8 }}>
@@ -48,7 +57,7 @@ export function QuestionInput({ q, value, onChange }: { q: Question; value: stri
   );
 }
 
-function splitAnswer(q: Question, value: string) {
+export function splitAnswer(q: Question, value: string) {
   const n = inputCount(q);
   const parts = value ? value.split(SEP) : [];
   return Array.from({ length: n }, (_, i) => parts[i] ?? '');
@@ -69,6 +78,21 @@ export function TableGrid({ q, values, onCell, solution }: { q: Question; values
             {r.map((c, ci) => {
               if (c.trim() !== '?') return <View key={ci} style={cell}><MathText text={c} style={{ ...s.text, fontSize: 14 }} /></View>;
               k += 1; const idx = k;
+              if (isCheckTable(q)) {
+                const on = checked(values[idx] ?? '');
+                const want = solution ? checked(solution[idx] ?? '') : on;
+                const bg = solution ? (on === want ? C.okSoft : '#f8dcd8') : C.surface;
+                return (
+                  <Pressable key={ci} disabled={!onCell} accessibilityRole="checkbox" accessibilityState={{ checked: on }}
+                    accessibilityLabel={`${r[0]} ${q.table!.header[ci] ?? ''}`} onPress={() => onCell?.(idx, on ? '-' : 'x')}
+                    style={[cell, { alignItems: 'center', backgroundColor: bg }]}>
+                    <View style={{ width: 34, height: 34, borderRadius: 8, borderWidth: 2, borderColor: on ? C.accent : C.line, backgroundColor: on ? C.accent : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+                      {on && <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>✓</Text>}
+                    </View>
+                    {solution && on !== want && <Text style={{ fontSize: 11, color: C.muted }}>{want ? 'richtig: ✓' : 'richtig: leer'}</Text>}
+                  </Pressable>
+                );
+              }
               if (onCell) return (
                 <View key={ci} style={[cell, { padding: 2 }]}>
                   <TextInput value={values[idx]} onChangeText={v => onCell(idx, v)} placeholder="?" autoCapitalize="none"
@@ -94,10 +118,10 @@ export function TableGrid({ q, values, onCell, solution }: { q: Question; values
 export function AnswerView({ q, answer }: { q: Question; answer: string }) {
   return (
     <View style={{ gap: 6 }}>
-      <MathText text={q.q} style={{ ...s.text, fontWeight: '700' }} />
+      <MathText text={qText(q)} style={{ ...s.text, fontWeight: '700' }} />
       <Figure svg={q.figure} />
       {q.type === 'table' && q.table ? (
-        <TableGrid q={q} values={answer.split(SEP)} solution={q.solution.split('|').map(x => x.trim())} />
+        <TableGrid q={q} values={splitAnswer(q, answer)} solution={q.solution.split('|').map(x => x.trim())} />
       ) : (
         <>
           <View style={[s.row, { gap: 6 }]}><Text style={s.text}>Antwort:</Text><MathText text={answer || '–'} style={{ ...s.text, fontWeight: '700' }} /></View>

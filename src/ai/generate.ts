@@ -62,12 +62,13 @@ Regeln:
 - Keine Aufgaben, die man aus dem Foto abschreiben kann.
 - Lösungen kurz und eindeutig (Zahl, Bruch, Wort), damit Eltern sie leicht abgleichen können. Brüche immer als 3/4 schreiben, gekürzt.
 - Keine Namen von echten Personen aus den Fotos übernehmen.
+- Im Fragetext keine Hinweise, die die Lösung verraten.
 
 Aufgabentypen:
 1. "text": freie Antwort. {"type":"text","q":"Frage","solution":"3/4"}
 2. "choice": Auswahl, 3 bis 4 Möglichkeiten, solution ist exakt eine davon. {"type":"choice","q":"...","options":["1/2","2/3","3/4"],"solution":"3/4"}
-3. "table": Tabelle zum Ausfüllen. In rows steht "?" für jedes leere Feld. solution nennt die Werte der "?"-Felder zeilenweise von links nach rechts, getrennt mit " | ". Für Ankreuz-Tabellen trägt das Kind "x" oder "-" ein.
-   {"type":"table","q":"Kreuze an, wodurch die Zahl teilbar ist (x oder -).","table":{"header":["Zahl","durch 2","durch 3"],"rows":[["12","?","?"],["15","?","?"]]},"solution":"x | x | - | x"}
+3. "table": Tabelle zum Ausfüllen. In rows steht "?" für jedes leere Feld. solution nennt die Werte der "?"-Felder zeilenweise von links nach rechts, getrennt mit " | ". Ankreuz-Tabellen: Lösung "x" für ankreuzen, "-" für nicht ankreuzen. Das Kind tippt dort nur Kästchen an. Im Fragetext NICHT "(x oder -)" schreiben, sondern nur "Kreuze an, ...".
+   {"type":"table","q":"Kreuze an, wodurch die Zahl teilbar ist.","table":{"header":["Zahl","durch 2","durch 3"],"rows":[["12","?","?"],["15","?","?"]]},"solution":"x | x | - | x"}
 
 Zeichnungen: Jede Aufgabe darf zusätzlich "figure" haben, eine einfache SVG-Zeichnung, wenn das Thema Bilder braucht (Bruchkreis oder Bruchstreifen mit gefärbten Teilen, Zahlenstrahl, Säulendiagramm, Koordinatensystem, Figur mit Maßen). SVG-Regeln: beginnt mit <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220">, nur rect, circle, line, path, polygon, polyline, text, g; Linien schwarz, Füllungen hell (#9ecae1, #fdd49e, #ffffff); Schrift font-family="Arial" font-size zwischen 14 und 18; keine Bilder, Links, Skripte oder Styles. Die Zeichnung darf die Lösung nicht direkt verraten. Zeichne genau und mathematisch korrekt (bei einem Bruchkreis gleich große Teile).
 
