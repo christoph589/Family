@@ -40,6 +40,14 @@ export interface Worksheet {
   retryOf?: string;
 }
 
+export interface CalEvent {
+  id: string; title: string; date: string; // YYYY-MM-DD
+  time?: string; // HH:MM
+  who: string[]; // leer = ganze Familie, sonst Kinder-IDs
+  weekly?: boolean;
+  icon?: string;
+}
+
 export interface FamilyData {
   version: 1;
   family: { id: string; name: string; parentPin: string };
@@ -51,6 +59,8 @@ export interface FamilyData {
   requests?: RewardRequest[];
   topics?: Topic[];
   worksheets?: Worksheet[];
+  events?: CalEvent[];
+  settings?: { googleCalendarId?: string; googleCalendarName?: string };
 }
 
 // Punkte pro Note (1 bis 6). Keine Minuspunkte.
