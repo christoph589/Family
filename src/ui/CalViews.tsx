@@ -63,7 +63,15 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
   const tasks = data.tasks
     .filter(t => t.repeat === 'einmal' && t.date === date && isDueOn(t, date, data) && (!childIds || childIds.includes(t.childId)))
     .map(t => ({ key: 't' + t.id, title: `${t.icon ? t.icon + ' ' : ''}${t.title}`, color: data.children.find(k => k.id === t.childId)?.color ?? C.muted, tag: 'Aufgabe', who: [t.childId] }));
-  return [...bd, ...school, ...ev].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99')).concat(tasks);
+  // Feiertage jeden Tag, Schulferien nur am ersten und letzten Tag (sonst ist der Monat voll davon)
+  const fmt = (x: string) => parse(x).toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' });
+  const hol: CalItem[] = data.settings?.autoHoliday?.on === false ? [] : (data.settings?.autoHoliday?.ranges ?? []).flatMap(r => {
+    if (r.kind === 'feiertag') return r.from <= date && date <= r.to ? [{ key: 'h' + r.from + r.name, title: `🎉 ${r.name}`, color: '#b26a00', tag: 'Feiertag' }] : [];
+    if (date === r.from) return [{ key: 'h' + r.from + r.name, title: `🏖️ ${r.name}${r.to !== r.from ? ` bis ${fmt(r.to)}` : ''}`, color: '#0f6e73', tag: 'Ferien' }];
+    if (date === r.to) return [{ key: 'h' + r.to + r.name + 'e', title: `🏖️ Letzter Tag ${r.name}`, color: '#0f6e73', tag: 'Ferien' }];
+    return [];
+  });
+  return [...hol, ...bd, ...school, ...ev].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99')).concat(tasks);
 }
 
 export function CalNav({ mode, anchor, onMode, onAnchor, right }: { mode: CalMode; anchor: string; onMode: (m: CalMode) => void; onAnchor: (a: string) => void; right?: ReactNode }) {

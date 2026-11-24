@@ -24,7 +24,25 @@ const cors = {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'content-type': 'application/json' } });
 
 // Nur bekannte Kalenderdienste, damit die Funktion nicht als offener Proxy taugt
-const ALLOWED = [/\.icloud\.com$/, /^calendar\.google\.com$/, /^outlook\.(office365|live)\.com$/, /\.webuntis\.com$/, /^webuntis\.com$/, /\.office\.com$/, /^p\d+-caldav\.icloud\.com$/];
+// Jeder öffentliche Kalender-Link ist erlaubt (Apple, Google, Outlook, WebUntis, Müllkalender der Stadt, Verein …).
+// Gesperrt sind nur Adressen, die ins interne Netz zeigen könnten: IP-Adressen, localhost, Namen ohne Punkt.
+function publicHost(host: string) {
+  if (!host.includes('.') || host === 'localhost' || /\.(local|internal|localhost|lan|home|intranet)$/.test(host)) return false;
+  if (/^[\d.]+$/.test(host) || host.includes(':') || host.startsWith('[')) return false;
+  return true;
+}
+async function fetchPublic(raw: string) {
+  let url = raw;
+  for (let i = 0; i < 4; i++) {
+    const p = new URL(url);
+    if (!['https:', 'http:'].includes(p.protocol) || !publicHost(p.hostname.toLowerCase())) throw new Error('host_not_allowed');
+    const r = await fetch(url, { headers: { accept: 'text/calendar, */*' }, redirect: 'manual' });
+    const loc = r.headers.get('location');
+    if (r.status >= 300 && r.status < 400 && loc) { url = new URL(loc, url).toString(); continue; }
+    return r;
+  }
+  throw new Error('fetch_failed');
+}
 
 // ---------- Export: Familientermine als iCal ----------
 
@@ -172,11 +190,10 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       const body = await req.json();
       if (body.action === 'import') {
         let url = String(body.url ?? '').trim().replace(/^webcals?:\/\//i, 'https://');
-        let host: string;
-        try { const p = new URL(url); if (p.protocol !== 'https:') throw 0; host = p.hostname.toLowerCase(); url = p.toString(); }
-        catch { return json({ error: 'bad_url' }, 400); }
-        if (!ALLOWED.some(r => r.test(host))) return json({ error: 'host_not_allowed', host }, 400);
-        const r = await fetch(url, { headers: { accept: 'text/calendar' }, redirect: 'follow' });
+        try { url = new URL(url).toString(); } catch { return json({ error: 'bad_url' }, 400); }
+        let r: Response;
+        try { r = await fetchPublic(url); }
+        catch (e) { return json({ error: (e as Error).message === 'host_not_allowed' ? 'host_not_allowed' : 'fetch_failed' }, 400); }
         if (!r.ok) return json({ error: 'fetch_failed', status: r.status }, 502);
         const text = await r.text();
         if (text.length > 5_000_000 || !text.includes('BEGIN:VCALENDAR')) return json({ error: 'not_ical' }, 502);

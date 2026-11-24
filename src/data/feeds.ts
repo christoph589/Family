@@ -7,7 +7,7 @@ export type FeedEvent = { uid: string; title: string; date: string; time?: strin
 
 const ERR: Record<string, string> = {
   bad_url: 'Das ist kein gültiger Kalender-Link.',
-  host_not_allowed: 'Dieser Anbieter wird noch nicht unterstützt (erlaubt: iCloud, Google, Outlook, WebUntis).',
+  host_not_allowed: 'Dieser Link zeigt nicht auf eine öffentliche Internetadresse.',
   fetch_failed: 'Der Kalender war nicht erreichbar. Ist der Link öffentlich freigegeben?',
   not_ical: 'Unter dem Link liegt kein Kalender.',
   not_signed_in: 'Dieses Gerät ist nicht angemeldet.',
@@ -64,8 +64,8 @@ export function useFeedItems(feeds: Feed[] | undefined, people: { id: string; na
   return (date: string): CalItem[] => (feeds ?? []).flatMap(f => {
     const person = people.find(p => p.id === f.who);
     return (cache.get(f.url)?.events ?? []).filter(e => e.date === date).map(e => ({
-      key: 'x' + f.id + e.uid, time: e.time, end: e.end, title: e.title, color: f.color,
-      tag: person ? `${person.name} · ${f.name}` : f.name, badge: person?.name.slice(0, 2), who: f.who ? [f.who] : [],
+      key: 'x' + f.id + e.uid, time: e.time, end: e.end, title: f.icon ? `${f.icon} ${e.title}` : e.title, color: f.color,
+      tag: person ? `${person.name} · ${f.name}` : f.name, badge: person?.name.slice(0, 2) ?? f.icon, who: f.who ? [f.who] : [],
     }));
   });
 }
