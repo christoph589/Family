@@ -6,6 +6,7 @@ import { addPoints, decideIdea, decideRequest, pointsOf, proposeIdea, requestRew
 import { Button } from '../ui/Button';
 import { PersonHead } from '../ui/Avatar';
 import { Pots } from './Pots';
+import { IconPicker } from '../ui/IconPicker';
 import { C, s } from '../ui/theme';
 
 export function Points({ childIds, parent, admin = parent }: { childIds: string[]; parent: boolean; admin?: boolean }) {
@@ -107,7 +108,8 @@ function NewIdea({ childId, pending }: { childId: string; pending: Idea[] }) {
 function IdeaRow({ idea }: { idea: Idea }) {
   const { data, update } = useFamily();
   const [cost, setCost] = useState('');
-  const [forAll, setForAll] = useState(false);
+  const [mode, setMode] = useState<'kind' | 'alle' | 'pot'>('kind');
+  const [icon, setIcon] = useState('🎯');
   const kid = data?.children.find(c => c.id === idea.childId);
   const n = Number(cost);
   const ok = cost !== '' && Number.isInteger(n) && n > 0 && n <= 10000;
@@ -115,23 +117,29 @@ function IdeaRow({ idea }: { idea: Idea }) {
     <View style={{ backgroundColor: C.bg, borderRadius: 12, padding: 12, gap: 8, borderLeftWidth: 5, borderLeftColor: kid?.color ?? C.accent }}>
       <Text style={[s.text, { fontWeight: '800' }]}>{kid?.name}: {idea.title}</Text>
       <View style={s.row}>
-        {[30, 50, 100, 200].map(v => (
+        {(mode === 'pot' ? [200, 500, 1000, 2000] : [30, 50, 100, 200]).map(v => (
           <Pressable key={v} onPress={() => setCost(String(v))} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: C.accent, backgroundColor: cost === String(v) ? C.accent : C.surface }}>
             <Text style={{ fontWeight: '700', color: cost === String(v) ? '#fff' : C.fg }}>{v} P</Text>
           </Pressable>
         ))}
         <TextInput style={[s.input, { width: 90, backgroundColor: C.surface }]} value={cost} onChangeText={t => setCost(t.replace(/\D/g, '').slice(0, 5))} keyboardType="number-pad" placeholder="Punkte" accessibilityLabel="Punkte" />
       </View>
-      {data && data.children.length > 1 && (
-        <Pressable onPress={() => setForAll(v => !v)} style={s.row} accessibilityRole="checkbox" accessibilityState={{ checked: forAll }}>
-          <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: C.accent, backgroundColor: forAll ? C.accent : C.surface, alignItems: 'center', justifyContent: 'center' }}>
-            {forAll && <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>✓</Text>}
-          </View>
-          <Text style={s.text}>Für alle Kinder freischalten</Text>
-        </Pressable>
+      <View style={[s.row, { gap: 8 }]}>
+        {([['kind', `Nur für ${kid?.name ?? 'das Kind'}`], ...(data && data.children.length > 1 ? [['alle', 'Für alle Kinder einzeln'], ['pot', '🎯 Gemeinsames Ziel']] : [])] as [typeof mode, string][]).map(([v, l]) => (
+          <Pressable key={v} onPress={() => setMode(v)} accessibilityRole="radio" accessibilityState={{ checked: mode === v }}
+            style={[s.chip, { paddingVertical: 9, paddingHorizontal: 14, backgroundColor: mode === v ? C.accent : C.surface }]}>
+            <Text style={{ fontWeight: '700', color: mode === v ? '#fff' : C.fg }}>{l}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {mode === 'pot' && (
+        <View style={[s.row, { flexWrap: 'nowrap' }]}>
+          <IconPicker value={icon} onChange={setIcon} />
+          <Text style={[s.muted, { flex: 1 }]}>Alle Kinder sparen zusammen. Die Punkte oben sind dann das gemeinsame Ziel, z. B. 500 oder 1000.</Text>
+        </View>
       )}
       <View style={s.row}>
-        <Button title={ok ? `Freischalten für ${n} P` : 'Freischalten'} color={C.ok} disabled={!ok} style={{ paddingVertical: 8 }} onPress={() => update(d => decideIdea(d, idea.id, n, forAll))} />
+        <Button title={ok ? (mode === 'pot' ? `Ziel mit ${n} P anlegen` : `Freischalten für ${n} P`) : mode === 'pot' ? 'Ziel anlegen' : 'Freischalten'} color={C.ok} disabled={!ok} style={{ paddingVertical: 8 }} onPress={() => update(d => decideIdea(d, idea.id, n, mode === 'pot' ? 'pot' : mode === 'alle', icon))} />
         <Button ghost title="Ablehnen" style={{ paddingVertical: 8 }} onPress={() => update(d => decideIdea(d, idea.id, null))} />
       </View>
     </View>

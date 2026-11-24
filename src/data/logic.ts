@@ -242,10 +242,11 @@ export function proposeIdea(d: FamilyData, childId: string, title: string): Fami
   return { ...d, ideas: [...(d.ideas ?? []), { id: uid(), childId, title: title.trim().slice(0, 80), at: new Date().toISOString() }] };
 }
 /** Eltern schalten einen Kinderwunsch mit Punktepreis frei (cost) oder lehnen ab (null). */
-export function decideIdea(d: FamilyData, ideaId: string, cost: number | null, forAll = false): FamilyData {
+export function decideIdea(d: FamilyData, ideaId: string, cost: number | null, forAll: boolean | 'pot' = false, icon?: string): FamilyData {
   const idea = (d.ideas ?? []).find(i => i.id === ideaId);
   const rest = { ...d, ideas: (d.ideas ?? []).filter(i => i.id !== ideaId) };
   if (!idea || cost === null) return rest;
+  if (forAll === 'pot') return { ...rest, pots: [...(d.pots ?? []), { id: uid(), title: idea.title, icon: icon || '🎯', target: cost, createdAt: new Date().toISOString() }] };
   return { ...rest, rewards: [...d.rewards, { id: uid(), title: idea.title, cost, childId: forAll ? undefined : idea.childId }] };
 }
 
