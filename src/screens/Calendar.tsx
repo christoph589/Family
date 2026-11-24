@@ -6,6 +6,7 @@ import { peopleOf, Person, today, uid } from '../data/logic';
 import { CalEvent } from '../data/types';
 import { Button } from '../ui/Button';
 import { DateField } from '../ui/DateField';
+import { guessIcon, IconPicker } from '../ui/IconPicker';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 import { useFeedItems } from '../data/feeds';
@@ -126,6 +127,7 @@ function EventRow({ item, canDelete, onDelete }: { item: Item; canDelete: boolea
 export function EventForm({ people, days, onSave, onCancel }: { people: Person[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void }) {
   const [title, setTitle] = useState('');
   const [icon, setIcon] = useState('');
+  const [iconTouched, setIconTouched] = useState(false);
   const [date, setDate] = useState(days.includes(today()) ? today() : days[0]);
   const [time, setTime] = useState('');
   const [end, setEnd] = useState('');
@@ -139,8 +141,8 @@ export function EventForm({ people, days, onSave, onCancel }: { people: Person[]
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
       <Text style={s.h2}>Neuer Termin</Text>
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
-        <TextInput style={[s.input, { width: 60, textAlign: 'center' }]} value={icon} onChangeText={t => setIcon(t.slice(0, 4))} placeholder="⚽" accessibilityLabel="Symbol" />
-        <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={setTitle} placeholder="z. B. Fußballtraining" />
+        <IconPicker value={icon} onChange={v => { setIcon(v); setIconTouched(true); }} />
+        <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={t => { setTitle(t); if (!iconTouched) setIcon(guessIcon(t)); }} placeholder="z. B. Fußballtraining" accessibilityLabel="Titel" />
       </View>
       <Text style={s.label}>Tag</Text>
       <View style={s.row}>

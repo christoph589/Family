@@ -5,6 +5,7 @@ import { isSchoolTask, REPEAT_LABEL, today, uid } from '../data/logic';
 import { DayTime, Repeat, TaskKind } from '../data/types';
 import { KIND_LABEL, SCHOOL_PACK, TaskTemplate, TEMPLATES, TIME_LABEL } from '../data/templates';
 import { Button, Segmented } from '../ui/Button';
+import { IconPicker } from '../ui/IconPicker';
 import { C, s } from '../ui/theme';
 
 export function Manage({ onReset }: { onReset?: () => void }) {
@@ -63,7 +64,7 @@ export function Manage({ onReset }: { onReset?: () => void }) {
       <View style={s.card}>
         <Text style={s.h2}>Eigene Aufgabe</Text>
         <View style={[s.row, { flexWrap: 'nowrap' }]}>
-          <TextInput style={[s.input, { width: 60, textAlign: 'center' }]} value={icon} onChangeText={t => setIcon(t.slice(0, 4))} placeholder="🙂" accessibilityLabel="Symbol" />
+          <IconPicker value={icon} onChange={setIcon} />
           <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={setTitle} placeholder="z. B. Mathe: Arbeitsheft S. 34" />
         </View>
         <Segmented value={kind} onChange={setKind} options={(['routine', 'hausaufgabe', 'pflicht'] as TaskKind[]).map(k => ({ value: k, label: KIND_LABEL[k] }))} />
