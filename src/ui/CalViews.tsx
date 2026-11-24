@@ -130,19 +130,33 @@ export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat, 
               const items = itemsFor(d);
               const other = d.slice(0, 7) !== month;
               const isToday = d === t;
-              const shown = narrow ? 0 : 3;
+              // Monat: Schule weglassen (steht jeden Tag gleich da), Aufgaben nur als Punkte, Termine als Zeilen.
+              const school = items.filter(it => it.key.startsWith('s') && it.tag === 'Schule');
+              const shownCount = items.length - school.length;
+              const tasks = items.filter(it => it.key.startsWith('t'));
+              const rest = items.filter(it => !school.includes(it) && !tasks.includes(it));
+              const max = narrow ? 0 : 3;
+              const lines = rest.slice(0, max);
+              const dots = [...rest.slice(max), ...tasks];
               return (
-                <Pressable key={d} disabled={!onPickDay} onPress={() => onPickDay?.(d)} accessibilityLabel={`${parse(d).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}, ${items.length} Einträge`}
-                  style={{ flex: 1, minWidth: 0, minHeight: narrow ? 54 : 96, borderRadius: 8, padding: 4, gap: 2, backgroundColor: isToday ? C.accent + '18' : C.bg, opacity: other ? 0.45 : 1, borderWidth: isToday ? 2 : 0, borderColor: C.accent }}>
-                  <Text style={{ fontWeight: '800', color: isToday ? C.accent : C.fg, fontSize: 13 }}>{parse(d).getDate()}</Text>
-                  {items.slice(0, shown).map(it => (
-                    <Text key={it.key} numberOfLines={1} style={{ fontSize: 11, color: C.fg, backgroundColor: it.color + '22', borderLeftWidth: 3, borderLeftColor: it.color, paddingHorizontal: 3, borderRadius: 3 }}>{it.time ? it.time + ' ' : ''}{it.title}</Text>
-                  ))}
-                  {narrow ? (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
-                      {items.slice(0, 6).map(it => <View key={it.key} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: it.color }} />)}
+                <Pressable key={d} disabled={!onPickDay} onPress={() => onPickDay?.(d)} accessibilityLabel={`${parse(d).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}, ${shownCount} Einträge`}
+                  style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: narrow ? 58 : 112, borderRadius: 12, padding: narrow ? 4 : 6, gap: 3, backgroundColor: isToday ? C.accentSoft : pressed ? C.surface2 : C.bg, opacity: other ? 0.4 : 1, borderWidth: isToday ? 2 : 0, borderColor: C.accent })}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                    <Text style={{ fontWeight: '800', color: isToday ? C.accent : C.fg, fontSize: narrow ? 13 : 15 }}>{parse(d).getDate()}</Text>
+                  </View>
+                  {lines.map(it => (
+                    <View key={it.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: it.time ? 'transparent' : it.color + '26', borderRadius: 6, paddingHorizontal: it.time ? 0 : 4, paddingVertical: 1 }}>
+                      {it.time ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: it.color }} /> : null}
+                      <Text numberOfLines={1} style={{ flex: 1, fontSize: 11.5, color: C.fg, fontWeight: it.time ? '500' : '700' }}>
+                        {it.time ? <Text style={{ color: C.muted, fontWeight: '700' }}>{it.time} </Text> : null}{it.title}
+                      </Text>
                     </View>
-                  ) : items.length > shown ? <Text style={{ fontSize: 11, color: C.muted }}>+{items.length - shown} mehr</Text> : null}
+                  ))}
+                  {dots.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginTop: 'auto' as any }}>
+                      {dots.slice(0, narrow ? 6 : 10).map(it => <View key={it.key} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: it.color }} />)}
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
