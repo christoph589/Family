@@ -10,6 +10,8 @@ export interface Task {
 export interface Completion { id: string; taskId: string; childId: string; date: string; status: 'wartet' | 'bestaetigt' }
 export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string }
 export interface Reward { id: string; title: string; cost: number }
+export interface RewardRequest { id: string; childId: string; rewardId: string; at: string }
+export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; date: string }
 
 export interface FamilyData {
   version: 1;
@@ -19,6 +21,8 @@ export interface FamilyData {
   completions: Completion[];
   ledger: LedgerEntry[];
   rewards: Reward[];
+  requests?: RewardRequest[];
+  topics?: Topic[];
 }
 
 // Punkte pro Note (1 bis 6). Keine Minuspunkte.

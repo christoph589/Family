@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
 import { FamilyProvider, useFamily } from './src/data/FamilyContext';
 import { Grades } from './src/screens/Grades';
+import { Learn } from './src/screens/Learn';
 import { Manage } from './src/screens/Manage';
 import { Points } from './src/screens/Points';
 import { Setup } from './src/screens/Setup';
@@ -10,7 +11,7 @@ import { Today } from './src/screens/Today';
 import { Button, Segmented } from './src/ui/Button';
 import { C, s } from './src/ui/theme';
 
-type Tab = 'heute' | 'punkte' | 'noten' | 'aufgaben';
+type Tab = 'heute' | 'lernen' | 'punkte' | 'noten' | 'aufgaben';
 type Profile = { kind: 'eltern' } | { kind: 'kind'; id: string };
 
 export default function App() {
@@ -69,7 +70,7 @@ function Root() {
   }
 
   const childIds = profile.kind === 'kind' ? [profile.id] : data.children.map(c => c.id);
-  const tabs: { value: Tab; label: string }[] = [{ value: 'heute', label: 'Heute' }, { value: 'punkte', label: 'Punkte' }];
+  const tabs: { value: Tab; label: string }[] = [{ value: 'heute', label: 'Heute' }, { value: 'lernen', label: 'Lernen' }, { value: 'punkte', label: parent && (data.requests ?? []).length ? `Punkte (${(data.requests ?? []).length})` : 'Punkte' }];
   if (parent) tabs.push({ value: 'noten', label: 'Noten' }, { value: 'aufgaben', label: 'Aufgaben' });
   const who = profile.kind === 'kind' ? data.children.find(c => c.id === profile.id)?.name : 'Eltern';
   const dateStr = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -88,6 +89,7 @@ function Root() {
           </View>
         </View>
         {tab === 'heute' && <Today childIds={childIds} parent={parent} />}
+        {tab === 'lernen' && <Learn childIds={childIds} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
         {tab === 'noten' && parent && <Grades />}
         {tab === 'aufgaben' && parent && <Manage onReset={() => { replace(null); setProfile(null); }} />}

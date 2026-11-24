@@ -1,4 +1,4 @@
-import { Child, Completion, FamilyData, Task } from './types';
+import { Child, Completion, FamilyData, Reward, Task } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 export const today = (d = new Date()) => {
@@ -75,4 +75,25 @@ export function newFamily(name: string, pin: string, kids: { name: string; grade
       { id: uid(), title: 'Ausflug oder Kino', cost: 300 },
     ],
   };
+}
+
+/** Punkte, die schon für offene Wünsche reserviert sind. */
+export function reservedOf(data: FamilyData, childId: string) {
+  return (data.requests ?? []).filter(r => r.childId === childId)
+    .reduce((sum, r) => sum + (data.rewards.find(x => x.id === r.rewardId)?.cost ?? 0), 0);
+}
+
+/** Kind wünscht sich eine Belohnung. Eltern bestätigen später. */
+export function requestReward(data: FamilyData, childId: string, reward: Reward): FamilyData {
+  if (pointsOf(data, childId) - reservedOf(data, childId) < reward.cost) return data;
+  return { ...data, requests: [...(data.requests ?? []), { id: uid(), childId, rewardId: reward.id, at: new Date().toISOString() }] };
+}
+
+export function decideRequest(data: FamilyData, requestId: string, approve: boolean): FamilyData {
+  const req = (data.requests ?? []).find(r => r.id === requestId);
+  if (!req) return data;
+  const rest = { ...data, requests: (data.requests ?? []).filter(r => r.id !== requestId) };
+  const reward = data.rewards.find(r => r.id === req.rewardId);
+  if (!approve || !reward || pointsOf(data, req.childId) < reward.cost) return rest;
+  return addPoints(rest, req.childId, -reward.cost, 'Eingelöst: ' + reward.title);
 }
