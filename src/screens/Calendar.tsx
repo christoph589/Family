@@ -133,6 +133,7 @@ export function EventForm({ people, days, onSave, onCancel }: { people: Person[]
   const [weekly, setWeekly] = useState(false);
   const re = /^([01]?\d|2[0-3]):[0-5]\d$/;
   const fix = (t: string) => t.padStart(5, '0');
+  const addMin = (t: string, n: number) => { const x = Math.min(23 * 60 + 59, +t.slice(0, 2) * 60 + +t.slice(3, 5) + n); return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
   const timeOk = (!time || re.test(time)) && (!end || (re.test(end) && !!time && fix(end) > fix(time)));
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
@@ -144,14 +145,29 @@ export function EventForm({ people, days, onSave, onCancel }: { people: Person[]
       <Text style={s.label}>Tag</Text>
       <View style={s.row}>
         <DateField value={date} onChange={v => v && setDate(v)} label="Datum" />
-        <Text style={s.muted}>{date ? parse(date).toLocaleDateString('de-DE', { weekday: 'long' }) : ''}</Text>
       </View>
+      <Text style={s.label}>Uhrzeit</Text>
       <View style={s.row}>
-        <DateField type="time" value={time} onChange={setTime} label="Uhrzeit" />
+        <Pressable onPress={() => { setTime(''); setEnd(''); }} style={[s.chip, { paddingVertical: 10, paddingHorizontal: 14, backgroundColor: !time ? C.accent : C.surface2 }]}>
+          <Text style={{ fontWeight: '700', color: !time ? '#fff' : C.fg }}>Ganztägig</Text>
+        </Pressable>
+        <DateField type="time" value={time} onChange={v => { setTime(v); if (v && (!end || fix(end) <= fix(v))) setEnd(addMin(v, 60)); }} label="Uhrzeit" placeholder="Beginn" />
         <Text style={s.muted}>bis</Text>
-        <DateField type="time" value={end} onChange={setEnd} label="Ende" />
-        <Text style={s.muted}>leer = ganztägig</Text>
+        <DateField type="time" value={end} onChange={setEnd} label="Ende" placeholder="Ende" clearable />
       </View>
+      {!!time && (
+        <View style={[s.row, { gap: 8 }]}>
+          <Text style={s.muted}>Dauer:</Text>
+          {[30, 60, 90, 120, 180].map(n => {
+            const on = end === addMin(time, n);
+            return (
+              <Pressable key={n} onPress={() => setEnd(addMin(time, n))} style={[s.chip, { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: on ? C.accent : C.bg }]}>
+                <Text style={{ fontWeight: '700', color: on ? '#fff' : C.fg }}>{n < 60 ? `${n} Min` : `${n / 60} Std`.replace('.5', ',5')}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
       {!timeOk && <Text style={{ color: C.danger }}>Uhrzeit bitte so: 16:30. Das Ende muss nach dem Beginn liegen.</Text>}
       <Text style={s.label}>Für wen</Text>
       <View style={[s.row, { gap: 8 }]}>
