@@ -14,8 +14,17 @@ export const isSchoolTask = (t: Task) => !!t.school || t.kind === 'hausaufgabe';
 
 /** Ferien an diesem Tag? Ferienmodus an und (kein Enddatum oder Tag liegt davor). */
 export function holidayOn(d: FamilyData | undefined, date: string) {
+  return manualHolidayOn(d, date) || !!autoHolidayOn(d, date);
+}
+export function manualHolidayOn(d: FamilyData | undefined, date: string) {
   const h = d?.settings?.holiday;
   return !!h?.on && (!h.until || date <= h.until);
+}
+/** Ferien oder Feiertag laut Bundesland an diesem Tag (oder null). */
+export function autoHolidayOn(d: FamilyData | undefined, date: string) {
+  const a = d?.settings?.autoHoliday;
+  if (!a?.on) return null;
+  return a.ranges.find(r => r.from <= date && date <= r.to) ?? null;
 }
 const schoolDay = (d: FamilyData | undefined, date: string) => { const wd = weekday(date); return wd >= 1 && wd <= 5 && !holidayOn(d, date); };
 
@@ -177,4 +186,24 @@ export function schoolOn(d: FamilyData, childId: string, date: string) {
   const day = d.children.find(c => c.id === childId)?.timetable?.[String(weekday(date)) as '1'];
   if (!day || (!day.from && !day.to && !day.lessons?.some(Boolean))) return null;
   return day;
+}
+
+/** Text fürs Ferien-Banner, z. B. "Weihnachtsferien bis Fr., 9. Januar" */
+export function holidayLabel(d: FamilyData, date: string): string | null {
+  const fmt = (x: string) => new Date(x + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
+  const a = autoHolidayOn(d, date);
+  if (a) return a.kind === 'feiertag' ? `Feiertag: ${a.name}` : `${a.name} bis ${fmt(a.to)}`;
+  if (manualHolidayOn(d, date)) { const u = d.settings?.holiday?.until; return `Ferien${u ? ' bis ' + fmt(u) : ''}`; }
+  return null;
+}
+
+export function proposeIdea(d: FamilyData, childId: string, title: string): FamilyData {
+  return { ...d, ideas: [...(d.ideas ?? []), { id: uid(), childId, title: title.trim().slice(0, 80), at: new Date().toISOString() }] };
+}
+/** Eltern schalten einen Kinderwunsch mit Punktepreis frei (cost) oder lehnen ab (null). */
+export function decideIdea(d: FamilyData, ideaId: string, cost: number | null, forAll = false): FamilyData {
+  const idea = (d.ideas ?? []).find(i => i.id === ideaId);
+  const rest = { ...d, ideas: (d.ideas ?? []).filter(i => i.id !== ideaId) };
+  if (!idea || cost === null) return rest;
+  return { ...rest, rewards: [...d.rewards, { id: uid(), title: idea.title, cost, childId: forAll ? undefined : idea.childId }] };
 }

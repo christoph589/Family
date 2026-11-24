@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { loadHolidays, STATES } from '../data/holidays';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { ALL_COLORS, CHILD_COLORS, holidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
+import { ALL_COLORS, autoHolidayOn, CHILD_COLORS, manualHolidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
 import { TEMPLATES } from '../data/templates';
 import { FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
@@ -75,36 +76,81 @@ export const fmtDay = (d: string) => new Date(d + 'T12:00:00').toLocaleDateStrin
 /** Ferienmodus: Schulaufgaben pausieren. Einmalige Lernaufgaben der Eltern bleiben. */
 export function Holiday() {
   const { data, update } = useFamily();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [pick, setPick] = useState(false);
+  const auto = data?.settings?.autoHoliday;
+  const enableAuto = (state: string) => {
+    setBusy(true); setErr('');
+    loadHolidays(state)
+      .then(r => { update(d => ({ ...d, settings: { ...d.settings, autoHoliday: { on: true, state, ...r } } })); setPick(false); })
+      .catch(e => setErr(e?.message?.startsWith('Ferien') ? e.message : 'Ferien konnten nicht geladen werden. Bitte später nochmal versuchen.'))
+      .finally(() => setBusy(false));
+  };
+  // Termine rechtzeitig für das nächste Jahr nachladen
+  useEffect(() => {
+    if (!auto?.on) return;
+    const soon = new Date(); soon.setDate(soon.getDate() + 200);
+    if (auto.validTo < isoDate(soon)) enableAuto(auto.state);
+  }, [auto?.on, auto?.state, auto?.validTo]);
   if (!data) return null;
   const h = data.settings?.holiday;
-  const active = holidayOn(data, today());
+  const now = today();
+  const manual = manualHolidayOn(data, now);
+  const autoNow = autoHolidayOn(data, now);
+  const next = auto?.on ? auto.ranges.find(r => r.kind === 'ferien' && r.from > now) : undefined;
   const set = (holiday?: { on: boolean; until?: string }) => update(d => ({ ...d, settings: { ...d.settings, holiday } }));
   const opts: { label: string; until?: string }[] = [
     { label: 'Bis Sonntag', until: sundayIn(1) }, { label: '2 Wochen', until: sundayIn(2) },
     { label: '3 Wochen', until: sundayIn(3) }, { label: '6 Wochen', until: sundayIn(6) }, { label: 'Ohne Enddatum' },
   ];
+  const chip = (label: string, onPress: () => void, on = false) => (
+    <Pressable key={label} onPress={onPress} disabled={busy}
+      style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99, borderWidth: 1, borderColor: C.accent, backgroundColor: on ? C.accent : C.surface }}>
+      <Text style={{ color: on ? '#fff' : C.fg, fontWeight: '700' }}>{label}</Text>
+    </Pressable>
+  );
   return (
-    <View style={[s.card, active && { borderWidth: 2, borderColor: C.warn }]}>
-      <Text style={s.label}>Ferienmodus</Text>
-      {active ? (
+    <View style={[s.card, (manual || autoNow) && { borderWidth: 2, borderColor: C.warn }]}>
+      <Text style={s.label}>Ferien</Text>
+
+      <Pressable accessibilityRole="switch" accessibilityState={{ checked: !!auto?.on }} disabled={busy}
+        onPress={() => (auto?.on ? update(d => ({ ...d, settings: { ...d.settings, autoHoliday: { ...d.settings!.autoHoliday!, on: false } } })) : auto?.state ? enableAuto(auto.state) : setPick(true))}
+        style={[s.row, { flexWrap: 'nowrap' }]}>
+        <View style={{ width: 48, height: 28, borderRadius: 14, backgroundColor: auto?.on ? C.ok : C.surface2, padding: 3, alignItems: auto?.on ? 'flex-end' : 'flex-start' }}>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.text, { fontWeight: '700' }]}>Automatisch nach Bundesland{auto?.state ? `: ${STATES.find(x => x.code === auto.state)?.name}` : ''}</Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>Schulferien und Feiertage. Schulaufgaben pausieren dann von selbst.</Text>
+        </View>
+      </Pressable>
+      {busy && <Text style={s.muted}>Lade Ferientermine …</Text>}
+      {!!err && <Text style={{ color: C.danger }}>{err}</Text>}
+      {auto?.on && !pick && (
+        <View style={{ gap: 4 }}>
+          {autoNow && <Text style={[s.text, { fontWeight: '800' }]}>🏖️ Jetzt: {autoNow.name} bis {fmtDay(autoNow.to)}</Text>}
+          {next && <Text style={s.muted}>Nächste Ferien: {next.name}, {fmtDay(next.from)} bis {fmtDay(next.to)}</Text>}
+          <Pressable onPress={() => setPick(true)}><Text style={{ color: C.accent, fontWeight: '700' }}>Bundesland ändern</Text></Pressable>
+        </View>
+      )}
+      {pick && <View style={[s.row, { gap: 8 }]}>{STATES.map(st => chip(st.name, () => enableAuto(st.code), auto?.state === st.code))}</View>}
+
+      <Text style={[s.label, { marginTop: 8 }]}>Von Hand</Text>
+      {manual ? (
         <>
           <Text style={[s.text, { fontWeight: '800' }]}>🏖️ Ferien {h?.until ? `bis einschließlich ${fmtDay(h.until)}` : 'ohne Enddatum'}</Text>
-          <Text style={s.muted}>Schulaufgaben pausieren. Lernaufgaben, die ihr einzeln anlegt (Eigene Aufgabe › Hausaufgabe › Nur heute), erscheinen trotzdem. {h?.until ? 'Am letzten Ferientag kommt abends wieder „Schulsachen richten“.' : ''}</Text>
           <Button ghost title="Ferien beenden" onPress={() => set(undefined)} />
         </>
       ) : (
         <>
-          <Text style={s.muted}>Pausiert alle Schulaufgaben. Routinen wie Zähne putzen und Haushalt laufen weiter.</Text>
+          <Text style={s.muted}>Für bewegliche Ferientage oder Brückentage, die nicht im Kalender stehen.</Text>
           <View style={[s.row, { gap: 8 }]}>
-            {opts.map(o => (
-              <Pressable key={o.label} onPress={() => set({ on: true, until: o.until })}
-                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99, borderWidth: 1, borderColor: C.accent }}>
-                <Text style={{ color: C.fg, fontWeight: '700' }}>{o.label}{o.until ? ` (${new Date(o.until + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' })})` : ''}</Text>
-              </Pressable>
-            ))}
+            {opts.map(o => chip(`${o.label}${o.until ? ` (${new Date(o.until + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' })})` : ''}`, () => set({ on: true, until: o.until })))}
           </View>
         </>
       )}
+      <Text style={[s.muted, { fontSize: 13 }]}>In den Ferien pausieren Schulaufgaben. Routinen und Haushalt laufen weiter. Lernaufgaben, die ihr einzeln anlegt (Hausaufgabe, Nur heute), erscheinen trotzdem.</Text>
     </View>
   );
 }

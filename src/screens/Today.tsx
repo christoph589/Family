@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { confirm, eventsOn, holidayOn, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn } from '../data/logic';
+import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn } from '../data/logic';
 import { Child, TaskKind } from '../data/types';
 import { C, s } from '../ui/theme';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
@@ -11,14 +11,13 @@ export function Today({ childIds, parent }: { childIds: string[]; parent: boolea
   const kids = data.children.filter(c => childIds.includes(c.id));
   const people = peopleOf(data);
   const events = eventsOn(data, today(), parent ? null : childIds);
-  const holiday = holidayOn(data, today());
-  const until = data.settings?.holiday?.until;
+  const holiday = holidayLabel(data, today());
   return (
     <View style={{ gap: 16 }}>
       {holiday && (
         <View style={[s.card, { backgroundColor: C.warnSoft, flexDirection: 'row', alignItems: 'center' }]}>
           <Text style={{ fontSize: 28 }}>🏖️</Text>
-          <Text style={[s.text, { fontWeight: '800', flex: 1 }]}>Ferien{until ? ` bis ${new Date(until + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}` : ''}. Schulaufgaben machen Pause.</Text>
+          <Text style={[s.text, { fontWeight: '800', flex: 1 }]}>{holiday}. Schulaufgaben machen Pause.</Text>
         </View>
       )}
       {events.length > 0 && (

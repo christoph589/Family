@@ -23,7 +23,10 @@ export interface Task {
 }
 export interface Completion { id: string; taskId: string; childId: string; date: string; status: 'wartet' | 'bestaetigt' }
 export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string }
-export interface Reward { id: string; title: string; cost: number }
+/** childId gesetzt = nur für dieses Kind (z. B. aus einem eigenen Wunsch) */
+export interface Reward { id: string; title: string; cost: number; childId?: string }
+/** Eigener Wunsch eines Kindes, Eltern legen den Punktepreis fest und schalten frei. */
+export interface Idea { id: string; childId: string; title: string; at: string }
 export interface RewardRequest { id: string; childId: string; rewardId: string; at: string }
 export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; photos?: string[]; date: string }
 
@@ -67,10 +70,13 @@ export interface FamilyData {
   ledger: LedgerEntry[];
   rewards: Reward[];
   requests?: RewardRequest[];
+  ideas?: Idea[];
   topics?: Topic[];
   worksheets?: Worksheet[];
   events?: CalEvent[];
-  settings?: { googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string } };
+  settings?: { googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
+    /** Automatische Ferien und Feiertage nach Bundesland */
+    autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string } };
 }
 
 // Punkte pro Note (1 bis 6). Keine Minuspunkte.

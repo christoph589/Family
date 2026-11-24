@@ -7,6 +7,8 @@ import { Connect } from './src/screens/Connect';
 import { Devices } from './src/screens/Devices';
 import { Family, Holiday } from './src/screens/Family';
 import { Timetable } from './src/screens/Timetable';
+import { Board } from './src/screens/Board';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { peopleOf } from './src/data/logic';
 import { Calendar } from './src/screens/Calendar';
 import { Grades } from './src/screens/Grades';
@@ -72,6 +74,9 @@ function Root() {
   const [tab, setTab] = useState<Tab>('heute');
   const [askPin, setAskPin] = useState<string | null>(null);
   const scroller = useRef<any>(null);
+  const [board, setBoardState] = useState(false);
+  useEffect(() => { AsyncStorage.getItem('familienplaner:board').then(v => v === '1' && setBoardState(true), () => {}); }, []);
+  const setBoard = (on: boolean) => { setBoardState(on); AsyncStorage.setItem('familienplaner:board', on ? '1' : '0').catch(() => {}); };
   useEffect(() => { scroller.current?.scrollTo({ y: 0, animated: false }); }, [tab]);
   const [pin, setPin] = useState('');
   const [pinErr, setPinErr] = useState(false);
@@ -83,6 +88,8 @@ function Root() {
       <Button ghost title="Gerät neu einrichten" onPress={cloud.unlink} />
     </View>
   ) : <Setup />}</SafeAreaView>;
+
+  if (board) return <SafeAreaView style={s.screen}><Board onExit={() => { setBoard(false); setProfile(null); }} /></SafeAreaView>;
 
   const people = peopleOf(data).filter(p => p.role === 'eltern' || !ownChild || p.id === ownChild);
   const parent = profile?.kind === 'eltern';
@@ -107,6 +114,16 @@ function Root() {
               </Pressable>
             ))}
           </View>
+          {!ownChild && (
+            <Pressable accessibilityRole="button" onPress={() => setBoard(true)}
+              style={({ pressed }) => [s.card, { flexDirection: 'row', alignItems: 'center', gap: 14, maxWidth: 480, alignSelf: 'center', width: '100%', opacity: pressed ? 0.8 : 1 }]}>
+              <Text style={{ fontSize: 34 }}>📺</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.h2}>Wandansicht</Text>
+                <Text style={s.muted}>Alles auf einen Blick, nur zum Ansehen. Für ein Tablet an der Wand. Bleibt nach dem Neustart an, beenden mit PIN.</Text>
+              </View>
+            </Pressable>
+          )}
           {askPin && (
             <View style={[s.card, { maxWidth: 360, alignSelf: 'center', width: '100%' }]}>
               <Text style={s.label}>PIN für {people.find(p => p.id === askPin)?.name}</Text>
@@ -128,7 +145,7 @@ function Root() {
   const childIds = profile.kind === 'kind' ? [profile.id] : data.children.map(c => c.id);
   const sheetBadge = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === (parent ? 'abgegeben' : 'offen')).length
     + (parent ? (data.topics ?? []).filter(t => !(data.worksheets ?? []).some(w => w.topicId === t.id)).length : 0);
-  const reqBadge = parent ? (data.requests ?? []).length : 0;
+  const reqBadge = parent ? (data.requests ?? []).length + (data.ideas ?? []).length : 0;
   const tabs: { value: Tab; label: string; badge?: number }[] = [
     { value: 'heute', label: 'Heute' }, { value: 'kalender', label: 'Kalender' },
     { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge },
