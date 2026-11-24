@@ -7,7 +7,7 @@ import { Connect } from './src/screens/Connect';
 import { Avatar } from './src/ui/Avatar';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
-import { Family, Holiday } from './src/screens/Family';
+import { Family, Holiday, ParentPin } from './src/screens/Family';
 import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -232,6 +232,7 @@ function Root() {
           </View>
         )}
         {tab === 'aufgaben' && admin && section === 'familie' && <Family />}
+        {tab === 'aufgaben' && admin && section === 'familie' && <ParentPin />}
         {tab === 'aufgaben' && admin && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
         {tab === 'aufgaben' && admin && section === 'ferien' && <Holiday />}
         {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}

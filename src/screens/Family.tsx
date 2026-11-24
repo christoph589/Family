@@ -245,3 +245,42 @@ function KidProfileEdit({ child }: { child: Child }) {
     </View>
   );
 }
+
+/** Eltern-PIN ändern. Die alte PIN wird abgefragt, falls das Tablet gerade offen herumliegt. */
+export function ParentPin() {
+  const { data, update } = useFamily();
+  const [old, setOld] = useState('');
+  const [pin, setPin] = useState('');
+  const [pin2, setPin2] = useState('');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  if (!data) return null;
+  const digits = (t: string) => t.replace(/\D/g, '').slice(0, 4);
+  function save() {
+    if (old !== data!.family.parentPin) return setMsg({ ok: false, text: 'Die bisherige PIN stimmt nicht.' });
+    if (pin.length !== 4) return setMsg({ ok: false, text: 'Die neue PIN braucht 4 Ziffern.' });
+    if (pin !== pin2) return setMsg({ ok: false, text: 'Die beiden neuen PINs sind nicht gleich.' });
+    update(d => ({ ...d, family: { ...d.family, parentPin: pin } }));
+    setOld(''); setPin(''); setPin2('');
+    setMsg({ ok: true, text: 'Neue Eltern-PIN gespeichert. Sie gilt sofort auf allen Geräten.' });
+  }
+  const field = (label: string, v: string, set: (t: string) => void) => (
+    <View style={{ gap: 4, flexGrow: 1, flexBasis: 140 }}>
+      <Text style={s.label}>{label}</Text>
+      <TextInput style={[s.input, { letterSpacing: 8, fontWeight: '800' }]} value={v} secureTextEntry keyboardType="number-pad" maxLength={4}
+        accessibilityLabel={label} onChangeText={t => { set(digits(t)); setMsg(null); }} placeholder="••••" />
+    </View>
+  );
+  return (
+    <View style={s.card}>
+      <Text style={s.h2}>🔒 Eltern-PIN ändern</Text>
+      <Text style={s.muted}>Mit dieser PIN melden sich alle Erwachsenen mit Admin-Rechten an. Oma, Opa und andere ohne Admin haben ihre eigene PIN, die stellst du oben bei der Person ein.</Text>
+      <View style={[s.row, { alignItems: 'flex-end' }]}>
+        {field('Bisherige PIN', old, setOld)}
+        {field('Neue PIN', pin, setPin)}
+        {field('Neue PIN nochmal', pin2, setPin2)}
+      </View>
+      <Button title="PIN ändern" disabled={old.length !== 4 || pin.length !== 4 || pin2.length !== 4} onPress={save} />
+      {msg && <Text style={{ color: msg.ok ? C.ok : C.danger, fontWeight: '700' }}>{msg.text}</Text>}
+    </View>
+  );
+}
