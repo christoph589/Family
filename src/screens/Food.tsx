@@ -34,7 +34,7 @@ export function Food({ who }: { who: string }) {
   );
 }
 
-function MealPlan({ who }: { who: string }) {
+export function MealPlan({ who }: { who: string }) {
   const { data, update } = useFamily();
   const [anchor, setAnchor] = useState(today());
   const [edit, setEdit] = useState<{ date: string; slot: MealSlot } | null>(null);
@@ -133,7 +133,7 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
 }
 const countUses = (d: FamilyData, r: Recipe) => (d.meals ?? []).filter(m => norm(m.title) === norm(r.title)).length;
 
-function Shopping({ who }: { who: string }) {
+export function Shopping({ who }: { who: string }) {
   const { data, update } = useFamily();
   const [text, setText] = useState('');
   if (!data) return null;

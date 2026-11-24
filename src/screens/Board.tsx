@@ -8,9 +8,9 @@ import { Child, FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf, matchesPeople } from '../ui/CalViews';
 import { EventForm } from './Calendar';
-import { mealsOn } from './Food';
+import { MealPlan, mealsOn, Shopping } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { C, s } from '../ui/theme';
+import { C, s, SHADOW } from '../ui/theme';
 import { Avatar, PersonHead } from '../ui/Avatar';
 import { useFeedItems } from '../data/feeds';
 
@@ -30,6 +30,9 @@ export function Board({ onExit }: { onExit: () => void }) {
   const [adding, setAdding] = useState(false);
   const [sel, setSel] = useState<{ it: CalItem; date: string } | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [pane, setPaneState] = useState<Pane>('kalender');
+  const setPane = (p: Pane) => { setPaneState(p); AsyncStorage.setItem('familienplaner:boardPane', p).catch(() => {}); };
+  useEffect(() => { AsyncStorage.getItem('familienplaner:boardPane').then(v => v && setPaneState(v as Pane), () => {}); }, []);
   const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : []);
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardView').then(v => v && setMode(v as CalMode), () => {}); }, []);
   // Nach 2 Minuten ohne Bedienung zurück zu heute
@@ -50,6 +53,7 @@ export function Board({ onExit }: { onExit: () => void }) {
   const wide = width >= 900;
   const people = peopleOf(data);
   const holiday = holidayLabel(data, date);
+  const open = (data.shopping ?? []).filter(i => !i.done).length;
 
   return (
     <ScrollView onTouchStart={() => setTouched(x => x + 1)} style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: wide ? 24 : 16, gap: 16 }}>
@@ -119,7 +123,20 @@ export function Board({ onExit }: { onExit: () => void }) {
         </View>
       </View>
 
-      <View style={[s.card, { gap: 12 }]}>
+      <View style={[s.row, { gap: 10 }]} accessibilityRole="tablist">
+        {PANES.map(x => (
+          <Pressable key={x.value} accessibilityRole="tab" accessibilityState={{ selected: pane === x.value }} onPress={() => setPane(x.value)}
+            style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 18, backgroundColor: pane === x.value ? C.fg : C.surface }, pane === x.value ? null : SHADOW.sm]}>
+            <Text style={{ fontSize: 20 }}>{x.icon}</Text>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: pane === x.value ? '#fff' : C.fg }}>{x.label}</Text>
+            {x.value === 'einkauf' && open > 0 && <View style={{ backgroundColor: C.accent2, borderRadius: 10, minWidth: 20, paddingHorizontal: 5, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{open}</Text></View>}
+          </Pressable>
+        ))}
+      </View>
+      {pane === 'stundenplan' && <WallTimetable data={data} kids={data.children.filter(c => !filter.length || filter.includes(c.id))} date={date} />}
+      {pane === 'essen' && <MealPlan who="Wandansicht" />}
+      {pane === 'einkauf' && <Shopping who="Wandansicht" />}
+      {pane === 'kalender' && <View style={[s.card, { gap: 12 }]}>
         <CalNav mode={mode} anchor={anchor} onMode={m => { setMode(m); setAnchor(date); AsyncStorage.setItem('familienplaner:boardView', m).catch(() => {}); }} onAnchor={setAnchor}
           right={<Button title="+ Termin" onPress={() => { setAdding(true); setSel(null); }} />} />
         {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
@@ -137,8 +154,8 @@ export function Board({ onExit }: { onExit: () => void }) {
         )}
         <CalViews flat mode={mode} anchor={anchor} itemsFor={d => [...baseItems(data, d, null), ...feedItems(d)].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).filter(i => matchesPeople(i, filter))}
           onItemPress={(it, d) => { setSel({ it, date: d }); setConfirmDel(false); setAdding(false); }} onPickDay={d => { setAnchor(d); setMode('tag'); }} />
-      </View>
-      <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Abhaken geht auf den Geräten der Kinder oder in der Eltern-Ansicht. Termine kann hier jeder eintragen.</Text>
+      </View>}
+      <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Aufgaben abhaken geht auf den Geräten der Kinder oder in der Eltern-Ansicht. Termine, Essen und Einkauf kann hier jeder eintragen.</Text>
     </ScrollView>
   );
 }
@@ -179,6 +196,53 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
           <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: completion ? C.warn : child.color, backgroundColor: completion ? C.warn : 'transparent' }} />
           <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>{task.icon ? task.icon + ' ' : ''}{task.title}{TIME_ICON[task.time ?? ''] ?? ''}</Text>
           {completion && <Text style={{ color: C.warn, fontSize: 12, fontWeight: '700' }}>wartet</Text>}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+type Pane = 'kalender' | 'stundenplan' | 'essen' | 'einkauf';
+const PANES: { value: Pane; icon: string; label: string }[] = [
+  { value: 'kalender', icon: '📅', label: 'Kalender' }, { value: 'stundenplan', icon: '🏫', label: 'Stundenplan' },
+  { value: 'essen', icon: '🍽️', label: 'Essensplan' }, { value: 'einkauf', icon: '🛒', label: 'Einkaufsliste' },
+];
+const WDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
+
+/** Stundenpläne aller Kinder als Wochenraster: Zeilen = Kinder, Spalten = Mo bis Fr. */
+function WallTimetable({ data, kids, date }: { data: FamilyData; kids: Child[]; date: string }) {
+  const wd = new Date(date + 'T12:00:00').getDay(); // 1 = Montag
+  const withPlan = kids.filter(k => k.timetable && Object.values(k.timetable).some(d => d && (d.from || d.to || d.lessons?.some(Boolean))));
+  if (!withPlan.length) return <View style={s.card}><Text style={s.muted}>Noch kein Stundenplan eingetragen. Das geht in der Eltern-Ansicht unter Kalender › Stundenplan.</Text></View>;
+  return (
+    <View style={[s.card, { padding: 12, gap: 0 }]}>
+      <View style={{ flexDirection: 'row' }}>
+        <View style={{ width: 150 }} />
+        {WDAYS.map((d, i) => (
+          <View key={d} style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}>
+            <Text style={{ fontWeight: '800', fontSize: 16, color: i + 1 === wd ? C.accent : C.fg }}>{d}</Text>
+          </View>
+        ))}
+      </View>
+      {withPlan.map(k => (
+        <View key={k.id} style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.line, paddingVertical: 8, alignItems: 'stretch' }}>
+          <View style={{ width: 150, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Avatar name={k.name} color={k.color} photo={k.photo} size={36} />
+            <Text style={[s.text, { fontWeight: '800', flex: 1 }]} numberOfLines={1}>{k.name}</Text>
+          </View>
+          {WDAYS.map((_, i) => {
+            const day = k.timetable?.[String(i + 1) as '1'];
+            const lessons = (day?.lessons ?? []).filter(Boolean);
+            const today = i + 1 === wd;
+            return (
+              <View key={i} style={{ flex: 1, padding: 3 }}>
+                <View style={{ flex: 1, borderRadius: 12, padding: 8, gap: 2, backgroundColor: day && (day.from || day.to) ? k.color + (today ? '33' : '17') : C.surface2, borderWidth: today ? 2 : 0, borderColor: k.color }}>
+                  {day && (day.from || day.to) ? <Text style={{ fontWeight: '800', fontSize: 14, color: C.fg }}>{day.from ?? '?'}–{day.to ?? '?'}</Text> : <Text style={s.muted}>–</Text>}
+                  {lessons.length > 0 && <Text style={{ fontSize: 12, color: C.muted }} numberOfLines={4}>{lessons.join(', ')}</Text>}
+                </View>
+              </View>
+            );
+          })}
         </View>
       ))}
     </View>
