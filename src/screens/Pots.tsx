@@ -37,7 +37,9 @@ export function Pots({ childIds, parent, admin }: { childIds: string[]; parent: 
 function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[]; parent: boolean; admin: boolean }) {
   const { data, update } = useFamily();
   const [ask, setAsk] = useState<'none' | 'dissolve'>('none');
+  const [editing, setEditing] = useState(false);
   if (!data) return null;
+  if (editing) return <NewPot pot={pot} onDone={() => setEditing(false)} />;
   const bal = potBalance(data, pot.id);
   const shares = potShares(data, pot.id);
   const pct = Math.min(100, (bal / pot.target) * 100);
@@ -93,6 +95,7 @@ function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[
         {admin && (
           <View style={[s.row, { gap: 8 }]}>
             {!reached && <Button ghost title="👪 +25 von uns" onPress={() => update(d => ({ ...d, pots: (d.pots ?? []).map(p => (p.id === pot.id ? { ...p, bonus: (p.bonus ?? 0) + 25 } : p)) }))} />}
+            <Button ghost title="✏️ Bearbeiten" onPress={() => setEditing(true)} />
             {reached && <Button title="🎉 Einlösen" color={C.ok} onPress={() => update(d => ({ ...d, pots: (d.pots ?? []).map(p => (p.id === pot.id ? { ...p, doneAt: new Date().toISOString() } : p)) }))} />}
             {ask === 'none'
               ? <Pressable onPress={() => setAsk('dissolve')} style={{ padding: 8 }}><Text style={{ color: C.danger, fontWeight: '700' }}>Ziel auflösen</Text></Pressable>
@@ -109,15 +112,22 @@ function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[
   );
 }
 
-function NewPot({ onDone }: { onDone: () => void }) {
-  const { update } = useFamily();
-  const [title, setTitle] = useState('');
-  const [icon, setIcon] = useState('🎢');
-  const [target, setTarget] = useState('500');
-  const t = Number(target);
+function NewPot({ onDone, pot }: { onDone: () => void; pot?: Pot }) {
+  const { data, update } = useFamily();
+  const [title, setTitle] = useState(pot?.title ?? '');
+  const [icon, setIcon] = useState(pot?.icon ?? '🎢');
+  const [target, setTarget] = useState(String(pot?.target ?? 500));
+  const [bonus, setBonus] = useState(String(pot?.bonus ?? 0));
+  const t = Number(target), bo = Number(bonus) || 0;
+  const paid = pot && data ? potBalance(data, pot.id) - (pot.bonus ?? 0) : 0;
+  function save() {
+    if (pot) update(d => ({ ...d, pots: (d.pots ?? []).map(p => (p.id === pot.id ? { ...p, title: title.trim(), icon, target: t, bonus: bo || undefined } : p)) }));
+    else update(d => ({ ...d, pots: [...(d.pots ?? []), { id: uid(), title: title.trim(), icon, target: t, createdAt: new Date().toISOString() }] }));
+    onDone();
+  }
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
-      <Text style={s.h2}>Neues gemeinsames Ziel</Text>
+      <Text style={s.h2}>{pot ? 'Ziel bearbeiten' : 'Neues gemeinsames Ziel'}</Text>
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
         <IconPicker value={icon} onChange={setIcon} />
         <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={setTitle} placeholder="z. B. Freizeitpark" autoFocus accessibilityLabel="Ziel" />
@@ -131,9 +141,16 @@ function NewPot({ onDone }: { onDone: () => void }) {
         ))}
         <TextInput style={[s.input, { width: 100 }]} value={target} onChangeText={x => setTarget(x.replace(/\D/g, ''))} keyboardType="number-pad" accessibilityLabel="Punkte" />
       </View>
+      {pot && (
+        <>
+          <Text style={s.label}>Von euch Eltern dazugelegt</Text>
+          <TextInput style={[s.input, { width: 120 }]} value={bonus} onChangeText={x => setBonus(x.replace(/\D/g, ''))} keyboardType="number-pad" accessibilityLabel="Eltern-Anteil" />
+          <Text style={[s.muted, { fontSize: 13 }]}>Die Kinder haben {paid} Punkte eingezahlt. Daran ändert sich nichts. Mit den neuen Werten steht der Topf bei {paid + bo} von {t || 0}{paid + bo >= t && t > 0 ? ', also erreicht 🎉' : ''}.</Text>
+        </>
+      )}
       <Text style={[s.muted, { fontSize: 13 }]}>Richtwert: Hausaufgaben bringen 10, Zähne putzen 2 Punkte. Bei 4 Kindern kommen so grob 150 bis 250 Punkte pro Woche zusammen, wenn alle mitmachen.</Text>
       <View style={s.row}>
-        <Button title="Anlegen" disabled={!title.trim() || !(t > 0)} onPress={() => { update(d => ({ ...d, pots: [...(d.pots ?? []), { id: uid(), title: title.trim(), icon, target: t, createdAt: new Date().toISOString() }] })); onDone(); }} />
+        <Button title={pot ? 'Speichern' : 'Anlegen'} disabled={!title.trim() || !(t > 0)} onPress={save} />
         <Button ghost title="Abbrechen" onPress={onDone} />
       </View>
     </View>
