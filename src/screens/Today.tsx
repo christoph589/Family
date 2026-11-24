@@ -3,6 +3,7 @@ import { useFamily } from '../data/FamilyContext';
 import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn, gradeLabel, ageOf, birthdaysOn, giveBirthdayBonus, BIRTHDAY_BONUS } from '../data/logic';
 import { Child, TaskKind } from '../data/types';
 import { C, s } from '../ui/theme';
+import { Avatar } from '../ui/Avatar';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
 
 export function Today({ childIds, parent }: { childIds: string[]; parent: boolean }) {
@@ -101,9 +102,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
   return (
     <View style={[s.card, { flexGrow: 1, flexBasis: 320, borderTopWidth: 6, borderTopColor: child.color }]}>
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
-        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: child.color, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 22 }}>{child.name[0]}</Text>
-        </View>
+        <Avatar name={child.name} color={child.color} photo={child.photo} size={48} />
         <View style={{ flex: 1 }}>
           <Text style={s.h2}>{child.name}</Text>
           {gradeLabel(child) ? <Text style={s.muted}>{gradeLabel(child)}{ageOf(child) !== undefined ? ` · ${ageOf(child)} Jahre` : ''}</Text> : null}

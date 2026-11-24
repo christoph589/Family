@@ -11,6 +11,8 @@ import { EventForm } from './Calendar';
 import { mealsOn } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, s } from '../ui/theme';
+import { Avatar } from '../ui/Avatar';
+import { useFeedItems } from '../data/feeds';
 
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 
@@ -28,6 +30,7 @@ export function Board({ onExit }: { onExit: () => void }) {
   const [adding, setAdding] = useState(false);
   const [sel, setSel] = useState<{ it: CalItem; date: string } | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : []);
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardView').then(v => v && setMode(v as CalMode), () => {}); }, []);
   // Nach 2 Minuten ohne Bedienung zurück zu heute
   useEffect(() => { const t = setTimeout(() => setAnchor(today()), 120000); return () => clearTimeout(t); }, [anchor, mode, touched]);
@@ -75,9 +78,7 @@ export function Board({ onExit }: { onExit: () => void }) {
               <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={`Nur ${p.name}`} accessibilityState={{ selected: on }}
                 onPress={() => setFilter(f => (f.includes(p.id) ? f.filter(x => x !== p.id) : [...f, p.id]))}
                 style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 3, borderColor: on ? C.fg : 'transparent', padding: 2 }}>
-                <View style={{ flex: 1, borderRadius: 24, backgroundColor: p.color, alignItems: 'center', justifyContent: 'center', opacity: filter.length && !on ? 0.4 : 1 }}>
-                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>{p.name[0]}</Text>
-                </View>
+                <View style={{ opacity: filter.length && !on ? 0.4 : 1 }}><Avatar name={p.name} color={p.color} photo={p.photo} size={42} /></View>
               </Pressable>
             );
           })}
@@ -127,14 +128,14 @@ export function Board({ onExit }: { onExit: () => void }) {
             <Text style={s.h2}>{sel.it.title}</Text>
             <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
             <View style={s.row}>
-              {!/^[gtsb]/.test(sel.it.key) && (confirmDel
+              {(data.events ?? []).some(e => e.id === sel.it.key) && (confirmDel
                 ? <><Text style={s.text}>Wirklich löschen?</Text><Button title="Ja, löschen" color={C.danger} onPress={() => { update(d => ({ ...d, events: (d.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); setConfirmDel(false); }} /></>
                 : <Button ghost title="Termin löschen" onPress={() => setConfirmDel(true)} />)}
               <Button ghost title="Schließen" onPress={() => { setSel(null); setConfirmDel(false); }} />
             </View>
           </View>
         )}
-        <CalViews flat mode={mode} anchor={anchor} itemsFor={d => baseItems(data, d, null).filter(i => matchesPeople(i, filter))}
+        <CalViews flat mode={mode} anchor={anchor} itemsFor={d => [...baseItems(data, d, null), ...feedItems(d)].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).filter(i => matchesPeople(i, filter))}
           onItemPress={(it, d) => { setSel({ it, date: d }); setConfirmDel(false); setAdding(false); }} onPickDay={d => { setAnchor(d); setMode('tag'); }} />
       </View>
       <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Abhaken geht auf den Geräten der Kinder oder in der Eltern-Ansicht. Termine kann hier jeder eintragen.</Text>
@@ -165,9 +166,7 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
   return (
     <View style={[s.card, { flexGrow: 1, flexBasis: 260, borderTopWidth: 6, borderTopColor: child.color }]}>
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
-        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: child.color, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 24 }}>{child.name[0]}</Text>
-        </View>
+        <Avatar name={child.name} color={child.color} photo={child.photo} size={52} />
         <Text style={[s.h2, { flex: 1, fontSize: 24 }]} numberOfLines={1}>{child.name}</Text>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={{ fontSize: 30, fontWeight: '800', color: child.color }}>⭐ {pointsOf(data, child.id)}</Text>

@@ -96,9 +96,10 @@ export const ALL_COLORS = [...CHILD_COLORS, ...PARENT_COLORS, '#0f6e73', '#e0a10
 export function parentsOf(d: FamilyData): Parent[] {
   return d.parents ?? [{ id: 'mama', name: 'Mama', color: PARENT_COLORS[0] }, { id: 'papa', name: 'Papa', color: PARENT_COLORS[1] }];
 }
-export type Person = { id: string; name: string; color: string; role: 'eltern' | 'kind' };
+export const isAdmin = (p?: Parent) => !!p && p.admin !== false;
+export type Person = { id: string; name: string; color: string; role: 'eltern' | 'kind'; admin?: boolean; photo?: string };
 export function peopleOf(d: FamilyData): Person[] {
-  return [...parentsOf(d).map(p => ({ ...p, role: 'eltern' as const })), ...d.children.map(c => ({ id: c.id, name: c.name, color: c.color, role: 'kind' as const }))];
+  return [...parentsOf(d).map(p => ({ id: p.id, name: p.name, color: p.color, photo: p.photo, admin: isAdmin(p), role: 'eltern' as const })), ...d.children.map(c => ({ id: c.id, name: c.name, color: c.color, photo: c.photo, role: 'kind' as const }))];
 }
 
 export function newFamily(name: string, pin: string, kids: { name: string; grade?: string; birthday?: string; gender?: Child['gender'] }[], parentNames: string[] = ['Mama', 'Papa']): FamilyData {

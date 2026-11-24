@@ -4,12 +4,14 @@ import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, TextInput
 import { cloudEnabled, cloudStore, DeviceLink, getLink, signOut } from './src/data/cloud';
 import { FamilyProvider, useFamily } from './src/data/FamilyContext';
 import { Connect } from './src/screens/Connect';
+import { Avatar } from './src/ui/Avatar';
+import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
 import { Family, Holiday } from './src/screens/Family';
 import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { birthdaysOn, payAllowances, peopleOf, today } from './src/data/logic';
+import { birthdaysOn, isAdmin, parentsOf, payAllowances, peopleOf, today } from './src/data/logic';
 import { Money } from './src/screens/Money';
 import { Food } from './src/screens/Food';
 import { Calendar } from './src/screens/Calendar';
@@ -58,13 +60,6 @@ function CloudApp() {
   );
 }
 
-function Avatar({ name, color, size = 44 }: { name: string; color: string; size?: number }) {
-  return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.45 }}>{name[0]?.toUpperCase()}</Text>
-    </View>
-  );
-}
 
 const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', essen: '🍽️', aufgaben: '⚙️' };
 
@@ -97,9 +92,13 @@ function Root() {
 
   const people = peopleOf(data).filter(p => p.role === 'eltern' || !ownChild || p.id === ownChild);
   const parent = profile?.kind === 'eltern';
+  // Admin = volle Rechte. Andere Erwachsene (z. B. Oma, Opa) sehen alles, haken ab und tragen Termine ein, aber keine Einstellungen, Geld und Punkte.
+  const admin = parent && isAdmin(parentsOf(data).find(p => p.id === profile?.id) ?? parentsOf(data)[0]);
   if (!profile) {
     const tryPin = () => {
-      if (pin === data.family.parentPin) { setProfile({ kind: 'eltern', id: askPin! }); setAskPin(null); setPin(''); setTab('heute'); }
+      const who = parentsOf(data).find(p => p.id === askPin);
+      const ok = isAdmin(who) ? pin === data.family.parentPin : !!who?.pin && pin === who.pin;
+      if (ok) { setProfile({ kind: 'eltern', id: askPin! }); setAskPin(null); setPin(''); setTab('heute'); }
       else setPinErr(true);
     };
     return (
@@ -112,10 +111,10 @@ function Root() {
               <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.name}
                 onPress={() => { setPinErr(false); setPin(''); if (p.role === 'kind') { setProfile({ kind: 'kind', id: p.id }); setTab('heute'); } else setAskPin(p.id); }}
                 style={({ pressed }) => [s.card, { width: 150, alignItems: 'center', paddingVertical: 22, borderWidth: 3, borderColor: askPin === p.id ? p.color : 'transparent', opacity: pressed ? 0.8 : 1 }]}>
-                <Avatar name={p.name} color={p.color} size={72} />
+                <Avatar name={p.name} color={p.color} photo={p.photo} size={72} />
                 {p.role === 'kind' && birthdaysOn(data, today()).some(b => b.child.id === p.id) && <Text style={{ position: 'absolute', top: 8, right: 12, fontSize: 28 }}>🎂</Text>}
                 <Text style={[s.h2, { textAlign: 'center' }]} numberOfLines={1}>{p.name}</Text>
-                {p.role === 'eltern' && <Text style={[s.muted, { fontSize: 12 }]}>mit PIN</Text>}
+                {p.role === 'eltern' && <Text style={[s.muted, { fontSize: 12 }]}>{p.admin ? 'mit PIN' : 'eigene PIN'}</Text>}
               </Pressable>
             ))}
           </View>
@@ -135,7 +134,7 @@ function Root() {
               <TextInput autoFocus style={[s.input, { fontSize: 24, letterSpacing: 8, textAlign: 'center' }]} value={pin} secureTextEntry keyboardType="number-pad"
                 onSubmitEditing={tryPin}
                 onChangeText={t => { setPin(t.replace(/\D/g, '').slice(0, 4)); setPinErr(false); }} />
-              {pinErr && <Text style={{ color: C.danger }}>PIN stimmt nicht.</Text>}
+              {pinErr && <Text style={{ color: C.danger }}>{(() => { const w = parentsOf(data).find(p => p.id === askPin); return w && !isAdmin(w) && !w.pin ? 'Für diese Person ist noch keine PIN festgelegt. Mama oder Papa legt sie unter ⚙️ › Familie fest.' : 'PIN stimmt nicht.'; })()}</Text>}
               <View style={s.row}>
                 <Button title="Weiter" disabled={pin.length !== 4} onPress={tryPin} style={{ flex: 1 }} />
                 <Button ghost title="Abbrechen" onPress={() => setAskPin(null)} />
@@ -150,11 +149,12 @@ function Root() {
   const childIds = profile.kind === 'kind' ? [profile.id] : data.children.map(c => c.id);
   const sheetBadge = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === (parent ? 'abgegeben' : 'offen')).length
     + (parent ? (data.topics ?? []).filter(t => !(data.worksheets ?? []).some(w => w.topicId === t.id)).length : 0);
-  const reqBadge = parent ? (data.requests ?? []).length + (data.ideas ?? []).length : 0;
+  const reqBadge = admin ? (data.requests ?? []).length + (data.ideas ?? []).length : 0;
   const tabs: { value: Tab; label: string; badge?: number }[] = [
     { value: 'heute', label: 'Heute' }, { value: 'kalender', label: 'Kalender' },
     { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge }, { value: 'geld', label: 'Geld' }, { value: 'essen', label: 'Essen' },
   ];
+  const shownTabs = tabs.filter(t => !parent || admin || !['punkte', 'geld'].includes(t.value));
   const me = peopleOf(data).find(p => p.id === profile.id) ?? { name: 'Eltern', color: C.accent };
   const dateStr = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -166,7 +166,7 @@ function Root() {
             <Text style={[s.h2, { fontSize: 18 }]} numberOfLines={1}>{data.family.name}</Text>
             <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={1}>{dateStr}</Text>
           </View>
-          {parent && (
+          {admin && (
             <Pressable accessibilityRole="button" accessibilityLabel="Verwalten" onPress={() => setTab('aufgaben')}
               style={{ width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: tab === 'aufgaben' ? me.color + '22' : C.bg }}>
               <Text style={{ fontSize: 20 }}>⚙️</Text>
@@ -175,7 +175,7 @@ function Root() {
           <Pressable accessibilityRole="button" accessibilityLabel={`${me.name}, Person wechseln`}
             onPress={() => { setProfile(null); setTab('heute'); }}
             style={[s.row, { flexWrap: 'nowrap', backgroundColor: C.bg, borderRadius: 99, paddingVertical: 4, paddingLeft: 4, paddingRight: 12, gap: 8 }]}>
-            <Avatar name={me.name} color={me.color} size={34} />
+            <Avatar name={me.name} color={me.color} photo={(me as any).photo} size={34} />
             <View>
               <Text style={{ fontWeight: '800', color: C.fg }}>{me.name}</Text>
               <Text style={{ fontSize: 11, color: C.muted }}>wechseln</Text>
@@ -190,17 +190,18 @@ function Root() {
         {tab === 'kalender' && <Timetable childIds={childIds} parent={parent} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
-        {tab === 'lernen' && parent && <Grades />}
+        {tab === 'lernen' && admin && <Grades />}
         {tab === 'geld' && <Money childIds={childIds} parent={parent} />}
         {tab === 'essen' && <Food who={me.name} />}
-        {tab === 'aufgaben' && parent && <Holiday />}
-        {tab === 'aufgaben' && parent && <Family />}
-        {tab === 'aufgaben' && parent && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
-        {tab === 'aufgaben' && parent && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
+        {tab === 'aufgaben' && admin && <Holiday />}
+        {tab === 'aufgaben' && admin && <Family />}
+        {tab === 'aufgaben' && admin && cloud && <CalendarLink link={cloud.link} />}
+        {tab === 'aufgaben' && admin && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
+        {tab === 'aufgaben' && admin && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
       </ScrollView>
       <View style={{ backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.line }}>
         <View style={{ flexDirection: 'row', maxWidth: 720, width: '100%', alignSelf: 'center' }}>
-          {tabs.map(t => {
+          {shownTabs.map(t => {
             const on = tab === t.value;
             return (
               <Pressable key={t.value} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.badge ? `${t.label}, ${t.badge} neu` : t.label}

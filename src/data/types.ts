@@ -9,6 +9,7 @@ export interface SchoolDay { from?: string; to?: string; lessons?: string[] }
 export type Timetable = Partial<Record<'1' | '2' | '3' | '4' | '5', SchoolDay>>;
 export type Gender = 'junge' | 'maedchen' | 'divers';
 export interface Child {
+  photo?: string;
   id: string; name: string; color: string;
   /** Klasse wie eingegeben, z. B. "4" oder "4b". Steigt jedes Schuljahr automatisch (siehe gradeYear). */
   grade?: string;
@@ -27,7 +28,8 @@ export interface MoneyAccount {
   tx: MoneyTx[];
 }
 /** Elternteil, z. B. Mama oder Papa. Für Kalender und Anzeige, wer gerade am Pad ist. */
-export interface Parent { id: string; name: string; color: string }
+/** Erwachsene in der Familie. admin=false: z. B. Oma/Opa, eigene PIN, keine Einstellungen, kein Geld, keine Punkte-Freigabe. */
+export interface Parent { id: string; name: string; color: string; admin?: boolean; pin?: string; photo?: string }
 export interface Task {
   id: string; childId: string; title: string; kind: TaskKind; points: number;
   repeat: Repeat; date?: string; // date nur bei 'einmal' (YYYY-MM-DD)
@@ -101,6 +103,8 @@ export interface FamilyData {
   events?: CalEvent[];
   settings?: { googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
     /** Automatische Ferien und Feiertage nach Bundesland */
+    /** Eingebundene fremde Kalender (iCal-Links von iCloud, Google, Outlook, WebUntis) */
+    feeds?: Feed[];
     autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string } };
 }
 
@@ -115,3 +119,5 @@ export interface Meal { id: string; date: string; slot: MealSlot; title: string 
 /** Gericht mit Zutaten, wird aus dem Essensplan gemerkt */
 export interface Recipe { id: string; title: string; ingredients: string[] }
 export interface ShopItem { id: string; title: string; done: boolean; at: string; by?: string }
+
+export interface Feed { id: string; name: string; url: string; color: string; who?: string }

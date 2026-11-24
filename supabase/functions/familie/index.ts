@@ -1,0 +1,194 @@
+// Familienplaner: Kalender-Abos
+//
+// GET  /familie?ics=<token>          Familienkalender als iCal-Abo (für iPhone, Mac, Google, Outlook)
+// POST /familie {action:'import', url} Fremden Kalender (iCal-Link) einlesen, nur für angemeldete Geräte
+//
+// Einspielen: Supabase Dashboard > Edge Functions > Deploy a new function > Via Editor,
+// Name "familie", diesen Code einfügen, Deploy. Danach bei der Funktion
+// "Enforce JWT Verification" ausschalten (Kalender-Apps schicken keinen Login mit).
+// Die Funktion prüft den Login für den Import selbst.
+
+import ICAL from 'npm:ical.js@1.5.0';
+import { createClient } from 'npm:@supabase/supabase-js@2.119.2';
+
+const URL_ = Deno.env.get('SUPABASE_URL')!;
+const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
+const TZ = 'Europe/Berlin';
+
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'content-type': 'application/json' } });
+
+// Nur bekannte Kalenderdienste, damit die Funktion nicht als offener Proxy taugt
+const ALLOWED = [/\.icloud\.com$/, /^calendar\.google\.com$/, /^outlook\.(office365|live)\.com$/, /\.webuntis\.com$/, /^webuntis\.com$/, /\.office\.com$/, /^p\d+-caldav\.icloud\.com$/];
+
+// ---------- Export: Familientermine als iCal ----------
+
+type Ev = { id: string; title: string; date: string; time?: string; end?: string; who: string[]; weekly?: boolean; icon?: string };
+type Person = { id: string; name: string };
+
+const esc = (t: string) => t.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\;');
+const fold = (line: string) => {
+  const out: string[] = [];
+  let rest = line;
+  while (new TextEncoder().encode(rest).length > 74) {
+    let cut = 74;
+    while (new TextEncoder().encode(rest.slice(0, cut)).length > 74) cut--;
+    out.push(rest.slice(0, cut));
+    rest = ' ' + rest.slice(cut);
+  }
+  out.push(rest);
+  return out.join('\r\n');
+};
+const d8 = (iso: string) => iso.replace(/-/g, '');
+const t6 = (hm: string) => hm.replace(':', '') + '00';
+const addMin = (hm: string, m: number) => { const [h, mi] = hm.split(':').map(Number); const t = Math.min(23 * 60 + 59, h * 60 + mi + m); return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
+const nextDay = (iso: string) => { const x = new Date(iso + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10); };
+
+const VTZ = [
+  'BEGIN:VTIMEZONE', 'TZID:Europe/Berlin',
+  'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200', 'TZNAME:CEST', 'DTSTART:19700329T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT',
+  'BEGIN:STANDARD', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100', 'TZNAME:CET', 'DTSTART:19701025T030000', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU', 'END:STANDARD',
+  'END:VTIMEZONE',
+];
+
+export function buildIcs(name: string, events: Ev[], people: Person[], children: { id: string; name: string; birthday?: string }[]): string {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Familienplaner//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    `X-WR-CALNAME:${esc(name)}`, `X-WR-TIMEZONE:${TZ}`, 'REFRESH-INTERVAL;VALUE=DURATION:PT30M', 'X-PUBLISHED-TTL:PT30M', ...VTZ];
+  for (const e of events) {
+    const who = e.who.map(w => people.find(p => p.id === w)?.name).filter(Boolean).join(', ');
+    lines.push('BEGIN:VEVENT', `UID:${e.id}@familienplaner`, `DTSTAMP:${stamp}`, `SUMMARY:${esc(`${e.icon ? e.icon + ' ' : ''}${e.title}${who ? ` (${who})` : ''}`)}`);
+    if (e.time) {
+      lines.push(`DTSTART;TZID=${TZ}:${d8(e.date)}T${t6(e.time)}`, `DTEND;TZID=${TZ}:${d8(e.date)}T${t6(e.end ?? addMin(e.time, 60))}`);
+    } else {
+      lines.push(`DTSTART;VALUE=DATE:${d8(e.date)}`, `DTEND;VALUE=DATE:${d8(nextDay(e.date))}`);
+    }
+    if (e.weekly) lines.push('RRULE:FREQ=WEEKLY');
+    lines.push('END:VEVENT');
+  }
+  for (const c of children) {
+    if (!c.birthday) continue;
+    lines.push('BEGIN:VEVENT', `UID:geburtstag-${c.id}@familienplaner`, `DTSTAMP:${stamp}`, `SUMMARY:${esc(`🎂 ${c.name} hat Geburtstag`)}`,
+      `DTSTART;VALUE=DATE:${d8(c.birthday)}`, `DTEND;VALUE=DATE:${d8(nextDay(c.birthday))}`, 'RRULE:FREQ=YEARLY', 'TRANSP:TRANSPARENT', 'END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return lines.map(fold).join('\r\n') + '\r\n';
+}
+
+// ---------- Import: fremden iCal-Kalender lesen ----------
+
+export type Out = { uid: string; title: string; date: string; time?: string; end?: string; allDay: boolean };
+
+const fmt = new Intl.DateTimeFormat('de-DE', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+function local(d: Date) {
+  const p = Object.fromEntries(fmt.formatToParts(d).map(x => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+}
+const isoOf = (t: any) => `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`;
+
+export function parseIcs(text: string, fromIso: string, toIso: string): Out[] {
+  const comp = new ICAL.Component(ICAL.parse(text));
+  for (const tz of comp.getAllSubcomponents('vtimezone')) { try { ICAL.TimezoneService.register(tz); } catch { /* schon bekannt */ } }
+  const from = new Date(fromIso + 'T00:00:00Z'), to = new Date(toIso + 'T23:59:59Z');
+  const out: Out[] = [];
+  const push = (uid: string, title: string, s: any, e: any) => {
+    if (s.isDate) {
+      const last = e ? (() => { const x = e.clone(); x.adjust(-1, 0, 0, 0); return x; })() : s;
+      // mehrtägig: für jeden Tag ein Eintrag (max. 31)
+      const cur = s.clone();
+      for (let i = 0; i < 31 && cur.compare(last) <= 0; i++) { out.push({ uid: uid + ':' + isoOf(cur), title, date: isoOf(cur), allDay: true }); cur.adjust(1, 0, 0, 0); }
+    } else {
+      const a = local(s.toJSDate()), b = e ? local(e.toJSDate()) : undefined;
+      out.push({ uid, title, date: a.date, time: a.time, end: b && b.date === a.date ? b.time : undefined, allDay: false });
+    }
+  };
+  // Ausnahmen wiederkehrender Termine (RECURRENCE-ID) werden von ical.js über relateException verknüpft
+  const vevents = comp.getAllSubcomponents('vevent');
+  const masters = new Map<string, any>();
+  for (const v of vevents) {
+    const ev = new ICAL.Event(v);
+    if (ev.isRecurrenceException()) continue;
+    masters.set(ev.uid, ev);
+  }
+  for (const v of vevents) {
+    const ev = new ICAL.Event(v);
+    if (ev.isRecurrenceException() && masters.has(ev.uid)) masters.get(ev.uid).relateException(v);
+  }
+  for (const ev of masters.values()) {
+    if ((ev.component.getFirstPropertyValue('status') ?? '').toUpperCase() === 'CANCELLED') continue;
+    const title = String(ev.summary ?? 'Termin');
+    if (!ev.isRecurring()) {
+      const s = ev.startDate;
+      if (!s) continue;
+      const js = s.toJSDate();
+      if (js > to || (ev.endDate ?? s).toJSDate() < from) continue;
+      push(ev.uid, title, s, ev.endDate);
+      continue;
+    }
+    const it = ev.iterator();
+    let n: any, guard = 0;
+    while ((n = it.next()) && guard++ < 5000) {
+      const js = n.toJSDate();
+      if (js > to) break;
+      const det = ev.getOccurrenceDetails(n);
+      if (det.endDate.toJSDate() < from) continue;
+      const st = (det.item.component.getFirstPropertyValue('status') ?? '').toUpperCase();
+      if (st === 'CANCELLED') continue;
+      push(ev.uid + ':' + n.toString(), String(det.item.summary ?? title), det.startDate, det.endDate);
+    }
+  }
+  return out.sort((a, b) => (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')));
+}
+
+// ---------- Server ----------
+
+if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  const admin = createClient(URL_, SERVICE, { auth: { persistSession: false } });
+  try {
+    const u = new URL(req.url);
+    const token = u.searchParams.get('ics');
+    if (req.method === 'GET' && token) {
+      if (!/^[a-f0-9]{32,64}$/.test(token)) return new Response('Not found', { status: 404 });
+      const { data: fam } = await admin.from('families').select('id, name').eq('ics_token', token).maybeSingle();
+      if (!fam) return new Response('Not found', { status: 404 });
+      const { data: st } = await admin.from('family_state').select('data').eq('family_id', fam.id).single();
+      const d = st!.data as any;
+      const people: Person[] = [...(d.parents ?? [{ id: 'mama', name: 'Mama' }, { id: 'papa', name: 'Papa' }]), ...(d.children ?? [])];
+      const ics = buildIcs(fam.name, d.events ?? [], people, d.children ?? []);
+      return new Response(ics, { headers: { ...cors, 'content-type': 'text/calendar; charset=utf-8', 'cache-control': 'max-age=300' } });
+    }
+
+    if (req.method === 'POST') {
+      const auth = req.headers.get('Authorization') ?? '';
+      const userClient = createClient(URL_, ANON, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
+      const { data: user } = await userClient.auth.getUser();
+      if (!user?.user) return json({ error: 'not_signed_in' }, 401);
+      const body = await req.json();
+      if (body.action === 'import') {
+        let url = String(body.url ?? '').trim().replace(/^webcals?:\/\//i, 'https://');
+        let host: string;
+        try { const p = new URL(url); if (p.protocol !== 'https:') throw 0; host = p.hostname.toLowerCase(); url = p.toString(); }
+        catch { return json({ error: 'bad_url' }, 400); }
+        if (!ALLOWED.some(r => r.test(host))) return json({ error: 'host_not_allowed', host }, 400);
+        const r = await fetch(url, { headers: { accept: 'text/calendar' }, redirect: 'follow' });
+        if (!r.ok) return json({ error: 'fetch_failed', status: r.status }, 502);
+        const text = await r.text();
+        if (text.length > 5_000_000 || !text.includes('BEGIN:VCALENDAR')) return json({ error: 'not_ical' }, 502);
+        const today = new Date();
+        const from = new Date(today.getTime() - 31 * 864e5).toISOString().slice(0, 10);
+        const to = new Date(today.getTime() + 400 * 864e5).toISOString().slice(0, 10);
+        return json({ events: parseIcs(text, from, to) });
+      }
+      return json({ error: 'unknown_action' }, 400);
+    }
+    return new Response('Not found', { status: 404, headers: cors });
+  } catch (e) {
+    return json({ error: 'server', message: String((e as Error)?.message ?? e) }, 500);
+  }
+});

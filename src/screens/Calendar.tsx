@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import { DateField } from '../ui/DateField';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
+import { useFeedItems } from '../data/feeds';
 
 const parse = (d: string) => new Date(d + 'T12:00:00');
 
@@ -37,6 +38,7 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
     return () => { on = false; };
   }, [calId, days[0], days.length]);
 
+  const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : []);
   if (!data) return null;
   const people = peopleOf(data);
   const personInTitle = (t: string) => people.find(k => t.toLowerCase().split(/[^\p{L}]+/u).includes(k.name.toLowerCase()));
@@ -47,8 +49,9 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
       return { key: 'g' + e.id, time: e.time, title: e.title, color: kid?.color ?? '#4285f4', tag: 'Google' };
     });
     const base = baseItems(data!, date, parent ? null : childIds);
+    const ext = feedItems(date).filter(i => parent || !i.who?.length || i.who.some(w => childIds.includes(w) || people.some(p => p.id === w && p.role === 'eltern')));
     const tasks = base.filter(i => i.key.startsWith('t'));
-    return [...base.filter(i => !i.key.startsWith('t')), ...g].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).concat(tasks);
+    return [...base.filter(i => !i.key.startsWith('t')), ...g, ...ext].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).concat(tasks);
   }
 
   async function connect() {
@@ -68,7 +71,7 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
           <Text style={s.h2}>{sel.it.title}</Text>
           <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
           <View style={s.row}>
-            {parent && !/^[gtsb]/.test(sel.it.key) && <Button title="Termin löschen" color={C.danger} onPress={() => { update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
+            {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button title="Termin löschen" color={C.danger} onPress={() => { update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
             <Button ghost title="Schließen" onPress={() => setSel(null)} />
           </View>
         </View>

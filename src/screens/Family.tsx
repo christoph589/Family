@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { loadHolidays, STATES } from '../data/holidays';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { ALL_COLORS, autoHolidayOn, CHILD_COLORS, manualHolidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
+import { ALL_COLORS, autoHolidayOn, isAdmin, CHILD_COLORS, manualHolidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
 import { TEMPLATES } from '../data/templates';
 import { ageOf, gradeLabel, removeChild, schoolYearOf } from '../data/logic';
 import { Child } from '../data/types';
@@ -10,6 +10,7 @@ import { KidDraft, KidFields } from '../ui/KidFields';
 import { FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
+import { Avatar, pickPhoto } from '../ui/Avatar';
 
 /** Familienmitglieder: Namen und Farben von Eltern und Kindern. */
 export function Family() {
@@ -21,12 +22,15 @@ export function Family() {
   const parents = parentsOf(data);
   const setParents = (fn: (p: ReturnType<typeof parentsOf>) => ReturnType<typeof parentsOf>) => update(d => ({ ...d, parents: fn(parentsOf(d)) }));
   const rows = [
-    ...parents.map(p => ({ id: p.id, name: p.name, color: p.color, role: 'eltern' as const })),
-    ...data.children.map(c => ({ id: c.id, name: c.name, color: c.color, role: 'kind' as const })),
+    ...parents.map(p => ({ id: p.id, name: p.name, color: p.color, photo: p.photo, role: 'eltern' as const })),
+    ...data.children.map(c => ({ id: c.id, name: c.name, color: c.color, photo: c.photo, role: 'kind' as const })),
   ];
   const rename = (id: string, role: string, name: string) => role === 'eltern'
     ? setParents(ps => ps.map(p => (p.id === id ? { ...p, name } : p)))
     : update((d: FamilyData) => ({ ...d, children: d.children.map(c => (c.id === id ? { ...c, name } : c)) }));
+  const setPhoto = (id: string, role: string, photo?: string) => role === 'eltern'
+    ? setParents(ps => ps.map(p => (p.id === id ? { ...p, photo } : p)))
+    : update((d: FamilyData) => ({ ...d, children: d.children.map(c => (c.id === id ? { ...c, photo } : c)) }));
   const recolor = (id: string, role: string, color: string) => role === 'eltern'
     ? setParents(ps => ps.map(p => (p.id === id ? { ...p, color } : p)))
     : update((d: FamilyData) => ({ ...d, children: d.children.map(c => (c.id === id ? { ...c, color } : c)) }));
@@ -37,14 +41,14 @@ export function Family() {
       {rows.map(r => (
         <View key={r.id} style={{ gap: 8 }}>
           <View style={[s.row, { flexWrap: 'nowrap' }]}>
-            <Pressable accessibilityLabel={`Farbe für ${r.name}`} onPress={() => setOpen(o => (o === r.id ? null : r.id))}
-              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: r.color, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>{r.name[0]?.toUpperCase() ?? '?'}</Text>
+            <Pressable accessibilityLabel={`Foto oder Farbe für ${r.name}`} onPress={() => setOpen(o => (o === r.id ? null : r.id))}
+              >
+              <Avatar name={r.name} color={r.color} photo={r.photo} size={44} />
             </Pressable>
             <TextInput style={[s.input, { flex: 1, minWidth: 0 }]} value={r.name} onChangeText={t => rename(r.id, r.role, t.slice(0, 24))} accessibilityLabel="Name"
               placeholder={r.role === 'kind' ? 'Name des Kindes' : 'z. B. Mama, Papa, Oma'} autoFocus={focusId === r.id} selectTextOnFocus />
-            <Text style={[s.muted, { flexShrink: 0 }]}>{r.role === 'kind' ? 'Kind' : 'Eltern'}</Text>
-            {r.role === 'eltern' && parents.length > 1 && (
+            <Text style={[s.muted, { flexShrink: 0 }]}>{r.role === 'kind' ? 'Kind' : isAdmin(parents.find(p => p.id === r.id)) ? 'Admin' : 'Erwachsen'}</Text>
+            {r.role === 'eltern' && parents.length > 1 && !(isAdmin(parents.find(p => p.id === r.id)) && parents.filter(isAdmin).length === 1) && (
               <Pressable onPress={() => setParents(ps => ps.filter(p => p.id !== r.id))}><Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text></Pressable>
             )}
             {r.role === 'kind' && data.children.length > 1 && (
@@ -61,7 +65,43 @@ export function Family() {
               </View>
             </View>
           )}
+          {r.role === 'eltern' && (() => {
+            const p = parents.find(x => x.id === r.id)!;
+            const adm = isAdmin(p);
+            const lastAdmin = adm && parents.filter(isAdmin).length === 1;
+            const set = (patch: Partial<typeof p>) => setParents(ps => ps.map(x => (x.id === p.id ? { ...x, ...patch } : x)));
+            return (
+              <View style={{ marginLeft: 50, gap: 8 }}>
+                <View style={s.row}>
+                  {[{ v: true, l: 'Admin (alle Rechte)' }, { v: false, l: 'Ohne Admin, z. B. Oma, Opa' }].map(o => (
+                    <Pressable key={String(o.v)} accessibilityRole="button" disabled={lastAdmin && !o.v}
+                      onPress={() => set({ admin: o.v })}
+                      style={[s.chip, { paddingVertical: 8, backgroundColor: adm === o.v ? r.color : C.surface2, opacity: lastAdmin && !o.v ? 0.4 : 1 }]}>
+                      <Text style={{ color: adm === o.v ? '#fff' : C.fg, fontWeight: '700' }}>{o.l}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {adm ? (
+                  <Text style={[s.muted, { fontSize: 13 }]}>{lastAdmin ? 'Mindestens eine Person muss Admin bleiben. ' : ''}Meldet sich mit der Eltern-PIN an.</Text>
+                ) : (<>
+                  <View style={[s.row, { flexWrap: 'nowrap' }]}>
+                    <Text style={s.text}>Eigene PIN</Text>
+                    <TextInput style={[s.input, { width: 110, letterSpacing: 6, textAlign: 'center' }]} value={p.pin ?? ''} keyboardType="number-pad" placeholder="4 Ziffern"
+                      accessibilityLabel={`PIN für ${r.name}`} onChangeText={t => set({ pin: t.replace(/\D/g, '').slice(0, 4) })} />
+                    {(p.pin ?? '').length !== 4 && <Text style={{ color: C.warn, fontWeight: '700', flexShrink: 1 }}>fehlt noch</Text>}
+                  </View>
+                  <Text style={[s.muted, { fontSize: 13 }]}>Darf: alles sehen, Aufgaben abhaken und bestätigen, Termine, Essen und Einkauf eintragen, Lernen begleiten. Darf nicht: Einstellungen, Taschengeld, Punkte und Belohnungen, Noten.</Text>
+                </>)}
+              </View>
+            );
+          })()}
           {r.role === 'kind' && <KidProfileEdit child={data.children.find(c => c.id === r.id)!} />}
+          {open === r.id && (
+            <View style={[s.row, { paddingLeft: 50 }]}>
+              <Button ghost title={r.photo ? 'Anderes Foto' : '📷 Foto hochladen'} onPress={() => pickPhoto().then(ph => { if (ph) { setPhoto(r.id, r.role, ph); setOpen(null); } })} />
+              {r.photo && <Button ghost title="Foto entfernen" onPress={() => setPhoto(r.id, r.role, undefined)} />}
+            </View>
+          )}
           {open === r.id && (
             <View style={[s.row, { gap: 8, paddingLeft: 50 }]}>
               {ALL_COLORS.map(c => (
@@ -78,8 +118,9 @@ export function Family() {
           return { ...d, children: [...d.children, { id, name: '', color: CHILD_COLORS[d.children.length % CHILD_COLORS.length] }], tasks: [...d.tasks, ...starter] };
         }); }} />
         <Button ghost title="+ Elternteil" onPress={() => { const id = uid(); setFocusId(id); setParents(ps => [...ps, { id, name: '', color: PARENT_COLORS[ps.length % PARENT_COLORS.length] }]); }} />
+        <Button ghost title="+ Oma, Opa, …" onPress={() => { const id = uid(); setFocusId(id); setParents(ps => [...ps, { id, name: '', admin: false, color: ALL_COLORS[(ps.length + 5) % ALL_COLORS.length] }]); }} />
       </View>
-      <Text style={[s.muted, { fontSize: 13 }]}>Tipp auf den Kreis ändert die Farbe. Termine und Aufgaben tragen die Farbe der Person.</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>Tipp auf den Kreis: Foto hochladen oder Farbe ändern. Termine und Aufgaben tragen die Farbe der Person.</Text>
     </View>
   );
 }
