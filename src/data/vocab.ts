@@ -61,13 +61,19 @@ export function buildRound(deck: VocabDeck, date = today(), size = ROUND): { car
 }
 
 export type Mode = 'choice' | 'flip' | 'type';
-/** Je besser die Karte sitzt, desto schwerer die Abfrage: erst auswählen, dann umdrehen, dann selbst schreiben. */
-export function modeFor(card: VocabCard, deck: VocabDeck): { mode: Mode; reverse: boolean } {
+/**
+ * Abfrage gemischt, beide Richtungen und von Anfang an auch selbst schreiben.
+ * Je besser die Karte sitzt, desto öfter wird geschrieben statt ausgewählt.
+ * reverse = Deutsch steht da, Fremdsprache ist gefragt.
+ */
+export function modeFor(card: VocabCard, deck: VocabDeck, repeat = false, r = Math.random(), d = Math.random()): { mode: Mode; reverse: boolean } {
   const canChoice = deck.cards.length >= 4;
-  if (card.box === 0) return { mode: canChoice ? 'choice' : 'flip', reverse: false };
-  if (card.box === 1) return { mode: canChoice ? 'choice' : 'flip', reverse: true };
-  if (card.box <= 3) return { mode: 'flip', reverse: Math.random() < 0.5 };
-  return { mode: 'type', reverse: true };
+  if (repeat) return { mode: 'type', reverse: d < 0.6 };
+  const pick = (choice: number, flip: number): Mode => (r < choice && canChoice ? 'choice' : r < choice + flip ? 'flip' : 'type');
+  if (card.box === 0) return { mode: pick(0.55, 0.15), reverse: d < 0.45 };
+  if (card.box === 1) return { mode: pick(0.3, 0.2), reverse: d < 0.55 };
+  if (card.box <= 3) return { mode: pick(0.1, 0.25), reverse: d < 0.6 };
+  return { mode: 'type', reverse: d < 0.65 };
 }
 
 export function choicesFor(card: VocabCard, deck: VocabDeck, reverse: boolean): string[] {

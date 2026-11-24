@@ -110,7 +110,7 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
             </View>
           );
         })}
-        <Text style={[s.muted, { fontSize: 13 }]}>So funktioniert’s: Neue Wörter fragt der Trainer mit Auswahl ab, dann zum Umdrehen und am Ende zum selbst Schreiben. Was sitzt, kommt seltener dran (nach 1, 2, 4, 7, 14 Tagen). Pro Runde gibt es Punkte, höchstens {DAILY_CAP} am Tag, dazu Bonus für Tage am Stück.</Text>
+        <Text style={[s.muted, { fontSize: 13 }]}>So funktioniert’s: Der Trainer fragt in beide Richtungen und gemischt ab: auswählen, umdrehen und selbst schreiben. Je besser ein Wort sitzt, desto öfter wird geschrieben. Falsches kommt in der Runde nochmal, dann zum Schreiben. Was sitzt, kommt seltener dran (nach 1, 2, 4, 7, 14 Tagen). Pro Runde gibt es Punkte, höchstens {DAILY_CAP} am Tag, dazu Bonus für Tage am Stück.</Text>
       </View>
 
       {deck && <Practice deck={deck} givePoints={!parent} onClose={() => setPlaying(null)} />}
@@ -280,7 +280,7 @@ function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; givePoints: 
   const shake = useRef(new Animated.Value(0)).current;
   const L = langOf(deck.lang);
   const card = queue[idx];
-  const plan = useMemo(() => (card ? { ...modeFor(card, deck) } : null), [card?.id, idx]); // eslint-disable-line react-hooks/exhaustive-deps
+  const plan = useMemo(() => (card ? modeFor(card, deck, queue.slice(0, idx).some(c => c.id === card.id)) : null), [card?.id, idx]); // eslint-disable-line react-hooks/exhaustive-deps
   const options = useMemo(() => (card && plan?.mode === 'choice' ? choicesFor(card, deck, plan.reverse) : []), [card?.id, idx, plan?.mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ask = card ? (plan?.reverse ? card.back : card.front) : '';
@@ -352,7 +352,7 @@ function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; givePoints: 
               <Animated.View style={[{ borderRadius: 28, padding: 28, minHeight: 200, alignItems: 'center', justifyContent: 'center', gap: 10, transform: [{ scale: pop }, { translateX: shake }] },
                 answered ? { backgroundColor: answered.ok ? C.ok : C.danger } : grad('#5b4cf0', '#8a6cff'), SHADOW.lg]}>
                 <Text style={{ color: '#fff', opacity: 0.85, fontWeight: '700' }}>
-                  {plan.reverse ? `Wie heißt das auf ${deck.lang === 'Andere' ? 'der Fremdsprache' : deck.lang}?` : 'Was heißt das auf Deutsch?'}
+                  {plan.mode === 'type' ? (plan.reverse ? `Schreib es auf ${deck.lang === 'Andere' ? 'in der Fremdsprache' : deck.lang} ✍️` : 'Schreib es auf Deutsch ✍️') : plan.reverse ? `Wie heißt das auf ${deck.lang === 'Andere' ? 'der Fremdsprache' : deck.lang}?` : 'Was heißt das auf Deutsch?'}
                 </Text>
                 <Text style={{ color: '#fff', fontSize: 34, fontWeight: '800', textAlign: 'center' }}>{ask}</Text>
                 {askForeign && L.speech && canSpeak() && (
