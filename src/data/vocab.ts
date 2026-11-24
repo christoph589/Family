@@ -69,10 +69,10 @@ export type Mode = 'choice' | 'flip' | 'type';
 export function modeFor(card: VocabCard, deck: VocabDeck, repeat = false, r = Math.random(), d = Math.random()): { mode: Mode; reverse: boolean } {
   const canChoice = deck.cards.length >= 4;
   if (repeat) return { mode: 'type', reverse: d < 0.6 };
-  const pick = (choice: number, flip: number): Mode => (r < choice && canChoice ? 'choice' : r < choice + flip ? 'flip' : 'type');
-  if (card.box === 0) return { mode: pick(0.55, 0.15), reverse: d < 0.45 };
-  if (card.box === 1) return { mode: pick(0.3, 0.2), reverse: d < 0.55 };
-  if (card.box <= 3) return { mode: pick(0.1, 0.25), reverse: d < 0.6 };
+  const pick = (choice: number): Mode => (r < choice && canChoice ? 'choice' : 'type');
+  if (card.box === 0) return { mode: pick(0.6), reverse: d < 0.45 };
+  if (card.box === 1) return { mode: pick(0.4), reverse: d < 0.55 };
+  if (card.box <= 3) return { mode: pick(0.15), reverse: d < 0.6 };
   return { mode: 'type', reverse: d < 0.65 };
 }
 
