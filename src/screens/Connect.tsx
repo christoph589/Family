@@ -60,6 +60,8 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
       <TextInput style={s.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
       <Text style={s.label}>Passwort (mindestens 8 Zeichen)</Text>
       <TextInput style={s.input} value={pw} onChangeText={setPw} secureTextEntry autoComplete={mode === 'neu' ? 'new-password' : 'current-password'} />
+      {pw.length > 0 && pw.length < 8 && <Text style={{ color: C.danger }}>Noch {8 - pw.length} Zeichen. Das ist nicht die 4-stellige Eltern-PIN.</Text>}
+      {!!email && !email.includes('@') && <Text style={{ color: C.danger }}>Bitte eine gültige E-Mail eingeben.</Text>}
     </View>
     {!!info && <Text style={{ color: C.accent, fontWeight: '700' }}>{info}</Text>}
     {error}
