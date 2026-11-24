@@ -4,9 +4,12 @@ import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { newFamily } from '../data/logic';
 import { useFamily } from '../data/FamilyContext';
+import { FamilyData } from '../data/types';
 
-export function Setup() {
+export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promise<void>; note?: string } = {}) {
   const { replace } = useFamily();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [kids, setKids] = useState([{ name: '', grade: '' }]);
@@ -16,7 +19,7 @@ export function Setup() {
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { maxWidth: 560 }]}>
       <Text style={s.h1}>Familie anlegen</Text>
-      <Text style={s.muted}>Testversion. Die Daten bleiben vorerst nur auf diesem Gerät.</Text>
+      <Text style={s.muted}>{note ?? 'Testversion. Die Daten bleiben vorerst nur auf diesem Gerät.'}</Text>
       <View style={s.card}>
         <Text style={s.label}>Familienname</Text>
         <TextInput style={s.input} value={name} onChangeText={setName} placeholder="z. B. Familie Krüger" />
@@ -34,7 +37,13 @@ export function Setup() {
         ))}
         <Button ghost title="Weiteres Kind" onPress={() => setKids(ks => [...ks, { name: '', grade: '' }])} />
       </View>
-      <Button title="Loslegen" disabled={!valid} onPress={() => replace(newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined }))))} />
+      {!!err && <Text style={{ color: C.danger }}>{err}</Text>}
+      <Button title={busy ? 'Moment …' : 'Loslegen'} disabled={!valid || busy} onPress={() => {
+        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined })));
+        if (!onCreate) return replace(d);
+        setBusy(true); setErr('');
+        onCreate(d).catch(e => { setErr(e.message); setBusy(false); });
+      }} />
       <Text style={[s.muted, { fontSize: 13, color: C.muted }]}>Für jedes Kind lege ich ein paar Startaufgaben an, zum Beispiel Zähne putzen. Unter „Aufgaben“ findest du viele Vorlagen.</Text>
     </ScrollView>
   );

@@ -7,7 +7,7 @@ import { KIND_LABEL, TaskTemplate, TEMPLATES, TIME_LABEL } from '../data/templat
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 
-export function Manage({ onReset }: { onReset: () => void }) {
+export function Manage({ onReset }: { onReset?: () => void }) {
   const { data, update } = useFamily();
   const [childId, setChildId] = useState(data?.children[0]?.id ?? '');
   const [title, setTitle] = useState('');
@@ -91,7 +91,7 @@ export function Manage({ onReset }: { onReset: () => void }) {
           </View>
         ))}
       </View>
-      <View style={[s.card, { borderWidth: 1, borderColor: C.line }]}>
+      {onReset && <View style={[s.card, { borderWidth: 1, borderColor: C.line }]}>
         <Text style={s.label}>Testdaten</Text>
         {!confirmReset ? <Button ghost title="Alles löschen und neu anfangen" onPress={() => setConfirmReset(true)} /> : (
           <View style={s.row}>
@@ -100,7 +100,7 @@ export function Manage({ onReset }: { onReset: () => void }) {
             <Button ghost title="Abbrechen" onPress={() => setConfirmReset(false)} />
           </View>
         )}
-      </View>
+      </View>}
     </View>
   );
 }

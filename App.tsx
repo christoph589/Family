@@ -1,7 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
+import { cloudEnabled, cloudStore, DeviceLink, getLink, signOut } from './src/data/cloud';
 import { FamilyProvider, useFamily } from './src/data/FamilyContext';
+import { Connect } from './src/screens/Connect';
+import { Devices } from './src/screens/Devices';
 import { Calendar } from './src/screens/Calendar';
 import { Grades } from './src/screens/Grades';
 import { Learn } from './src/screens/Learn';
@@ -15,7 +18,10 @@ import { C, s } from './src/ui/theme';
 type Tab = 'heute' | 'kalender' | 'lernen' | 'punkte' | 'noten' | 'aufgaben';
 type Profile = { kind: 'eltern' } | { kind: 'kind'; id: string };
 
+const LinkCtx = createContext<{ link: DeviceLink; unlink: () => void } | null>(null);
+
 export default function App() {
+  if (cloudEnabled) return <CloudApp />;
   return (
     <FamilyProvider>
       <StatusBar style="dark" />
@@ -24,16 +30,44 @@ export default function App() {
   );
 }
 
+function CloudApp() {
+  const [link, setLinkState] = useState<DeviceLink | null | undefined>(undefined);
+  useEffect(() => { getLink().then(setLinkState, () => setLinkState(null)); }, []);
+  const store = useMemo(() => (link ? cloudStore(link.familyId) : null), [link?.familyId]);
+  if (link === undefined) return <View style={[s.screen, { justifyContent: 'center' }]}><ActivityIndicator color={C.accent} /></View>;
+  if (!link || !store) return (
+    <FamilyProvider>
+      <StatusBar style="dark" />
+      <SafeAreaView style={s.screen}><Connect onLinked={setLinkState} /></SafeAreaView>
+    </FamilyProvider>
+  );
+  return (
+    <LinkCtx.Provider value={{ link, unlink: () => { signOut().finally(() => setLinkState(null)); } }}>
+      <FamilyProvider key={link.familyId} store={store}>
+        <StatusBar style="dark" />
+        <Root />
+      </FamilyProvider>
+    </LinkCtx.Provider>
+  );
+}
+
 function Root() {
   const { data, loading, replace, saveError } = useFamily();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const cloud = useContext(LinkCtx);
+  const ownChild = cloud?.link.role === 'kind' ? cloud.link.childId : undefined;
+  const [profile, setProfile] = useState<Profile | null>(ownChild ? { kind: 'kind', id: ownChild } : null);
   const [tab, setTab] = useState<Tab>('heute');
   const [askPin, setAskPin] = useState(false);
   const [pin, setPin] = useState('');
   const [pinErr, setPinErr] = useState(false);
 
   if (loading) return <View style={[s.screen, { justifyContent: 'center' }]}><ActivityIndicator color={C.accent} /></View>;
-  if (!data) return <SafeAreaView style={s.screen}><Setup /></SafeAreaView>;
+  if (!data) return <SafeAreaView style={s.screen}>{cloud ? (
+    <View style={s.pad}>
+      <Text style={s.text}>{saveError ?? 'Keine Familiendaten gefunden.'}</Text>
+      <Button ghost title="Gerät neu einrichten" onPress={cloud.unlink} />
+    </View>
+  ) : <Setup />}</SafeAreaView>;
 
   const parent = profile?.kind === 'eltern';
   if (!profile) {
@@ -42,7 +76,7 @@ function Root() {
         <ScrollView contentContainerStyle={[s.pad, { maxWidth: 560 }]}>
           <Text style={s.h1}>{data.family.name}</Text>
           <Text style={s.muted}>Wer bist du?</Text>
-          {data.children.map(c => (
+          {data.children.filter(c => !ownChild || c.id === ownChild).map(c => (
             <Pressable key={c.id} onPress={() => { setProfile({ kind: 'kind', id: c.id }); setTab('heute'); }}
               style={[s.card, s.row, { flexWrap: 'nowrap', borderLeftWidth: 6, borderLeftColor: c.color }]}>
               <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.color, alignItems: 'center', justifyContent: 'center' }}>
@@ -91,13 +125,14 @@ function Root() {
             <Button ghost title="Wechseln" onPress={() => { setProfile(null); setTab('heute'); }} />
           </View>
         </View>
-        {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>Speicher auf diesem Gerät ist voll. Bitte alte Themen mit Fotos löschen.</Text>}
+        {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
         {tab === 'heute' && <Today childIds={childIds} parent={parent} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
         {tab === 'noten' && parent && <Grades />}
-        {tab === 'aufgaben' && parent && <Manage onReset={() => { replace(null); setProfile(null); }} />}
+        {tab === 'aufgaben' && parent && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
+        {tab === 'aufgaben' && parent && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
       </ScrollView>
     </SafeAreaView>
   );

@@ -78,7 +78,7 @@ begin
   return query select fid, code;
 end $$;
 
--- Ein Gerät tritt mit dem Code bei: Kindergerät (child) oder weiteres Eltern-Gerät (parent_pin nötig ist App-Sache).
+-- Ein Gerät tritt mit dem Code bei: Kindergerät (child) oder zweites Eltern-Konto.
 create or replace function public.join_family(code text, as_role text, child text)
 returns uuid
 language plpgsql security definer set search_path = public as $$
@@ -87,6 +87,10 @@ declare
 begin
   if auth.uid() is null then raise exception 'not_signed_in'; end if;
   if as_role not in ('eltern', 'kind') then raise exception 'bad_role'; end if;
+  -- Eltern-Geräte brauchen ein echtes Konto, Kindergeräte dürfen anonym sein
+  if as_role = 'eltern' and coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) then
+    raise exception 'parent_needs_account';
+  end if;
   select id into fid from public.families where join_code = upper(trim(code));
   if fid is null then
     perform pg_sleep(1); -- bremst Raten

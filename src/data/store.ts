@@ -1,24 +1,30 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FamilyData } from './types';
 
+/** Ein anderes Gerät hat inzwischen gespeichert. Neu laden und Änderung erneut anwenden. */
+export class ConflictError extends Error { constructor() { super('conflict'); } }
+
 /**
- * Speicher-Schnittstelle. Version 0.1 speichert lokal auf dem Gerät.
- * Für mehrere Geräte pro Familie kommt ein Supabase-Adapter mit derselben
- * Schnittstelle (siehe supabase/schema.sql).
+ * Speicher-Schnittstelle. Lokal (nur dieses Gerät) oder Supabase (alle Geräte der Familie).
+ * version zählt jede Speicherung hoch; save schlägt mit ConflictError fehl,
+ * wenn expected nicht mehr der aktuelle Stand ist.
  */
 export interface DataStore {
-  load(): Promise<FamilyData | null>;
-  save(data: FamilyData): Promise<void>;
+  cloud: boolean;
+  load(): Promise<{ data: FamilyData | null; version: number }>;
+  save(data: FamilyData, expected: number): Promise<number>;
+  subscribe?(cb: (data: FamilyData, version: number) => void): () => void;
   clear(): Promise<void>;
 }
 
 const KEY = 'familienplaner:v1';
 
 export const localStore: DataStore = {
+  cloud: false,
   async load() {
     const raw = await AsyncStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as FamilyData) : null;
+    return { data: raw ? (JSON.parse(raw) as FamilyData) : null, version: 0 };
   },
-  async save(data) { await AsyncStorage.setItem(KEY, JSON.stringify(data)); },
+  async save(data, expected) { await AsyncStorage.setItem(KEY, JSON.stringify(data)); return expected + 1; },
   async clear() { await AsyncStorage.removeItem(KEY); },
 };
