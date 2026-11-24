@@ -1,4 +1,5 @@
 import { Question, Topic } from '../data/types';
+import { cloudEnabled, getLink, sb } from '../data/cloud';
 
 /**
  * KI-Anbindung, Stufe 1: Im Web-Test läuft die App als claude.ai-Artifact und
@@ -13,12 +14,49 @@ type SampleFn = ((input: string, opts?: object) => Promise<{ text: string }>) & 
 };
 
 let samplePromise: Promise<SampleFn | null> | null = null;
+/** KI-Zugang: im claude.ai-Testlink über die eingebaute Schnittstelle, sonst über die Server-Funktion "familie" (braucht Familien-Verbindung). */
 export function getSample(): Promise<SampleFn | null> {
   if (!samplePromise) {
     const c = (globalThis as any).claude;
-    samplePromise = c?.use ? Promise.resolve(c.use('sample')).catch(() => null) : Promise.resolve(null);
+    samplePromise = c?.use
+      ? Promise.resolve(c.use('sample')).catch(() => null)
+      : cloudEnabled ? getLink().then(l => (l ? serverSample() : null)).catch(() => null) : Promise.resolve(null);
   }
   return samplePromise;
+}
+
+const blobToDataUrl = (b: Blob) => new Promise<string>((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = fail; r.readAsDataURL(b); });
+
+/** Liest JSON auch dann, wenn die Antwort in einem Codeblock steckt. */
+function parseJsonLoose<T>(text: string): T {
+  const t = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+  try { return JSON.parse(t); } catch { /* weiter */ }
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch { /* weiter */ } }
+  throw { code: 'invalid_json' };
+}
+
+function serverSample(): SampleFn {
+  const call = async (input: string, opts?: any): Promise<string> => {
+    const images = await Promise.all(((opts?.images ?? []) as Blob[]).map(blobToDataUrl));
+    const signal: AbortSignal | undefined = opts?.signal;
+    if (signal?.aborted) throw { code: 'cancelled' };
+    const req = sb().functions.invoke('familie', { body: { action: 'ai', prompt: input, images } }).then(async ({ data, error }) => {
+      if (error) {
+        let code = '';
+        try { code = (await (error as any).context?.json?.())?.error ?? ''; } catch { /* egal */ }
+        if (!code && /not found|404|Failed to send/i.test(String(error.message))) code = 'no_function';
+        throw { code: code || 'server' };
+      }
+      return String((data as { text: string }).text ?? '');
+    });
+    const cancel = new Promise<never>((_, fail) => signal?.addEventListener('abort', () => fail({ code: 'cancelled' })));
+    return Promise.race([req, cancel]);
+  };
+  const fn = (async (input: string, opts?: object) => ({ text: await call(input, opts) })) as SampleFn;
+  fn.json = async <T,>(input: string, opts?: object) => parseJsonLoose<T>(await call(input, opts));
+  fn.limits = async () => ({ images: { maxCount: 8 } });
+  return fn;
 }
 
 function dataUrlToBlob(url: string): Blob | null {
@@ -39,6 +77,15 @@ export const AI_ERROR: Record<string, string> = {
   image_rejected: 'Ein Foto konnte nicht gelesen werden. Bitte ein anderes nehmen.',
   invalid_json: 'Die KI hat keine brauchbaren Fragen geliefert. Bitte nochmal versuchen.',
   refused: 'Die KI hat das abgelehnt. Bitte Thema oder Fotos anpassen.',
+  no_key: 'Die KI ist auf dem Server noch nicht eingerichtet: Der API-Schlüssel fehlt (Secret ANTHROPIC_API_KEY).',
+  no_sql: 'Bitte zuerst das SQL „fix-03-ki“ im Supabase SQL Editor ausführen.',
+  no_function: 'Die Server-Funktion „familie“ ist noch nicht neu eingespielt.',
+  bad_key: 'Der API-Schlüssel wird nicht akzeptiert. Bitte in Supabase prüfen.',
+  no_credit: 'Das Anthropic-Konto hat kein Guthaben mehr. Bitte unter console.anthropic.com aufladen.',
+  daily_limit: 'Für heute ist das KI-Limit der Familie erreicht (30 Aufrufe). Morgen geht es weiter.',
+  not_member: 'Dieses Gerät ist mit keiner Familie verbunden.',
+  not_signed_in: 'Dieses Gerät ist nicht angemeldet.',
+  ai_down: 'Die KI ist gerade nicht erreichbar. Bitte gleich nochmal versuchen.',
 };
 
 export async function generateQuiz(topic: Topic, photos: string[], childName: string, grade: string | undefined, signal?: AbortSignal): Promise<GeneratedQuiz> {

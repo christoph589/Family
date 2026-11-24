@@ -212,7 +212,7 @@ function DeckEditor({ deck, childId, meId, onDone }: { deck?: VocabDeck; childId
             )}
           </>
         ) : (
-          <Text style={s.muted}>Das Ablesen per Foto macht die KI. Die läuft in der Live-App noch nicht, dafür fehlt noch die Server-Funktion. Bis dahin: Wörter unten abtippen oder eine Liste hineinkopieren.</Text>
+          <Text style={s.muted}>Das Ablesen per Foto macht die KI. Dafür muss dieses Gerät mit dem Familienserver verbunden sein. Bis dahin: Wörter unten abtippen oder eine Liste hineinkopieren.</Text>
         )}
       </View>
 

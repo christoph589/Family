@@ -175,7 +175,7 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
           {u && <UnderstandingChip u={u} />}
         </View>
         {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>KI liest die Fotos und erstellt den Test. Das dauert meist 20 bis 60 Sekunden.</Text></View>}
-        {!busy && !sheets.length && !ai && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>{parent ? 'Noch kein Test. KI-Tests laufen in der Live-App noch nicht, bis dahin „Selbst Fragen schreiben“.' : 'Wartet auf einen Test'}</Text>}
+        {!busy && !sheets.length && !ai && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>{parent ? 'Noch kein Test. Die KI braucht die Verbindung mit dem Familienserver. Bis dahin „Selbst Fragen schreiben“.' : 'Wartet auf einen Test'}</Text>}
         {open && !parent && !busy && <Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Test ist bereit</Text>}
         {open && parent && <Text style={[s.muted, { fontSize: 13 }]}>Test liegt bei {childName}, noch nicht gelöst</Text>}
         {waiting && <Text style={[s.muted, { fontSize: 13 }]}>{parent ? 'Abgegeben, oben prüfen' : 'Abgegeben, Eltern schauen drüber'}</Text>}

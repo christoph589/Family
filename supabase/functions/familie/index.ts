@@ -1,7 +1,9 @@
-// Familienplaner: Kalender-Abos
+// Familienplaner: Kalender-Abos und KI
 //
 // GET  /familie?ics=<token>          Familienkalender als iCal-Abo (für iPhone, Mac, Google, Outlook)
 // POST /familie {action:'import', url} Fremden Kalender (iCal-Link) einlesen, nur für angemeldete Geräte
+// POST /familie {action:'ai', prompt, images} KI-Test und Vokabel-Foto, nur für Mitglieder einer Familie,
+//      höchstens AI_DAILY Aufrufe pro Familie und Tag. Braucht das Secret ANTHROPIC_API_KEY und fix-03-ki.sql.
 //
 // Einspielen: Supabase Dashboard > Edge Functions > Deploy a new function > Via Editor,
 // Name "familie", diesen Code einfügen, Deploy. Danach bei der Funktion
@@ -10,6 +12,7 @@
 
 import ICAL from 'npm:ical.js@1.5.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.119.2';
+import Anthropic from 'npm:@anthropic-ai/sdk@1.7.0';
 
 const URL_ = Deno.env.get('SUPABASE_URL')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -163,6 +166,60 @@ export function parseIcs(text: string, fromIso: string, toIso: string): Out[] {
   return out.sort((a, b) => (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')));
 }
 
+// ---------- KI ----------
+
+const AI_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const AI_MODEL = 'claude-opus-5-5';
+const AI_DAILY = 30;
+const IMG = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
+const berlinDay = () => new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(new Date());
+
+async function runAi(body: any, userId: string, admin: any) {
+  if (!AI_KEY) return json({ error: 'no_key' }, 503);
+  const prompt = String(body.prompt ?? '');
+  if (!prompt || prompt.length > 20000) return json({ error: 'bad_request' }, 400);
+  const images: any[] = [];
+  for (const raw of (Array.isArray(body.images) ? body.images : []).slice(0, 8)) {
+    const m = IMG.exec(String(raw));
+    if (!m || m[2].length > 6_000_000) return json({ error: 'image_rejected' }, 400);
+    images.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+  }
+
+  // Nur Mitglieder einer Familie, mit Tageslimit pro Familie (schützt vor hohen Kosten)
+  const { data: mem } = await admin.from('members').select('family_id').eq('user_id', userId).limit(1);
+  if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const fid = mem[0].family_id;
+  const { data: fam, error: famErr } = await admin.from('families').select('ai_day, ai_count').eq('id', fid).single();
+  if (famErr) return json({ error: 'no_sql' }, 500);
+  const day = berlinDay();
+  const used = fam.ai_day === day ? fam.ai_count : 0;
+  if (used >= AI_DAILY) return json({ error: 'daily_limit' }, 429);
+  await admin.from('families').update({ ai_day: day, ai_count: used + 1 }).eq('id', fid);
+
+  const client = new Anthropic({ apiKey: AI_KEY });
+  try {
+    const msg = await client.beta.messages.stream({
+      model: AI_MODEL,
+      max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'medium' },
+      system: 'Du hilfst einer Familie beim Lernen. Antworte ausschließlich mit gültigem JSON, ohne Markdown-Codeblock und ohne weiteren Text.',
+      messages: [{ role: 'user', content: [...images, { type: 'text', text: prompt }] }],
+    } as any).finalMessage();
+    if (msg.stop_reason === 'refusal') return json({ error: 'refused' }, 422);
+    if (msg.stop_reason === 'max_tokens') return json({ error: 'invalid_json' }, 502);
+    const text = msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    return json({ text, left: AI_DAILY - used - 1 });
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return json({ error: 'bad_key' }, 502);
+    if (e instanceof Anthropic.RateLimitError) return json({ error: 'rate_limited' }, 429);
+    if (e instanceof Anthropic.BadRequestError) return json({ error: /credit|billing/i.test(e.message) ? 'no_credit' : 'image_rejected', message: e.message }, 400);
+    if (e instanceof Anthropic.APIError) return json({ error: 'ai_down', status: e.status }, 502);
+    throw e;
+  }
+}
+
 // ---------- Server ----------
 
 if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => {
@@ -188,6 +245,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       const { data: user } = await userClient.auth.getUser();
       if (!user?.user) return json({ error: 'not_signed_in' }, 401);
       const body = await req.json();
+      if (body.action === 'ai') return await runAi(body, user.user.id, admin);
       if (body.action === 'import') {
         let url = String(body.url ?? '').trim().replace(/^webcals?:\/\//i, 'https://');
         try { url = new URL(url).toString(); } catch { return json({ error: 'bad_url' }, 400); }
