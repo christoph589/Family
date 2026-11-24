@@ -10,7 +10,7 @@ import { KidDraft, KidFields } from '../ui/KidFields';
 import { FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
-import { Avatar, pickPhoto } from '../ui/Avatar';
+import { Avatar, PhotoCropper, pickImageFile } from '../ui/Avatar';
 
 /** Familienmitglieder: Namen und Farben von Eltern und Kindern. */
 export function Family() {
@@ -18,6 +18,7 @@ export function Family() {
   const [open, setOpen] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [delKid, setDelKid] = useState<string | null>(null);
+  const [crop, setCrop] = useState<{ id: string; src?: string; error?: string } | null>(null);
   if (!data) return null;
   const parents = parentsOf(data);
   const setParents = (fn: (p: ReturnType<typeof parentsOf>) => ReturnType<typeof parentsOf>) => update(d => ({ ...d, parents: fn(parentsOf(d)) }));
@@ -96,9 +97,15 @@ export function Family() {
             );
           })()}
           {r.role === 'kind' && <KidProfileEdit child={data.children.find(c => c.id === r.id)!} />}
+          {crop?.id === r.id && (
+            <View style={{ paddingLeft: 50 }}>
+              {crop.error ? <View style={s.row}><Text style={{ color: C.danger, flexShrink: 1 }}>{crop.error}</Text><Button ghost title="OK" onPress={() => setCrop(null)} /></View>
+                : crop.src && <PhotoCropper src={crop.src} onCancel={() => setCrop(null)} onDone={ph => { setPhoto(r.id, r.role, ph); setCrop(null); }} />}
+            </View>
+          )}
           {open === r.id && (
             <View style={[s.row, { paddingLeft: 50 }]}>
-              <Button ghost title={r.photo ? 'Anderes Foto' : '📷 Foto hochladen'} onPress={() => pickPhoto().then(ph => { if (ph) { setPhoto(r.id, r.role, ph); setOpen(null); } })} />
+              <Button ghost title={r.photo ? 'Anderes Foto' : '📷 Foto hochladen'} onPress={() => pickImageFile().then(res => { if (res) { setCrop({ id: r.id, ...res }); setOpen(null); } })} />
               {r.photo && <Button ghost title="Foto entfernen" onPress={() => setPhoto(r.id, r.role, undefined)} />}
             </View>
           )}

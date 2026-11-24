@@ -63,6 +63,12 @@ function CloudApp() {
 
 const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', essen: '🍽️', aufgaben: '⚙️' };
 
+type Section = 'familie' | 'aufgaben' | 'ferien' | 'kalender' | 'geraete';
+const SETTINGS: { value: Section; label: string; cloud?: boolean }[] = [
+  { value: 'familie', label: '👪 Familie' }, { value: 'aufgaben', label: '✅ Aufgaben' }, { value: 'ferien', label: '🏖️ Ferien' },
+  { value: 'kalender', label: '📅 Kalender', cloud: true }, { value: 'geraete', label: '📱 Geräte', cloud: true },
+];
+
 function Root() {
   const { data, loading, replace, saveError, update } = useFamily();
   const cloud = useContext(LinkCtx);
@@ -72,6 +78,7 @@ function Root() {
   const [askPin, setAskPin] = useState<string | null>(null);
   const scroller = useRef<any>(null);
   const [board, setBoardState] = useState(false);
+  const [section, setSection] = useState<Section>('familie');
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
   useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
   useEffect(() => { AsyncStorage.getItem('familienplaner:board').then(v => v === '1' && setBoardState(true), () => {}); }, []);
@@ -193,11 +200,21 @@ function Root() {
         {tab === 'lernen' && admin && <Grades />}
         {tab === 'geld' && <Money childIds={childIds} parent={parent} />}
         {tab === 'essen' && <Food who={me.name} />}
-        {tab === 'aufgaben' && admin && <Holiday />}
-        {tab === 'aufgaben' && admin && <Family />}
-        {tab === 'aufgaben' && admin && cloud && <CalendarLink link={cloud.link} />}
-        {tab === 'aufgaben' && admin && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
-        {tab === 'aufgaben' && admin && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
+        {tab === 'aufgaben' && admin && (
+          <View style={[s.row, { gap: 8 }]} accessibilityRole="tablist">
+            {SETTINGS.filter(x => cloud || !x.cloud).map(x => (
+              <Pressable key={x.value} accessibilityRole="tab" accessibilityState={{ selected: section === x.value }} onPress={() => setSection(x.value)}
+                style={[s.chip, { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: section === x.value ? C.accent : C.surface }]}>
+                <Text style={{ fontWeight: '700', color: section === x.value ? '#fff' : C.fg }}>{x.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        {tab === 'aufgaben' && admin && section === 'familie' && <Family />}
+        {tab === 'aufgaben' && admin && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
+        {tab === 'aufgaben' && admin && section === 'ferien' && <Holiday />}
+        {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
+        {tab === 'aufgaben' && admin && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
       </ScrollView>
       <View style={{ backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.line }}>
         <View style={{ flexDirection: 'row', maxWidth: 720, width: '100%', alignSelf: 'center' }}>
