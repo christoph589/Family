@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { finishCheck, setSheet, today, uid } from '../data/logic';
-import { Question, SHEET_POINTS, Topic, Worksheet } from '../data/types';
+import { finishCheck, setSheet, today, uid, UNDERSTANDING_LABEL } from '../data/logic';
+import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
 
@@ -16,8 +16,8 @@ export function SheetEditor({ topic, onDone }: { topic: Topic; onDone: () => voi
   const filled = qs.filter(x => x.q.trim() && x.solution.trim());
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
-      <Text style={s.h2}>Arbeit: {topic.subject}</Text>
-      <Text style={s.muted}>{topic.text}. Trag Fragen und Lösungen ein. Sobald die KI angebunden ist, schlägt sie diese aus Thema und Foto vor und du prüfst nur noch.</Text>
+      <Text style={s.h2}>Übung: {topic.subject}</Text>
+      <Text style={s.muted}>{topic.text}. Ein paar Fragen reichen, um zu sehen, ob das Thema sitzt. Sobald die KI angebunden ist, schlägt sie diese aus Thema und Foto vor und du prüfst nur noch.</Text>
       {qs.map((x, i) => (
         <View key={i} style={{ gap: 6 }}>
           <Text style={s.label}>Frage {i + 1}</Text>
@@ -49,7 +49,7 @@ export function KidSheets({ childId }: { childId: string }) {
   const active = open.find(w => w.id === openId);
   return (
     <View style={[s.card, { borderWidth: open.length ? 2 : 0, borderColor: C.accent }]}>
-      <Text style={s.h2}>Deine Arbeiten</Text>
+      <Text style={s.h2}>Deine Übungen</Text>
       {active ? <SolveSheet sheet={active} onDone={() => setOpenId(null)} /> : open.map(w => (
         <View key={w.id} style={[s.row, { backgroundColor: C.bg, padding: 12, borderRadius: 12 }]}>
           <Text style={[s.text, { flex: 1, minWidth: 160, fontWeight: '700' }]}>{w.title}</Text>
@@ -57,7 +57,17 @@ export function KidSheets({ childId }: { childId: string }) {
         </View>
       ))}
       {waiting.map(w => <Text key={w.id} style={s.muted}>{w.title}: abgegeben, Eltern schauen drüber.</Text>)}
-      {checked.map(w => <Text key={w.id} style={s.text}>{w.title}: Note {w.grade}, +{SHEET_POINTS[w.grade ?? 6]} P</Text>)}
+      {checked.map(w => (
+        <View key={w.id} style={{ gap: 4, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
+          <View style={[s.row, { justifyContent: 'space-between' }]}>
+            <Text style={[s.text, { fontWeight: '700', flex: 1 }]}>{w.title}</Text>
+            {w.understanding && <UnderstandingChip u={w.understanding} />}
+          </View>
+          {w.questions.map((q, i) => (w.results?.[i] ? null : (
+            <Text key={i} style={[s.text, { fontSize: 14 }]}>{q.q}: richtig ist <Text style={{ fontWeight: '700' }}>{q.solution}</Text></Text>
+          )))}
+        </View>
+      ))}
     </View>
   );
 }
@@ -116,8 +126,17 @@ function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
           </Pressable>
         </View>
       ))}
-      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern.</Text>
-      <Button title={`Fertig: ${res.filter(Boolean).length} von ${res.length} richtig`} color={C.ok} onPress={() => update(d => finishCheck(d, sheet, res))} />
+      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern. {name} bekommt {PRACTICE_POINTS} Punkte fürs Üben und sieht danach die richtigen Lösungen.</Text>
+      <View style={s.row}>
+        {res.some(r => !r) && <Button title="Falsches nochmal üben lassen" onPress={() => update(d => finishCheck(d, sheet, res, true))} />}
+        <Button title={res.every(Boolean) ? 'Fertig, alles verstanden' : 'Fertig'} color={C.ok} onPress={() => update(d => finishCheck(d, sheet, res))} />
+      </View>
     </View>
   );
+}
+
+const U_COLOR: Record<Understanding, [string, string]> = { verstanden: [C.ok, C.okSoft], teilweise: [C.warn, C.warnSoft], nochmal: [C.danger, '#f8dcd8'] };
+export function UnderstandingChip({ u }: { u: Understanding }) {
+  const [fg, bg] = U_COLOR[u];
+  return <Text style={{ color: fg, backgroundColor: bg, fontWeight: '700', fontSize: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, overflow: 'hidden' }}>{UNDERSTANDING_LABEL[u]}</Text>;
 }

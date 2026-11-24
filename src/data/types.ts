@@ -13,6 +13,7 @@ export interface Reward { id: string; title: string; cost: number }
 export interface RewardRequest { id: string; childId: string; rewardId: string; at: string }
 export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; date: string }
 
+export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
 export interface Question { q: string; solution: string }
 export interface Worksheet {
   id: string; childId: string; topicId?: string; title: string; date: string;
@@ -20,7 +21,8 @@ export interface Worksheet {
   answers?: string[];
   results?: boolean[];
   status: 'offen' | 'abgegeben' | 'geprueft';
-  grade?: number;
+  understanding?: Understanding;
+  retryOf?: string;
 }
 
 export interface FamilyData {
@@ -39,5 +41,5 @@ export interface FamilyData {
 // Punkte pro Note (1 bis 6). Keine Minuspunkte.
 export const EXAM_POINTS: Record<number, number> = { 1: 40, 2: 30, 3: 15, 4: 5, 5: 0, 6: 0 };
 
-// Punkte für eine Arbeit in der App, nach Note.
-export const SHEET_POINTS: Record<number, number> = { 1: 15, 2: 10, 3: 5, 4: 2, 5: 0, 6: 0 };
+// Punkte fürs Üben. Es zählt, dass geübt wird, nicht wie viel richtig ist.
+export const PRACTICE_POINTS = 10;

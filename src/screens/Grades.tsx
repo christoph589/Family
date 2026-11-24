@@ -39,7 +39,7 @@ export function Grades() {
           </View>
         ))}
         <Text style={[s.muted, { fontSize: 13 }]}>Keine Minuspunkte bei 5 oder 6, damit schlechte Noten nicht versteckt werden.</Text>
-        <Text style={[s.muted, { fontSize: 13 }]}>Tages-Quiz aus dem Schulthema mit KI kommt in der nächsten Version.</Text>
+        <Text style={[s.muted, { fontSize: 13 }]}>Übungen zu den Tagesthemen findest du unter „Lernen“. Die werden nicht benotet.</Text>
       </View>
     </View>
   );

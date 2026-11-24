@@ -1,4 +1,4 @@
-import { Child, Completion, FamilyData, Reward, SHEET_POINTS, Task, Worksheet } from './types';
+import { Child, Completion, FamilyData, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 export const today = (d = new Date()) => {
@@ -98,7 +98,6 @@ export function decideRequest(data: FamilyData, requestId: string, approve: bool
   return addPoints(rest, req.childId, -reward.cost, 'Eingelöst: ' + reward.title);
 }
 
-export function gradeFromPercent(p: number) { return p >= 92 ? 1 : p >= 80 ? 2 : p >= 67 ? 3 : p >= 50 ? 4 : p >= 30 ? 5 : 6; }
 
 export function setSheet(data: FamilyData, sheet: Worksheet): FamilyData {
   const list = data.worksheets ?? [];
@@ -106,10 +105,25 @@ export function setSheet(data: FamilyData, sheet: Worksheet): FamilyData {
   return { ...data, worksheets: exists ? list.map(w => (w.id === sheet.id ? sheet : w)) : [sheet, ...list] };
 }
 
-/** Eltern haben abgehakt: Note berechnen und Punkte gutschreiben. */
-export function finishCheck(data: FamilyData, sheet: Worksheet, results: boolean[]): FamilyData {
+export function understandingOf(right: number, total: number): Understanding {
+  if (right === total) return 'verstanden';
+  return right / total >= 0.5 ? 'teilweise' : 'nochmal';
+}
+export const UNDERSTANDING_LABEL: Record<Understanding, string> = { verstanden: 'Verstanden', teilweise: 'Teilweise verstanden', nochmal: 'Nochmal üben' };
+
+/** Eltern haben abgeglichen. Punkte gibt es fürs Üben. Optional werden die falschen Fragen nochmal geschickt. */
+export function finishCheck(data: FamilyData, sheet: Worksheet, results: boolean[], retryWrong = false): FamilyData {
   const right = results.filter(Boolean).length;
-  const grade = gradeFromPercent(Math.round((right / sheet.questions.length) * 100));
-  const done = { ...sheet, results, grade, status: 'geprueft' as const };
-  return addPoints(setSheet(data, done), sheet.childId, SHEET_POINTS[grade], `Arbeit ${sheet.title}: Note ${grade}`);
+  const done = { ...sheet, results, understanding: understandingOf(right, sheet.questions.length), status: 'geprueft' as const };
+  let next = addPoints(setSheet(data, done), sheet.childId, PRACTICE_POINTS, `Geübt: ${sheet.title}`);
+  const wrong = sheet.questions.filter((_, i) => !results[i]);
+  if (retryWrong && wrong.length) {
+    next = setSheet(next, { id: uid(), childId: sheet.childId, topicId: sheet.topicId, title: sheet.title.replace(/^Nochmal: /, ''), date: today(), questions: wrong, status: 'offen', retryOf: sheet.id });
+  }
+  return next;
+}
+
+/** Letzter Stand des Verständnisses zu einem Thema. */
+export function topicUnderstanding(data: FamilyData, topicId: string): Understanding | undefined {
+  return (data.worksheets ?? []).find(w => w.topicId === topicId && w.status === 'geprueft')?.understanding;
 }

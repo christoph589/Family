@@ -3,10 +3,10 @@ import * as Print from 'expo-print';
 import { useState } from 'react';
 import { Image, Platform, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { today, uid } from '../data/logic';
+import { today, topicUnderstanding, uid } from '../data/logic';
 import { Topic } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
-import { KidSheets, ReviewSheets, SheetEditor } from './Sheets';
+import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
 import { C, s } from '../ui/theme';
 
 const MAX_TOPICS = 30; // Fotos liegen vorerst lokal, deshalb begrenzt.
@@ -48,7 +48,7 @@ export function Learn({ childIds, parent }: { childIds: string[]; parent: boolea
     <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
       <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
         <Text style={s.h2}>Was kam heute dran?</Text>
-        <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Daraus entsteht später das Arbeitsblatt.</Text>
+        <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Daraus entsteht eine kurze Übung, mit der ihr seht, ob das Thema verstanden wurde.</Text>
         {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
         <Text style={s.label}>Fach</Text>
         <TextInput style={s.input} value={subject} onChangeText={setSubject} placeholder="z. B. Mathe" />
@@ -79,7 +79,8 @@ export function Learn({ childIds, parent }: { childIds: string[]; parent: boolea
 }
 
 function TopicRow({ topic, childName, onMsg, onCreate }: { topic: Topic; childName: string; onMsg: (m: string) => void; onCreate?: () => void }) {
-  const { update } = useFamily();
+  const { data, update } = useFamily();
+  const u = data ? topicUnderstanding(data, topic.id) : undefined;
   const date = new Date(topic.date + 'T12:00:00').toLocaleDateString('de-DE');
   async function print() {
     try { await Print.printAsync({ html: worksheetHtml(topic, childName, date) }); }
@@ -90,9 +91,12 @@ function TopicRow({ topic, childName, onMsg, onCreate }: { topic: Topic; childNa
       {topic.photo ? <Image source={{ uri: topic.photo }} style={{ width: 56, height: 56, borderRadius: 8 }} /> : null}
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[s.text, { fontWeight: '700' }]}>{topic.subject}: {topic.text}</Text>
-        <Text style={[s.muted, { fontSize: 12 }]}>{childName} · {date}</Text>
+        <View style={[s.row, { gap: 8 }]}>
+          <Text style={[s.muted, { fontSize: 12 }]}>{childName} · {date}</Text>
+          {u && <UnderstandingChip u={u} />}
+        </View>
         <View style={[s.row, { marginTop: 6 }]}>
-          {onCreate && <Button title="Arbeit am Handy" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={onCreate} />}
+          {onCreate && <Button title="Übung am Handy" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={onCreate} />}
           <Button ghost title="Drucken" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={print} />
           <Button ghost title="Löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => update(d => ({ ...d, topics: (d.topics ?? []).filter(x => x.id !== topic.id) }))} />
         </View>
