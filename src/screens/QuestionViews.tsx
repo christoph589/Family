@@ -12,12 +12,15 @@ export function isCheckTable(q: Question) {
 }
 const qText = (q: Question) => (isCheckTable(q) ? q.q.replace(/\s*\(\s*x\s*oder\s*-\s*\)/i, '') : q.q);
 const checked = (v: string) => ['x', '✓'].includes(v.trim().toLowerCase());
+const crossed = (v: string) => ['-', '✗'].includes(v.trim().toLowerCase());
+/** Kästchen-Zustand: leer -> Haken -> Kreuz -> leer. */
+const nextMark = (v: string) => (checked(v) ? '-' : crossed(v) ? '' : 'x');
 
 export function inputCount(q: Question) {
   return q.type === 'table' && q.table ? q.table.rows.flat().filter(c => c.trim() === '?').length : 1;
 }
 export function isAnswered(q: Question, a: string) {
-  if (isCheckTable(q)) return true; // leeres Kästchen heißt "nicht teilbar"
+  if (isCheckTable(q)) return splitAnswer(q, a).every(v => checked(v) || crossed(v));
   if (q.type === 'table') { const parts = a.split(SEP); return parts.length === inputCount(q) && parts.every(p => p.trim()); }
   return !!a.trim();
 }
@@ -46,7 +49,10 @@ export function QuestionInput({ q, value, onChange }: { q: Question; value: stri
           ))}
         </View>
       ) : q.type === 'table' && q.table ? (
+        <>
+        {isCheckTable(q) && <Text style={[s.muted, { fontSize: 13 }]}>1x tippen: ✓ ja · 2x tippen: ✗ nein · 3x tippen: leer</Text>}
         <TableGrid q={q} values={splitAnswer(q, value)} onCell={(k, v) => { const vals = splitAnswer(q, value); vals[k] = v; onChange(vals.join(SEP)); }} />
+        </>
       ) : (
         <>
           <TextInput style={s.input} value={value} onChangeText={onChange} placeholder="Deine Antwort" autoCapitalize="none" />
@@ -79,17 +85,18 @@ export function TableGrid({ q, values, onCell, solution }: { q: Question; values
               if (c.trim() !== '?') return <View key={ci} style={cell}><MathText text={c} style={{ ...s.text, fontSize: 14 }} /></View>;
               k += 1; const idx = k;
               if (isCheckTable(q)) {
-                const on = checked(values[idx] ?? '');
+                const v = values[idx] ?? '';
+                const on = checked(v), off = crossed(v);
                 const want = solution ? checked(solution[idx] ?? '') : on;
-                const bg = solution ? (on === want ? C.okSoft : '#f8dcd8') : C.surface;
+                const right = solution ? on === want && (on || off) : true;
                 return (
-                  <Pressable key={ci} disabled={!onCell} accessibilityRole="checkbox" accessibilityState={{ checked: on }}
-                    accessibilityLabel={`${r[0]} ${q.table!.header[ci] ?? ''}`} onPress={() => onCell?.(idx, on ? '-' : 'x')}
-                    style={[cell, { alignItems: 'center', backgroundColor: bg }]}>
-                    <View style={{ width: 34, height: 34, borderRadius: 8, borderWidth: 2, borderColor: on ? C.accent : C.line, backgroundColor: on ? C.accent : C.surface, alignItems: 'center', justifyContent: 'center' }}>
-                      {on && <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>✓</Text>}
+                  <Pressable key={ci} disabled={!onCell} accessibilityRole="button"
+                    accessibilityLabel={`${r[0]} ${q.table!.header[ci] ?? ''}: ${on ? 'Haken' : off ? 'Kreuz' : 'leer'}`} onPress={() => onCell?.(idx, nextMark(v))}
+                    style={[cell, { alignItems: 'center', backgroundColor: solution ? (right ? C.okSoft : '#f8dcd8') : C.surface }]}>
+                    <View style={{ width: 36, height: 36, borderRadius: 8, borderWidth: 2, borderColor: on ? C.ok : off ? C.danger : C.line, backgroundColor: on ? C.ok : off ? C.danger : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>{on ? '✓' : off ? '✗' : ''}</Text>
                     </View>
-                    {solution && on !== want && <Text style={{ fontSize: 11, color: C.muted }}>{want ? 'richtig: ✓' : 'richtig: leer'}</Text>}
+                    {solution && !right && <Text style={{ fontSize: 11, color: C.muted }}>richtig: {want ? '✓' : '✗'}</Text>}
                   </Pressable>
                 );
               }
