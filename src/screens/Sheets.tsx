@@ -38,14 +38,18 @@ export function SheetEditor({ topic, onDone }: { topic: Topic; onDone: () => voi
 }
 
 /** Kind löst offene Arbeiten. */
-export function KidSheets({ childId }: { childId: string }) {
+export function KidSheets({ childId, openId, setOpenId }: { childId: string; openId: string | null; setOpenId: (id: string | null) => void }) {
   const { data } = useFamily();
-  const [openId, setOpenId] = useState<string | null>(null);
   const sheets = (data?.worksheets ?? []).filter(w => w.childId === childId);
   const open = sheets.filter(w => w.status === 'offen');
   const waiting = sheets.filter(w => w.status === 'abgegeben');
   const checked = sheets.filter(w => w.status === 'geprueft').slice(0, 5);
-  if (!sheets.length) return null;
+  if (!sheets.length) return (
+    <View style={s.card}>
+      <Text style={s.h2}>Deine Übungen</Text>
+      <Text style={s.muted}>Noch keine Übung da. Lade unten Fotos von dem hoch, was heute dran war. Dann tippst du auf „Test erstellen“.</Text>
+    </View>
+  );
   const active = open.find(w => w.id === openId);
   return (
     <View style={[s.card, { borderWidth: open.length ? 2 : 0, borderColor: C.accent }]}>

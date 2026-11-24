@@ -1,10 +1,11 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as Print from 'expo-print';
-import { useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { today, topicUnderstanding, uid } from '../data/logic';
+import { setSheet, today, topicUnderstanding, uid } from '../data/logic';
+import { AI_ERROR, generateQuiz, getSample } from '../ai/generate';
 import { Topic } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
@@ -32,6 +33,7 @@ export function Learn({ childIds, parent }: { childIds: string[]; parent: boolea
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [editing, setEditing] = useState<Topic | null>(null);
+  const [solveId, setSolveId] = useState<string | null>(null);
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const topics = (data.topics ?? []).filter(t => childIds.includes(t.childId));
@@ -61,12 +63,12 @@ export function Learn({ childIds, parent }: { childIds: string[]; parent: boolea
 
   return (
     <View style={{ gap: 16 }}>
-    {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} />}
+    {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
     {editing && <SheetEditor topic={editing} onDone={() => setEditing(null)} />}
     <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
       <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
         <Text style={s.h2}>Was kam heute dran?</Text>
-        <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Daraus entsteht eine kurze Übung, mit der ihr seht, ob das Thema verstanden wurde.</Text>
+        <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Die KI macht daraus einen kurzen Test, mit dem ihr seht, ob das Thema verstanden wurde.</Text>
         {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
         <Text style={s.label}>Fach (optional)</Text>
         <TextInput style={s.input} value={subject} onChangeText={setSubject} placeholder="z. B. Mathe" />
@@ -100,22 +102,53 @@ export function Learn({ childIds, parent }: { childIds: string[]; parent: boolea
       <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
         <Text style={s.label}>Gespeicherte Themen</Text>
         {topics.length === 0 && <Text style={s.muted}>Noch keine Themen.</Text>}
-        {topics.map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} onCreate={parent ? () => setEditing(t) : undefined} />)}
-        <Text style={[s.muted, { fontSize: 13 }]}>Fragen und Aufgaben schreibt die KI, sobald sie angebunden ist. Bis dahin druckt „Drucken“ ein Blatt mit Kopf, Thema und Platz zum Üben.</Text>
+        {topics.map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} onCreate={parent ? () => setEditing(t) : undefined} onSolve={parent ? undefined : id => setSolveId(id)} />)}
+        <Text style={[s.muted, { fontSize: 13 }]}>„Drucken“ druckt den letzten Test zum Thema mit Platz für die Antworten.</Text>
       </View>
     </View>
     </View>
   );
 }
 
-function TopicRow({ topic, childName, onMsg, onCreate }: { topic: Topic; childName: string; onMsg: (m: string) => void; onCreate?: () => void }) {
+function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic; childName: string; onMsg: (m: string) => void; onCreate?: () => void; onSolve?: (sheetId: string) => void }) {
   const { data, update } = useFamily();
+  const [ai, setAi] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ctl = useRef<AbortController | null>(null);
+  useEffect(() => { let on = true; getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, []);
   const u = data ? topicUnderstanding(data, topic.id) : undefined;
+  const sheets = (data?.worksheets ?? []).filter(w => w.topicId === topic.id);
+  const open = sheets.find(w => w.status === 'offen');
+  const waiting = sheets.some(w => w.status === 'abgegeben');
+  const latest = sheets[0];
+  const parent = !!onCreate;
   const date = new Date(topic.date + 'T12:00:00').toLocaleDateString('de-DE');
+
   async function print() {
-    try { await Print.printAsync({ html: worksheetHtml(topic, childName, date) }); }
+    try { await Print.printAsync({ html: worksheetHtml(topic, childName, date, latest?.questions.map(q => q.q) ?? []) }); }
     catch { onMsg('Drucken geht in dieser Vorschau nicht. In der App oder im normalen Browser klappt es.'); }
   }
+
+  async function makeTest() {
+    if (!data) return;
+    const child = data.children.find(c => c.id === topic.childId);
+    ctl.current = new AbortController();
+    setBusy(true); onMsg('');
+    try {
+      const quiz = await generateQuiz(topic, photosOf(topic), child?.name ?? childName, child?.grade, ctl.current.signal);
+      const id = uid();
+      const generic = topic.subject === 'Schule' || /^\d+ Seiten?$/.test(topic.text);
+      update(d => setSheet(
+        generic ? { ...d, topics: (d.topics ?? []).map(t => (t.id === topic.id ? { ...t, text: quiz.title } : t)) } : d,
+        { id, childId: topic.childId, topicId: topic.id, title: `${topic.subject === 'Schule' ? '' : topic.subject + ': '}${quiz.title}`, date: today(), questions: quiz.questions, status: 'offen' },
+      ));
+      if (onSolve) onSolve(id); else onMsg(`Test mit ${quiz.questions.length} Fragen ist bei ${childName}.`);
+    } catch (e: any) {
+      if (e?.code !== 'cancelled') onMsg(AI_ERROR[e?.code] ?? 'Die KI ist gerade nicht erreichbar. Bitte nochmal versuchen.');
+    }
+    setBusy(false);
+  }
+
   return (
     <View style={[s.row, { backgroundColor: C.bg, padding: 12, borderRadius: 12, flexWrap: 'nowrap', alignItems: 'flex-start' }]}>
       {photosOf(topic).length ? (
@@ -130,10 +163,18 @@ function TopicRow({ topic, childName, onMsg, onCreate }: { topic: Topic; childNa
           <Text style={[s.muted, { fontSize: 12 }]}>{childName} · {date}</Text>
           {u && <UnderstandingChip u={u} />}
         </View>
+        {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>KI liest die Fotos und erstellt den Test. Das dauert meist 20 bis 60 Sekunden.</Text></View>}
+        {!busy && !sheets.length && !ai && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>{parent ? 'Noch kein Test. Die KI gibt es im Test nur im Web-Link.' : 'Wartet auf einen Test'}</Text>}
+        {open && !parent && !busy && <Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Test ist bereit</Text>}
+        {open && parent && <Text style={[s.muted, { fontSize: 13 }]}>Test liegt bei {childName}, noch nicht gelöst</Text>}
+        {waiting && <Text style={[s.muted, { fontSize: 13 }]}>{parent ? 'Abgegeben, oben prüfen' : 'Abgegeben, Eltern schauen drüber'}</Text>}
         <View style={[s.row, { marginTop: 6 }]}>
-          {onCreate && <Button title="Übung am Handy" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={onCreate} />}
+          {open && onSolve && !busy && <Button title="Test lösen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => onSolve(open.id)} />}
+          {ai && !open && !waiting && !busy && <Button title={sheets.length ? 'Neuen Test erstellen' : 'Test erstellen'} style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={makeTest} />}
+          {busy && <Button ghost title="Abbrechen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => ctl.current?.abort()} />}
+          {parent && !busy && <Button ghost title="Selbst Fragen schreiben" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={onCreate} />}
           <Button ghost title="Drucken" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={print} />
-          <Button ghost title="Löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => update(d => ({ ...d, topics: (d.topics ?? []).filter(x => x.id !== topic.id) }))} />
+          {parent && <Button ghost title="Löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => update(d => ({ ...d, topics: (d.topics ?? []).filter(x => x.id !== topic.id) }))} />}
         </View>
       </View>
     </View>
@@ -142,7 +183,7 @@ function TopicRow({ topic, childName, onMsg, onCreate }: { topic: Topic; childNa
 
 const esc = (v: string) => v.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
-/** Arbeitsblatt als HTML. Die Aufgaben füllt später die KI. */
+/** Arbeitsblatt als HTML mit den Fragen des letzten Tests. */
 export function worksheetHtml(t: Topic, name: string, date: string, tasks: string[] = []) {
   const lines = Array.from({ length: 14 }, () => '<div class="line"></div>').join('');
   return `<html><head><meta charset="utf-8"><style>

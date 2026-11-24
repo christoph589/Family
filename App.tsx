@@ -70,7 +70,8 @@ function Root() {
   }
 
   const childIds = profile.kind === 'kind' ? [profile.id] : data.children.map(c => c.id);
-  const sheetBadge = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === (parent ? 'abgegeben' : 'offen')).length;
+  const sheetBadge = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === (parent ? 'abgegeben' : 'offen')).length
+    + (parent ? (data.topics ?? []).filter(t => !(data.worksheets ?? []).some(w => w.topicId === t.id)).length : 0);
   const tabs: { value: Tab; label: string }[] = [{ value: 'heute', label: 'Heute' }, { value: 'lernen', label: sheetBadge ? `Lernen (${sheetBadge})` : 'Lernen' }, { value: 'punkte', label: parent && (data.requests ?? []).length ? `Punkte (${(data.requests ?? []).length})` : 'Punkte' }];
   if (parent) tabs.push({ value: 'noten', label: 'Noten' }, { value: 'aufgaben', label: 'Aufgaben' });
   const who = profile.kind === 'kind' ? data.children.find(c => c.id === profile.id)?.name : 'Eltern';
