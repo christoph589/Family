@@ -70,7 +70,8 @@ function Root() {
   }
 
   const childIds = profile.kind === 'kind' ? [profile.id] : data.children.map(c => c.id);
-  const tabs: { value: Tab; label: string }[] = [{ value: 'heute', label: 'Heute' }, { value: 'lernen', label: 'Lernen' }, { value: 'punkte', label: parent && (data.requests ?? []).length ? `Punkte (${(data.requests ?? []).length})` : 'Punkte' }];
+  const sheetBadge = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === (parent ? 'abgegeben' : 'offen')).length;
+  const tabs: { value: Tab; label: string }[] = [{ value: 'heute', label: 'Heute' }, { value: 'lernen', label: sheetBadge ? `Lernen (${sheetBadge})` : 'Lernen' }, { value: 'punkte', label: parent && (data.requests ?? []).length ? `Punkte (${(data.requests ?? []).length})` : 'Punkte' }];
   if (parent) tabs.push({ value: 'noten', label: 'Noten' }, { value: 'aufgaben', label: 'Aufgaben' });
   const who = profile.kind === 'kind' ? data.children.find(c => c.id === profile.id)?.name : 'Eltern';
   const dateStr = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -83,13 +84,13 @@ function Root() {
             <Text style={s.h1}>{data.family.name}</Text>
             <Text style={s.muted}>{dateStr} · {who}</Text>
           </View>
-          <View style={s.row}>
+          <View style={[s.row, { flexShrink: 1, maxWidth: '100%' }]}>
             <Segmented value={tab} onChange={setTab} options={tabs} />
             <Button ghost title="Wechseln" onPress={() => { setProfile(null); setTab('heute'); }} />
           </View>
         </View>
         {tab === 'heute' && <Today childIds={childIds} parent={parent} />}
-        {tab === 'lernen' && <Learn childIds={childIds} />}
+        {tab === 'lernen' && <Learn childIds={childIds} parent={parent} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
         {tab === 'noten' && parent && <Grades />}
         {tab === 'aufgaben' && parent && <Manage onReset={() => { replace(null); setProfile(null); }} />}

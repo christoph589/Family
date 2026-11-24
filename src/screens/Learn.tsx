@@ -6,17 +6,19 @@ import { useFamily } from '../data/FamilyContext';
 import { today, uid } from '../data/logic';
 import { Topic } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
+import { KidSheets, ReviewSheets, SheetEditor } from './Sheets';
 import { C, s } from '../ui/theme';
 
 const MAX_TOPICS = 30; // Fotos liegen vorerst lokal, deshalb begrenzt.
 
-export function Learn({ childIds }: { childIds: string[] }) {
+export function Learn({ childIds, parent }: { childIds: string[]; parent: boolean }) {
   const { data, update } = useFamily();
   const [childId, setChildId] = useState(childIds[0] ?? '');
   const [subject, setSubject] = useState('');
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<string | undefined>();
   const [msg, setMsg] = useState('');
+  const [editing, setEditing] = useState<Topic | null>(null);
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const topics = (data.topics ?? []).filter(t => childIds.includes(t.childId));
@@ -40,6 +42,9 @@ export function Learn({ childIds }: { childIds: string[] }) {
   }
 
   return (
+    <View style={{ gap: 16 }}>
+    {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} />}
+    {editing && <SheetEditor topic={editing} onDone={() => setEditing(null)} />}
     <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
       <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
         <Text style={s.h2}>Was kam heute dran?</Text>
@@ -65,14 +70,15 @@ export function Learn({ childIds }: { childIds: string[] }) {
       <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
         <Text style={s.label}>Gespeicherte Themen</Text>
         {topics.length === 0 && <Text style={s.muted}>Noch keine Themen.</Text>}
-        {topics.map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} />)}
+        {topics.map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} onCreate={parent ? () => setEditing(t) : undefined} />)}
         <Text style={[s.muted, { fontSize: 13 }]}>Fragen und Aufgaben schreibt die KI, sobald sie angebunden ist. Bis dahin druckt „Drucken“ ein Blatt mit Kopf, Thema und Platz zum Üben.</Text>
       </View>
+    </View>
     </View>
   );
 }
 
-function TopicRow({ topic, childName, onMsg }: { topic: Topic; childName: string; onMsg: (m: string) => void }) {
+function TopicRow({ topic, childName, onMsg, onCreate }: { topic: Topic; childName: string; onMsg: (m: string) => void; onCreate?: () => void }) {
   const { update } = useFamily();
   const date = new Date(topic.date + 'T12:00:00').toLocaleDateString('de-DE');
   async function print() {
@@ -86,7 +92,8 @@ function TopicRow({ topic, childName, onMsg }: { topic: Topic; childName: string
         <Text style={[s.text, { fontWeight: '700' }]}>{topic.subject}: {topic.text}</Text>
         <Text style={[s.muted, { fontSize: 12 }]}>{childName} · {date}</Text>
         <View style={[s.row, { marginTop: 6 }]}>
-          <Button title="Drucken" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={print} />
+          {onCreate && <Button title="Arbeit am Handy" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={onCreate} />}
+          <Button ghost title="Drucken" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={print} />
           <Button ghost title="Löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => update(d => ({ ...d, topics: (d.topics ?? []).filter(x => x.id !== topic.id) }))} />
         </View>
       </View>

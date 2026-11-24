@@ -1,4 +1,4 @@
-import { Child, Completion, FamilyData, Reward, Task } from './types';
+import { Child, Completion, FamilyData, Reward, SHEET_POINTS, Task, Worksheet } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 export const today = (d = new Date()) => {
@@ -96,4 +96,20 @@ export function decideRequest(data: FamilyData, requestId: string, approve: bool
   const reward = data.rewards.find(r => r.id === req.rewardId);
   if (!approve || !reward || pointsOf(data, req.childId) < reward.cost) return rest;
   return addPoints(rest, req.childId, -reward.cost, 'Eingelöst: ' + reward.title);
+}
+
+export function gradeFromPercent(p: number) { return p >= 92 ? 1 : p >= 80 ? 2 : p >= 67 ? 3 : p >= 50 ? 4 : p >= 30 ? 5 : 6; }
+
+export function setSheet(data: FamilyData, sheet: Worksheet): FamilyData {
+  const list = data.worksheets ?? [];
+  const exists = list.some(w => w.id === sheet.id);
+  return { ...data, worksheets: exists ? list.map(w => (w.id === sheet.id ? sheet : w)) : [sheet, ...list] };
+}
+
+/** Eltern haben abgehakt: Note berechnen und Punkte gutschreiben. */
+export function finishCheck(data: FamilyData, sheet: Worksheet, results: boolean[]): FamilyData {
+  const right = results.filter(Boolean).length;
+  const grade = gradeFromPercent(Math.round((right / sheet.questions.length) * 100));
+  const done = { ...sheet, results, grade, status: 'geprueft' as const };
+  return addPoints(setSheet(data, done), sheet.childId, SHEET_POINTS[grade], `Arbeit ${sheet.title}: Note ${grade}`);
 }
