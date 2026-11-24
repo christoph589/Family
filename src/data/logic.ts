@@ -7,17 +7,39 @@ export const today = (d = new Date()) => {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 };
 
-export function isDueOn(t: Task, date: string): boolean {
+const weekday = (date: string) => new Date(date + 'T12:00:00').getDay();
+const plusDays = (date: string, n: number) => { const x = new Date(date + 'T12:00:00'); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+
+export const isSchoolTask = (t: Task) => !!t.school || t.kind === 'hausaufgabe';
+
+/** Ferien an diesem Tag? Ferienmodus an und (kein Enddatum oder Tag liegt davor). */
+export function holidayOn(d: FamilyData | undefined, date: string) {
+  const h = d?.settings?.holiday;
+  return !!h?.on && (!h.until || date <= h.until);
+}
+const schoolDay = (d: FamilyData | undefined, date: string) => { const wd = weekday(date); return wd >= 1 && wd <= 5 && !holidayOn(d, date); };
+
+/**
+ * Steht die Aufgabe an dem Tag an?
+ * Schulaufgaben gibt es nur an Schultagen (Mo bis Fr, keine Ferien). "Abends vor einem Schultag"
+ * heißt So bis Do, also auch Sonntagabend und am letzten Ferientag. Einmalige Aufgaben
+ * (von Eltern eingetragen) gelten immer, auch in den Ferien.
+ */
+export function isDueOn(t: Task, date: string, d?: FamilyData): boolean {
   if (!t.active) return false;
   if (t.repeat === 'einmal') return t.date === date;
+  if (t.repeat === 'vorSchultag') return schoolDay(d, plusDays(date, 1));
+  if (isSchoolTask(t)) return schoolDay(d, date);
   if (t.repeat === 'taeglich') return true;
-  const wd = new Date(date + 'T12:00:00').getDay();
+  const wd = weekday(date);
   return wd >= 1 && wd <= 5;
 }
 
+export const REPEAT_LABEL: Record<string, string> = { einmal: 'Nur heute', werktags: 'Mo bis Fr', taeglich: 'Täglich', vorSchultag: 'Vor Schultagen (So bis Do)' };
+
 export function tasksFor(data: FamilyData, childId: string, date: string) {
   return data.tasks
-    .filter(t => t.childId === childId && isDueOn(t, date))
+    .filter(t => t.childId === childId && isDueOn(t, date, data))
     .map(t => ({ task: t, completion: data.completions.find(c => c.taskId === t.id && c.date === date) }));
 }
 
@@ -77,7 +99,7 @@ export function newFamily(name: string, pin: string, kids: { name: string; grade
     family: { id: uid(), name, parentPin: pin },
     children,
     parents: parentNames.filter(n => n.trim()).map((n, i) => ({ id: uid(), name: n.trim(), color: PARENT_COLORS[i % PARENT_COLORS.length] })),
-    tasks: children.flatMap(c => [0, 1, 6, 9].map(i => ({ ...TEMPLATES[i], id: uid(), childId: c.id, active: true }))),
+    tasks: children.flatMap(c => TEMPLATES.filter(t => ['Zähne putzen', 'Zimmer aufräumen', 'Hausaufgaben erledigt', 'Schulsachen richten'].includes(t.title)).map(t => ({ ...t, id: uid(), childId: c.id, active: true }))),
     completions: [],
     ledger: [],
     rewards: [
@@ -147,4 +169,12 @@ export function eventsOn(d: FamilyData, date: string, childIds: string[] | null)
     .filter(e => (e.weekly ? new Date(e.date + 'T12:00:00').getDay() === wd && e.date <= date : e.date === date))
     .filter(e => !childIds || e.who.length === 0 || e.who.some(w => childIds.includes(w) || parentIds.includes(w)))
     .sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99'));
+}
+
+/** Schulzeit eines Kindes an dem Tag, falls Schultag und eingetragen. */
+export function schoolOn(d: FamilyData, childId: string, date: string) {
+  if (!schoolDay(d, date)) return null;
+  const day = d.children.find(c => c.id === childId)?.timetable?.[String(weekday(date)) as '1'];
+  if (!day || (!day.from && !day.to && !day.lessons?.some(Boolean))) return null;
+  return day;
 }

@@ -1,8 +1,13 @@
 export type TaskKind = 'routine' | 'hausaufgabe' | 'pflicht'; // pflicht = Haushalt
 export type DayTime = 'morgens' | 'mittags' | 'abends';
-export type Repeat = 'einmal' | 'taeglich' | 'werktags';
+/** vorSchultag = abends vor einem Schultag (So bis Do) */
+export type Repeat = 'einmal' | 'taeglich' | 'werktags' | 'vorSchultag';
 
-export interface Child { id: string; name: string; color: string; grade?: string }
+/** Ein Schultag im Stundenplan. Zeiten als HH:MM. */
+export interface SchoolDay { from?: string; to?: string; lessons?: string[] }
+/** Schlüssel 1 bis 5 = Montag bis Freitag */
+export type Timetable = Partial<Record<'1' | '2' | '3' | '4' | '5', SchoolDay>>;
+export interface Child { id: string; name: string; color: string; grade?: string; timetable?: Timetable }
 /** Elternteil, z. B. Mama oder Papa. Für Kalender und Anzeige, wer gerade am Pad ist. */
 export interface Parent { id: string; name: string; color: string }
 export interface Task {
@@ -13,6 +18,8 @@ export interface Task {
   time?: DayTime;
   /** Kind hakt selbst ab, Punkte sofort, ohne Eltern-Bestätigung. */
   selfCheck?: boolean;
+  /** Gehört zur Schule: nur an Schultagen, pausiert in den Ferien. Hausaufgaben zählen immer dazu. */
+  school?: boolean;
 }
 export interface Completion { id: string; taskId: string; childId: string; date: string; status: 'wartet' | 'bestaetigt' }
 export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string }
@@ -63,7 +70,7 @@ export interface FamilyData {
   topics?: Topic[];
   worksheets?: Worksheet[];
   events?: CalEvent[];
-  settings?: { googleCalendarId?: string; googleCalendarName?: string };
+  settings?: { googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string } };
 }
 
 // Punkte pro Note (1 bis 6). Keine Minuspunkte.

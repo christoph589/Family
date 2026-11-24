@@ -1,11 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
 import { cloudEnabled, cloudStore, DeviceLink, getLink, signOut } from './src/data/cloud';
 import { FamilyProvider, useFamily } from './src/data/FamilyContext';
 import { Connect } from './src/screens/Connect';
 import { Devices } from './src/screens/Devices';
-import { Family } from './src/screens/Family';
+import { Family, Holiday } from './src/screens/Family';
+import { Timetable } from './src/screens/Timetable';
 import { peopleOf } from './src/data/logic';
 import { Calendar } from './src/screens/Calendar';
 import { Grades } from './src/screens/Grades';
@@ -70,6 +71,8 @@ function Root() {
   const [profile, setProfile] = useState<Profile | null>(ownChild ? { kind: 'kind', id: ownChild } : null);
   const [tab, setTab] = useState<Tab>('heute');
   const [askPin, setAskPin] = useState<string | null>(null);
+  const scroller = useRef<any>(null);
+  useEffect(() => { scroller.current?.scrollTo({ y: 0, animated: false }); }, [tab]);
   const [pin, setPin] = useState('');
   const [pinErr, setPinErr] = useState(false);
 
@@ -153,13 +156,15 @@ function Root() {
           </Pressable>
         </View>
       </View>
-      <ScrollView contentContainerStyle={[s.pad, { paddingBottom: 32 }]}>
+      <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingBottom: 32 }]}>
         {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
         {tab === 'heute' && <Today childIds={childIds} parent={parent} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} />}
+        {tab === 'kalender' && <Timetable childIds={childIds} parent={parent} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
         {tab === 'noten' && parent && <Grades />}
+        {tab === 'aufgaben' && parent && <Holiday />}
         {tab === 'aufgaben' && parent && <Family />}
         {tab === 'aufgaben' && parent && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
         {tab === 'aufgaben' && parent && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}

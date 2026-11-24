@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { today, uid } from '../data/logic';
+import { isSchoolTask, REPEAT_LABEL, today, uid } from '../data/logic';
 import { DayTime, Repeat, TaskKind } from '../data/types';
-import { KIND_LABEL, TaskTemplate, TEMPLATES, TIME_LABEL } from '../data/templates';
+import { KIND_LABEL, SCHOOL_PACK, TaskTemplate, TEMPLATES, TIME_LABEL } from '../data/templates';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 
@@ -17,8 +17,14 @@ export function Manage({ onReset }: { onReset?: () => void }) {
   const [icon, setIcon] = useState('');
   const [time, setTime] = useState<DayTime | ''>('');
   const [selfCheck, setSelfCheck] = useState(false);
+  const [school, setSchool] = useState(false);
   const [added, setAdded] = useState('');
   const has = (t: TaskTemplate) => !!data?.tasks.some(x => x.active && x.childId === childId && x.title === t.title && x.time === t.time);
+  const addPack = () => {
+    const missing = SCHOOL_PACK.filter(t => !has(t));
+    update(d => ({ ...d, tasks: [...d.tasks, ...missing.map(t => ({ ...t, id: uid(), childId, active: true }))] }));
+    setAdded(missing.length ? `Schulpaket: ${missing.length} Aufgaben hinzugefügt.` : 'Schulpaket ist schon komplett da.');
+  };
   const addTemplate = (t: TaskTemplate) => {
     update(d => ({ ...d, tasks: [...d.tasks, { ...t, id: uid(), childId, active: true, date: t.repeat === 'einmal' ? today() : undefined }] }));
     setAdded(`${t.icon} ${t.title} hinzugefügt.`);
@@ -31,12 +37,16 @@ export function Manage({ onReset }: { onReset?: () => void }) {
       <View style={s.card}>
         <Text style={s.h2}>Vorlagen</Text>
         <Segmented value={childId} onChange={setChildId} options={data.children.map(c => ({ value: c.id, label: c.name }))} />
-        <Text style={s.muted}>Antippen zum Hinzufügen. Grau heißt: hat {data.children.find(c => c.id === childId)?.name} schon.</Text>
+        <Pressable onPress={addPack} style={{ backgroundColor: C.accent + '14', borderWidth: 2, borderColor: C.accent, borderRadius: 14, padding: 14, gap: 4 }}>
+          <Text style={[s.text, { fontWeight: '800' }]}>🎒 Schulpaket für {data.children.find(c => c.id === childId)?.name} hinzufügen</Text>
+          <Text style={s.muted}>{SCHOOL_PACK.map(t => t.title).join(', ')}. Mo bis Fr, Schulsachen abends vor Schultagen (also auch Sonntag). Am Wochenende und in den Ferien pausiert.</Text>
+        </Pressable>
+        <Text style={s.muted}>Oder einzeln antippen. Grau heißt: hat {data.children.find(c => c.id === childId)?.name} schon.</Text>
         {(['routine', 'hausaufgabe', 'pflicht'] as TaskKind[]).map(k => (
           <View key={k} style={{ gap: 6 }}>
             <Text style={s.label}>{k === 'pflicht' ? 'Haushalt' : k === 'routine' ? 'Routinen' : 'Schule'}</Text>
             <View style={[s.row, { gap: 8 }]}>
-              {TEMPLATES.filter(t => t.kind === k).map((t, i) => {
+              {TEMPLATES.filter(t => (k === 'hausaufgabe' ? t.kind === k || t.school : t.kind === k && !t.school)).map((t, i) => {
                 const on = has(t);
                 return (
                   <Pressable key={i} disabled={on} onPress={() => addTemplate(t)}
@@ -59,7 +69,7 @@ export function Manage({ onReset }: { onReset?: () => void }) {
         <Segmented value={kind} onChange={setKind} options={(['routine', 'hausaufgabe', 'pflicht'] as TaskKind[]).map(k => ({ value: k, label: KIND_LABEL[k] }))} />
         <Segmented value={time} onChange={setTime} options={[{ value: '' as const, label: 'Egal wann' }, ...(['morgens', 'mittags', 'abends'] as DayTime[]).map(t => ({ value: t, label: TIME_LABEL[t] }))]} />
         <View style={s.row}>
-          <Segmented value={repeat} onChange={setRepeat} options={[{ value: 'einmal', label: 'Nur heute' }, { value: 'werktags', label: 'Mo bis Fr' }, { value: 'taeglich', label: 'Täglich' }]} />
+          <Segmented value={repeat} onChange={setRepeat} options={(['einmal', 'werktags', 'vorSchultag', 'taeglich'] as Repeat[]).map(r => ({ value: r, label: REPEAT_LABEL[r] }))} />
           <View style={[s.row, { gap: 6 }]}>
             <TextInput style={[s.input, { width: 70 }]} value={points} onChangeText={t => setPoints(t.replace(/\D/g, '').slice(0, 3))} keyboardType="number-pad" />
             <Text style={s.muted}>Punkte</Text>
@@ -71,8 +81,17 @@ export function Manage({ onReset }: { onReset?: () => void }) {
           </View>
           <Text style={[s.text, { flex: 1 }]}>Kind darf selbst abhaken, ohne dass ihr bestätigt (gut für Zähne putzen und Ähnliches)</Text>
         </Pressable>
+        {kind !== 'hausaufgabe' && repeat !== 'einmal' && (
+          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: school }} onPress={() => setSchool(v => !v)} style={[s.row, { flexWrap: 'nowrap' }]}>
+            <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: C.accent, backgroundColor: school ? C.accent : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+              {school && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+            </View>
+            <Text style={[s.text, { flex: 1 }]}>Gehört zur Schule (nur an Schultagen, pausiert in den Ferien)</Text>
+          </Pressable>
+        )}
+        {repeat === 'einmal' && kind === 'hausaufgabe' && <Text style={[s.muted, { fontSize: 13 }]}>Einmalige Lernaufgaben erscheinen auch in den Ferien.</Text>}
         <Button title="Anlegen" disabled={!title.trim()} onPress={() => {
-          update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), childId, title: title.trim(), icon: icon.trim() || undefined, kind, time: time || undefined, selfCheck, repeat, points: Number(points) || 0, date: repeat === 'einmal' ? today() : undefined, active: true }] }));
+          update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), childId, title: title.trim(), icon: icon.trim() || undefined, kind, time: time || undefined, selfCheck, school: school && kind !== 'hausaufgabe' && repeat !== 'einmal' ? true : undefined, repeat, points: Number(points) || 0, date: repeat === 'einmal' ? today() : undefined, active: true }] }));
           setAdded(`${icon} ${title.trim()} hinzugefügt.`); setTitle(''); setIcon('');
         }} />
       </View>
@@ -83,7 +102,7 @@ export function Manage({ onReset }: { onReset?: () => void }) {
           <View key={t.id} style={[s.row, { flexWrap: 'nowrap', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }]}>
             <View style={{ flex: 1 }}>
               <Text style={[s.text, { fontWeight: '700' }]}>{t.icon ? t.icon + ' ' : ''}{t.title}</Text>
-              <Text style={[s.muted, { fontSize: 12 }]}>{KIND_LABEL[t.kind]}{t.time ? ` · ${t.time}` : ''}{t.selfCheck ? ' · ohne Bestätigung' : ''} · {t.repeat === 'einmal' ? t.date : t.repeat === 'taeglich' ? 'täglich' : 'Mo bis Fr'} · {t.points} P</Text>
+              <Text style={[s.muted, { fontSize: 12 }]}>{KIND_LABEL[t.kind]}{t.time ? ` · ${t.time}` : ''}{t.selfCheck ? ' · ohne Bestätigung' : ''} · {t.repeat === 'einmal' ? t.date : REPEAT_LABEL[t.repeat]}{isSchoolTask(t) ? ' · Schule' : ''} · {t.points} P</Text>
             </View>
             <Pressable onPress={() => update(d => ({ ...d, tasks: d.tasks.map(x => (x.id === t.id ? { ...x, active: false } : x)) }))}>
               <Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text>

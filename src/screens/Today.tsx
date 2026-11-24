@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { confirm, eventsOn, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm } from '../data/logic';
+import { confirm, eventsOn, holidayOn, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn } from '../data/logic';
 import { Child, TaskKind } from '../data/types';
 import { C, s } from '../ui/theme';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
@@ -11,8 +11,16 @@ export function Today({ childIds, parent }: { childIds: string[]; parent: boolea
   const kids = data.children.filter(c => childIds.includes(c.id));
   const people = peopleOf(data);
   const events = eventsOn(data, today(), parent ? null : childIds);
+  const holiday = holidayOn(data, today());
+  const until = data.settings?.holiday?.until;
   return (
     <View style={{ gap: 16 }}>
+      {holiday && (
+        <View style={[s.card, { backgroundColor: C.warnSoft, flexDirection: 'row', alignItems: 'center' }]}>
+          <Text style={{ fontSize: 28 }}>🏖️</Text>
+          <Text style={[s.text, { fontWeight: '800', flex: 1 }]}>Ferien{until ? ` bis ${new Date(until + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}` : ''}. Schulaufgaben machen Pause.</Text>
+        </View>
+      )}
       {events.length > 0 && (
         <View style={[s.card, { gap: 8 }]}>
           <Text style={s.label}>Termine heute</Text>
@@ -61,7 +69,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[s.text, { fontWeight: '700', textDecorationLine: st === 'bestaetigt' ? 'line-through' : 'none' }]}>{task.icon ? task.icon + ' ' : ''}{task.title}</Text>
-                <Text style={[s.muted, { fontSize: 12 }]}>{st === 'wartet' ? 'Wartet auf Eltern' : st === 'bestaetigt' ? (task.selfCheck ? 'Erledigt' : 'Bestätigt') : task.time ? TIME_LABEL[task.time] : task.repeat === 'einmal' ? 'Heute' : task.repeat === 'taeglich' ? 'Jeden Tag' : 'Mo bis Fr'}</Text>
+                <Text style={[s.muted, { fontSize: 12 }]}>{st === 'wartet' ? 'Wartet auf Eltern' : st === 'bestaetigt' ? (task.selfCheck ? 'Erledigt' : 'Bestätigt') : task.time ? TIME_LABEL[task.time] : task.repeat === 'einmal' ? 'Heute' : REPEAT_LABEL[task.repeat]}</Text>
               </View>
               {parent && st !== 'bestaetigt' ? (
                 <Pressable onPress={() => update(d => confirm(d, task, date))} style={{ backgroundColor: C.ok, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8 }}>
@@ -91,6 +99,17 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
           <Text style={[s.muted, { fontSize: 12 }]}>Punkte</Text>
         </View>
       </View>
+      {(() => {
+        const sd = schoolOn(data!, child.id, date);
+        if (!sd) return null;
+        const lessons = (sd.lessons ?? []).filter(Boolean);
+        return (
+          <View style={{ backgroundColor: child.color + '14', borderRadius: 12, padding: 10, gap: 2 }}>
+            <Text style={[s.text, { fontWeight: '800' }]}>🏫 Schule {sd.from ?? '?'}–{sd.to ?? '?'}</Text>
+            {lessons.length > 0 && <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>{lessons.join(' · ')}</Text>}
+          </View>
+        );
+      })()}
       <View>
         <Text style={[s.muted, { fontSize: 13, marginBottom: 4 }]}>{done} von {items.length} erledigt</Text>
         <View style={{ height: 10, backgroundColor: C.surface2, borderRadius: 99, overflow: 'hidden' }}>

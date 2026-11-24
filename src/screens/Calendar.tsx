@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { GCal, GEvent, getMcp, GOOGLE_ERROR, listCalendars, listWeek } from '../data/google';
-import { isDueOn, peopleOf, Person, today, uid } from '../data/logic';
+import { isDueOn, peopleOf, Person, schoolOn, today, uid } from '../data/logic';
 import { CalEvent } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
@@ -57,9 +57,13 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
       return { key: 'g' + e.id, time: e.time, title: e.title, color: kid?.color ?? '#4285f4', tag: 'Google' };
     });
     const tasks: Item[] = data!.tasks
-      .filter(t => t.repeat === 'einmal' && t.date === date && isDueOn(t, date) && (parent || childIds.includes(t.childId)))
+      .filter(t => t.repeat === 'einmal' && t.date === date && isDueOn(t, date, data!) && (parent || childIds.includes(t.childId)))
       .map(t => ({ key: 't' + t.id, title: `${t.icon ? t.icon + ' ' : ''}${t.title}`, color: kids.find(k => k.id === t.childId)?.color ?? C.muted, tag: 'Aufgabe' }));
-    return [...own, ...g].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99')).concat(tasks);
+    const school: Item[] = kids.filter(k => parent || childIds.includes(k.id)).flatMap(k => {
+      const sd = schoolOn(data!, k.id, date);
+      return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, title: `🏫 Schule${sd.to ? ' bis ' + sd.to : ''}`, color: k.color, tag: k.name }] : [];
+    });
+    return [...school, ...own, ...g].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99')).concat(tasks);
   }
 
   async function connect() {
@@ -92,7 +96,7 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
               <Text style={{ fontWeight: '800', color: isToday ? C.accent : C.fg }}>{WD[i]} {parse(d).getDate()}.</Text>
               {items.length === 0 && <Text style={[s.muted, { fontSize: 13 }]}>frei</Text>}
               {items.map(it => (
-                <EventRow key={it.key} item={it} canDelete={parent && !it.key.startsWith('g') && !it.key.startsWith('t')}
+                <EventRow key={it.key} item={it} canDelete={parent && !/^[gts]/.test(it.key)}
                   onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />
               ))}
             </View>

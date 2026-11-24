@@ -1,0 +1,105 @@
+import { useState } from 'react';
+import { ScrollView, Text, TextInput, View } from 'react-native';
+import { useFamily } from '../data/FamilyContext';
+import { Child, SchoolDay, Timetable as TT } from '../data/types';
+import { Button, Segmented } from '../ui/Button';
+import { C, s } from '../ui/theme';
+
+const DAYS = [['1', 'Mo'], ['2', 'Di'], ['3', 'Mi'], ['4', 'Do'], ['5', 'Fr']] as const;
+const ROWS = 8;
+const COL = 96;
+const timeOk = (t?: string) => !t || /^([01]?\d|2[0-3]):[0-5]\d$/.test(t);
+const fixTime = (t?: string) => (t && timeOk(t) ? t.padStart(5, '0') : undefined);
+
+/** Stundenplan je Kind: Schulbeginn, Schulende und Fächer pro Stunde. */
+export function Timetable({ childIds, parent }: { childIds: string[]; parent: boolean }) {
+  const { data, update } = useFamily();
+  const kids = data?.children.filter(c => childIds.includes(c.id)) ?? [];
+  const [childId, setChildId] = useState(kids[0]?.id ?? '');
+  const [edit, setEdit] = useState<TT | null>(null);
+  if (!data || !kids.length) return null;
+  const child = kids.find(k => k.id === childId) ?? kids[0];
+  const tt = edit ?? child.timetable ?? {};
+  const todayWd = String(new Date().getDay());
+  const setDay = (k: string, patch: Partial<SchoolDay>) => setEdit(e => ({ ...(e ?? {}), [k]: { ...(e ?? {})[k as '1'], ...patch } }));
+  const setLesson = (k: string, i: number, v: string) => setEdit(e => {
+    const day = (e ?? {})[k as '1'] ?? {};
+    const lessons = [...(day.lessons ?? [])];
+    while (lessons.length < ROWS) lessons.push('');
+    lessons[i] = v;
+    return { ...(e ?? {}), [k]: { ...day, lessons } };
+  });
+  const valid = DAYS.every(([k]) => timeOk(tt[k]?.from) && timeOk(tt[k]?.to));
+  const save = () => {
+    const clean: TT = {};
+    DAYS.forEach(([k]) => {
+      const d = tt[k];
+      if (!d) return;
+      const lessons = (d.lessons ?? []).map(l => l.trim());
+      while (lessons.length && !lessons[lessons.length - 1]) lessons.pop();
+      clean[k] = { from: fixTime(d.from), to: fixTime(d.to), lessons: lessons.length ? lessons : undefined };
+    });
+    update(d => ({ ...d, children: d.children.map((c: Child) => (c.id === child.id ? { ...c, timetable: clean } : c)) }));
+    setEdit(null);
+  };
+  const rows = Math.max(1, ...DAYS.map(([k]) => (tt[k]?.lessons ?? []).filter(Boolean).length ? (tt[k]?.lessons ?? []).length : 0));
+  const empty = !DAYS.some(([k]) => tt[k]?.from || tt[k]?.lessons?.some(Boolean));
+
+  return (
+    <View style={[s.card, { borderTopWidth: 6, borderTopColor: child.color }]}>
+      <View style={[s.row, { justifyContent: 'space-between' }]}>
+        <Text style={s.h2}>Stundenplan {child.name}</Text>
+        {parent && !edit && <Button ghost title={empty ? 'Eintragen' : 'Bearbeiten'} onPress={() => setEdit(child.timetable ?? {})} />}
+      </View>
+      {kids.length > 1 && !edit && <Segmented value={child.id} onChange={setChildId} options={kids.map(k => ({ value: k.id, label: k.name }))} />}
+      {empty && !edit ? (
+        <Text style={s.muted}>{parent ? 'Noch leer. Trag Schulbeginn und Schulende ein, dann zeigt „Heute“ und der Kalender, wann Schule ist. Fächer sind optional.' : 'Noch kein Stundenplan eingetragen.'}</Text>
+      ) : (
+        <ScrollView horizontal contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
+          <View style={{ gap: 6, paddingTop: 30 }}>
+            <Text style={[s.muted, { height: edit ? 84 : 40, fontSize: 12 }]}>Zeit</Text>
+            {Array.from({ length: edit ? ROWS : rows }, (_, i) => <Text key={i} style={[s.muted, { height: edit ? 40 : 30, fontSize: 12 }]}>{i + 1}.</Text>)}
+          </View>
+          {DAYS.map(([k, label]) => {
+            const d = tt[k] ?? {};
+            const isToday = k === todayWd;
+            return (
+              <View key={k} style={{ width: COL, gap: 6 }}>
+                <Text style={{ fontWeight: '800', textAlign: 'center', color: isToday ? child.color : C.fg, height: 24 }}>{label}</Text>
+                {edit ? (
+                  <>
+                    <TextInput style={[s.input, { paddingHorizontal: 6, fontSize: 14 }, !timeOk(d.from) && { borderColor: C.danger }]} value={d.from ?? ''} placeholder="7:55" accessibilityLabel={`${label} Beginn`} onChangeText={t => setDay(k, { from: t })} />
+                    <TextInput style={[s.input, { paddingHorizontal: 6, fontSize: 14 }, !timeOk(d.to) && { borderColor: C.danger }]} value={d.to ?? ''} placeholder="13:10" accessibilityLabel={`${label} Ende`} onChangeText={t => setDay(k, { to: t })} />
+                    {Array.from({ length: ROWS }, (_, i) => (
+                      <TextInput key={i} style={[s.input, { paddingHorizontal: 6, fontSize: 14, height: 40 }]} value={d.lessons?.[i] ?? ''} placeholder="Fach" accessibilityLabel={`${label} ${i + 1}. Stunde`} onChangeText={t => setLesson(k, i, t)} />
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <View style={{ height: 40, borderRadius: 8, backgroundColor: isToday ? child.color + '22' : C.bg, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontWeight: '700', color: C.fg, fontSize: 13 }}>{d.from || d.to ? `${d.from ?? '?'}–${d.to ?? '?'}` : 'frei'}</Text>
+                    </View>
+                    {Array.from({ length: rows }, (_, i) => (
+                      <View key={i} style={{ height: 30, borderRadius: 8, backgroundColor: d.lessons?.[i] ? (isToday ? child.color + '22' : C.bg) : 'transparent', justifyContent: 'center', paddingHorizontal: 6 }}>
+                        <Text style={{ fontSize: 13, color: C.fg }} numberOfLines={1}>{d.lessons?.[i] ?? ''}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+      {edit && (
+        <>
+          {!valid && <Text style={{ color: C.danger }}>Zeiten bitte so: 7:55</Text>}
+          <View style={s.row}>
+            <Button title="Speichern" disabled={!valid} onPress={save} />
+            <Button ghost title="Abbrechen" onPress={() => setEdit(null)} />
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
