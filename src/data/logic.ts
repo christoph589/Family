@@ -100,6 +100,29 @@ export function addPoints(data: FamilyData, childId: string, points: number, rea
   return { ...data, ledger: [{ id: uid(), childId, points, reason, at: new Date().toISOString() }, ...data.ledger] };
 }
 
+// --- Gemeinschaftstopf ---
+export function potShares(d: FamilyData, potId: string) {
+  const m = new Map<string, number>();
+  d.ledger.filter(l => l.potId === potId).forEach(l => m.set(l.childId, (m.get(l.childId) ?? 0) - l.points));
+  return d.children.map(c => ({ child: c, points: m.get(c.id) ?? 0 })).filter(x => x.points > 0);
+}
+export function potBalance(d: FamilyData, potId: string) {
+  const pot = d.pots?.find(p => p.id === potId);
+  return potShares(d, potId).reduce((s, x) => s + x.points, 0) + (pot?.bonus ?? 0);
+}
+export function contributeToPot(d: FamilyData, potId: string, childId: string, n: number): FamilyData {
+  const pot = d.pots?.find(p => p.id === potId);
+  if (!pot || pot.doneAt || n <= 0 || pointsOf(d, childId) - reservedOf(d, childId) < n) return d;
+  return { ...d, ledger: [{ id: uid(), childId, points: -n, reason: `${pot.icon ?? '🎯'} In den Topf: ${pot.title}`, at: new Date().toISOString(), potId }, ...d.ledger] };
+}
+/** Topf auflösen: Punkte gehen an die Kinder zurück. */
+export function dissolvePot(d: FamilyData, potId: string): FamilyData {
+  const pot = d.pots?.find(p => p.id === potId);
+  if (!pot) return d;
+  const back = pot.doneAt ? [] : potShares(d, potId).map(x => ({ id: uid(), childId: x.child.id, points: x.points, reason: `↩️ Zurück aus dem Topf: ${pot.title}`, at: new Date().toISOString() }));
+  return { ...d, pots: (d.pots ?? []).filter(p => p.id !== potId), ledger: [...back, ...d.ledger] };
+}
+
 export const CHILD_COLORS = ['#e2583e', '#4b55c4', '#2b8a4b', '#b26a00', '#a23b8c'];
 export const PARENT_COLORS = ['#c2477a', '#2f7fb5', '#6b5b45', '#5a6b2b'];
 export const ALL_COLORS = [...CHILD_COLORS, ...PARENT_COLORS, '#0f6e73', '#e0a100', '#7a4fd1', '#d0457f', '#1d9bb5', '#8a8f2a', '#5b6b78'];

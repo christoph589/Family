@@ -217,7 +217,7 @@ function Root() {
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} />}
         {tab === 'kalender' && <Timetable childIds={childIds} parent={parent} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} />}
-        {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
+        {tab === 'punkte' && <Points childIds={childIds} parent={parent} admin={admin} />}
         {tab === 'lernen' && admin && <Grades />}
         {tab === 'geld' && <Money childIds={childIds} parent={parent} />}
         {tab === 'essen' && <Food who={me.name} meId={profile.id} />}

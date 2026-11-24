@@ -5,15 +5,17 @@ import { useFamily } from '../data/FamilyContext';
 import { addPoints, decideIdea, decideRequest, pointsOf, proposeIdea, requestReward, reservedOf } from '../data/logic';
 import { Button } from '../ui/Button';
 import { PersonHead } from '../ui/Avatar';
+import { Pots } from './Pots';
 import { C, s } from '../ui/theme';
 
-export function Points({ childIds, parent }: { childIds: string[]; parent: boolean }) {
+export function Points({ childIds, parent, admin = parent }: { childIds: string[]; parent: boolean; admin?: boolean }) {
   const { data, update } = useFamily();
   if (!data) return null;
   const requests = (data.requests ?? []).filter(r => childIds.includes(r.childId));
   const ideas = (data.ideas ?? []).filter(i => childIds.includes(i.childId));
   return (
     <View style={{ gap: 16 }}>
+      <Pots childIds={childIds} parent={parent} admin={admin} />
       {parent && ideas.length > 0 && (
         <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
           <Text style={s.h2}>Neue Wünsche der Kinder</Text>

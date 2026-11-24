@@ -42,7 +42,9 @@ export interface Task {
   school?: boolean;
 }
 export interface Completion { id: string; taskId: string; childId: string; date: string; status: 'wartet' | 'bestaetigt' }
-export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string }
+export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string; /** Einzahlung in einen Gemeinschaftstopf */ potId?: string }
+/** Gemeinsames Ziel aller Kinder, z. B. Freizeitpark. Kinder zahlen eigene Punkte ein, Eltern können dazulegen. */
+export interface Pot { id: string; title: string; icon?: string; target: number; bonus?: number; createdAt: string; doneAt?: string }
 /** childId gesetzt = nur für dieses Kind (z. B. aus einem eigenen Wunsch) */
 export interface Reward { id: string; title: string; cost: number; childId?: string }
 /** Eigener Wunsch eines Kindes, Eltern legen den Punktepreis fest und schalten frei. */
@@ -92,6 +94,7 @@ export interface FamilyData {
   rewards: Reward[];
   requests?: RewardRequest[];
   ideas?: Idea[];
+  pots?: Pot[];
   money?: Record<string, MoneyAccount>;
   meals?: Meal[];
   recipes?: Recipe[];

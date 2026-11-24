@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { birthdaysOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today } from '../data/logic';
+import { potBalance, potShares, birthdaysOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today } from '../data/logic';
 import { TIME_ORDER } from '../data/templates';
 const TIME_ICON: Record<string, string> = { morgens: ' 🌅', mittags: ' ☀️', abends: ' 🌙' };
 import { Child, FamilyData } from '../data/types';
@@ -10,7 +10,7 @@ import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf, matchesPeople } 
 import { EventForm } from './Calendar';
 import { MealPlan, mealsOn, Shopping, shoppingFor, untilLabel } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { C, s, SHADOW } from '../ui/theme';
+import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar, PersonHead } from '../ui/Avatar';
 import { useFeedItems } from '../data/feeds';
 
@@ -123,6 +123,22 @@ export function Board({ onExit }: { onExit: () => void }) {
         </View>
       </View>
 
+      {(data.pots ?? []).filter(p => !p.doneAt).map(p => {
+        const bal = potBalance(data, p.id);
+        return (
+          <View key={p.id} style={[{ flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 22, padding: 16 }, grad('#5b4cf0', '#ff6a5c', 120), SHADOW.sm]}>
+            <Text style={{ fontSize: 36 }}>{p.icon ?? '🎯'}</Text>
+            <View style={{ flex: 1, gap: 8 }}>
+              <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>Gemeinsam für: {p.title}</Text>
+              <View style={{ height: 14, borderRadius: 99, backgroundColor: '#ffffff40', overflow: 'hidden', flexDirection: 'row' }}>
+                {potShares(data, p.id).map(x => <View key={x.child.id} style={{ width: `${(x.points / Math.max(p.target, bal)) * 100}%`, backgroundColor: x.child.color }} />)}
+                {!!p.bonus && <View style={{ width: `${(p.bonus / Math.max(p.target, bal)) * 100}%`, backgroundColor: '#fff' }} />}
+              </View>
+            </View>
+            <Text style={{ color: '#fff', fontSize: 26, fontWeight: '800' }}>{bal}<Text style={{ fontSize: 15, color: '#ffffffcc' }}> / {p.target} ⭐</Text></Text>
+          </View>
+        );
+      })}
       <View style={[s.row, { gap: 10 }]} accessibilityRole="tablist">
         {PANES.map(x => (
           <Pressable key={x.value} accessibilityRole="tab" accessibilityState={{ selected: pane === x.value }} onPress={() => setPane(x.value)}
@@ -214,13 +230,17 @@ const WDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
 
 /** Stundenpläne aller Kinder als Wochenraster: Zeilen = Kinder, Spalten = Mo bis Fr. */
 function WallTimetable({ data, kids, date }: { data: FamilyData; kids: Child[]; date: string }) {
+  const [open, setOpen] = useState<string[]>([]);
+  const all = open.length > 0 && open.length >= kids.length;
   const wd = new Date(date + 'T12:00:00').getDay(); // 1 = Montag
   const withPlan = kids.filter(k => k.timetable && Object.values(k.timetable).some(d => d && (d.from || d.to || d.lessons?.some(Boolean))));
   if (!withPlan.length) return <View style={s.card}><Text style={s.muted}>Noch kein Stundenplan eingetragen. Das geht in der Eltern-Ansicht unter Kalender › Stundenplan.</Text></View>;
   return (
     <View style={[s.card, { padding: 12, gap: 0 }]}>
       <View style={{ flexDirection: 'row' }}>
-        <View style={{ width: 150 }} />
+        <Pressable onPress={() => setOpen(all ? [] : kids.map(k => k.id))} style={{ width: 150, justifyContent: 'center' }} accessibilityRole="button">
+          <Text style={{ color: C.accent, fontWeight: '800', fontSize: 13 }}>{all ? '▴ Alle zuklappen' : '▾ Alle aufklappen'}</Text>
+        </Pressable>
         {WDAYS.map((d, i) => (
           <View key={d} style={{ flex: 1, alignItems: 'center', paddingVertical: 8 }}>
             <Text style={{ fontWeight: '800', fontSize: 16, color: i + 1 === wd ? C.accent : C.fg }}>{d}</Text>
@@ -228,10 +248,12 @@ function WallTimetable({ data, kids, date }: { data: FamilyData; kids: Child[]; 
         ))}
       </View>
       {withPlan.map(k => (
-        <View key={k.id} style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.line, paddingVertical: 8, alignItems: 'stretch' }}>
-          <View style={{ width: 150, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Pressable key={k.id} onPress={() => setOpen(o => (o.includes(k.id) ? o.filter(x => x !== k.id) : [...o, k.id]))} accessibilityRole="button" accessibilityLabel={`Stundenplan ${k.name} ${open.includes(k.id) ? 'zuklappen' : 'aufklappen'}`}
+          style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.line, paddingVertical: 8, alignItems: 'stretch' }}>
+          <View style={{ width: 150, flexDirection: 'row', alignItems: open.includes(k.id) ? 'flex-start' : 'center', gap: 10, paddingTop: open.includes(k.id) ? 6 : 0 }}>
             <Avatar name={k.name} color={k.color} photo={k.photo} size={36} />
             <Text style={[s.text, { fontWeight: '800', flex: 1 }]} numberOfLines={1}>{k.name}</Text>
+            <Text style={{ color: C.muted, fontSize: 14, paddingRight: 6 }}>{open.includes(k.id) ? '▴' : '▾'}</Text>
           </View>
           {WDAYS.map((_, i) => {
             const day = k.timetable?.[String(i + 1) as '1'];
@@ -241,12 +263,21 @@ function WallTimetable({ data, kids, date }: { data: FamilyData; kids: Child[]; 
               <View key={i} style={{ flex: 1, padding: 3 }}>
                 <View style={{ flex: 1, borderRadius: 12, padding: 8, gap: 2, backgroundColor: day && (day.from || day.to) ? k.color + (today ? '33' : '17') : C.surface2, borderWidth: today ? 2 : 0, borderColor: k.color }}>
                   {day && (day.from || day.to) ? <Text style={{ fontWeight: '800', fontSize: 14, color: C.fg }}>{day.from ?? '?'}–{day.to ?? '?'}</Text> : <Text style={s.muted}>–</Text>}
-                  {lessons.length > 0 && <Text style={{ fontSize: 12, color: C.muted }} numberOfLines={4}>{lessons.join(', ')}</Text>}
+                  {lessons.length > 0 && (open.includes(k.id)
+                    ? <View style={{ gap: 3, marginTop: 4 }}>
+                        {(day?.lessons ?? []).map((l, n) => l ? (
+                          <View key={n} style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                            <Text style={{ width: 18, fontSize: 11, fontWeight: '800', color: k.color }}>{n + 1}.</Text>
+                            <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: C.fg }} numberOfLines={1}>{l}</Text>
+                          </View>
+                        ) : null)}
+                      </View>
+                    : <Text style={{ fontSize: 12, color: C.muted }} numberOfLines={1}>{lessons.length} Stunden</Text>)}
                 </View>
               </View>
             );
           })}
-        </View>
+        </Pressable>
       ))}
     </View>
   );
