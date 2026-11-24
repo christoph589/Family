@@ -35,7 +35,7 @@ export function Setup() {
         <Button ghost title="Weiteres Kind" onPress={() => setKids(ks => [...ks, { name: '', grade: '' }])} />
       </View>
       <Button title="Loslegen" disabled={!valid} onPress={() => replace(newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined }))))} />
-      <Text style={[s.muted, { fontSize: 13, color: C.muted }]}>Für jedes Kind lege ich zwei Beispielaufgaben an. Du kannst sie unter „Aufgaben“ ändern.</Text>
+      <Text style={[s.muted, { fontSize: 13, color: C.muted }]}>Für jedes Kind lege ich ein paar Startaufgaben an, zum Beispiel Zähne putzen. Unter „Aufgaben“ findest du viele Vorlagen.</Text>
     </ScrollView>
   );
 }

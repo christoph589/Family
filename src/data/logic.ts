@@ -1,3 +1,4 @@
+import { TEMPLATES } from './templates';
 import { Child, Completion, FamilyData, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -27,6 +28,7 @@ export function pointsOf(data: FamilyData, childId: string) {
 /** Kind hakt ab oder nimmt zurück, solange noch nicht bestätigt. */
 export function toggleByChild(data: FamilyData, task: Task, date: string): FamilyData {
   const existing = data.completions.find(c => c.taskId === task.id && c.date === date);
+  if (task.selfCheck) return existing?.status === 'bestaetigt' ? undoConfirm(data, task, date) : confirm(data, task, date);
   if (existing?.status === 'bestaetigt') return data;
   const completions: Completion[] = existing
     ? data.completions.filter(c => c !== existing)
@@ -63,10 +65,7 @@ export function newFamily(name: string, pin: string, kids: { name: string; grade
     version: 1,
     family: { id: uid(), name, parentPin: pin },
     children,
-    tasks: children.flatMap(c => [
-      { id: uid(), childId: c.id, title: 'Hausaufgaben erledigt', kind: 'hausaufgabe' as const, points: 10, repeat: 'werktags' as const, active: true },
-      { id: uid(), childId: c.id, title: 'Zimmer aufräumen', kind: 'pflicht' as const, points: 5, repeat: 'taeglich' as const, active: true },
-    ]),
+    tasks: children.flatMap(c => [0, 1, 6, 9].map(i => ({ ...TEMPLATES[i], id: uid(), childId: c.id, active: true }))),
     completions: [],
     ledger: [],
     rewards: [

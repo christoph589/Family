@@ -1,4 +1,5 @@
-export type TaskKind = 'hausaufgabe' | 'pflicht';
+export type TaskKind = 'routine' | 'hausaufgabe' | 'pflicht'; // pflicht = Haushalt
+export type DayTime = 'morgens' | 'mittags' | 'abends';
 export type Repeat = 'einmal' | 'taeglich' | 'werktags';
 
 export interface Child { id: string; name: string; color: string; grade?: string }
@@ -6,6 +7,10 @@ export interface Task {
   id: string; childId: string; title: string; kind: TaskKind; points: number;
   repeat: Repeat; date?: string; // date nur bei 'einmal' (YYYY-MM-DD)
   active: boolean;
+  icon?: string;
+  time?: DayTime;
+  /** Kind hakt selbst ab, Punkte sofort, ohne Eltern-Bestätigung. */
+  selfCheck?: boolean;
 }
 export interface Completion { id: string; taskId: string; childId: string; date: string; status: 'wartet' | 'bestaetigt' }
 export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string }
