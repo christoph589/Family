@@ -24,7 +24,7 @@ export default function App() {
 }
 
 function Root() {
-  const { data, loading, replace } = useFamily();
+  const { data, loading, replace, saveError } = useFamily();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tab, setTab] = useState<Tab>('heute');
   const [askPin, setAskPin] = useState(false);
@@ -89,6 +89,7 @@ function Root() {
             <Button ghost title="Wechseln" onPress={() => { setProfile(null); setTab('heute'); }} />
           </View>
         </View>
+        {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>Speicher auf diesem Gerät ist voll. Bitte alte Themen mit Fotos löschen.</Text>}
         {tab === 'heute' && <Today childIds={childIds} parent={parent} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}

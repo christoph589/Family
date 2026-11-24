@@ -1,7 +1,8 @@
 import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as Print from 'expo-print';
 import { useState } from 'react';
-import { Image, Platform, Text, TextInput, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { today, topicUnderstanding, uid } from '../data/logic';
 import { Topic } from '../data/types';
@@ -10,13 +11,25 @@ import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheet
 import { C, s } from '../ui/theme';
 
 const MAX_TOPICS = 30; // Fotos liegen vorerst lokal, deshalb begrenzt.
+const MAX_PHOTOS = 8;
+const photosOf = (t: Topic) => t.photos ?? (t.photo ? [t.photo] : []);
+
+/** Verkleinert ein Foto auf max. 1400 px Breite, damit es lesbar bleibt, aber wenig Speicher braucht. */
+async function shrink(a: ImagePicker.ImagePickerAsset): Promise<string> {
+  const ctx = ImageManipulator.manipulate(a.uri);
+  if (a.width > 1400) ctx.resize({ width: 1400 });
+  const img = await ctx.renderAsync();
+  const out = await img.saveAsync({ compress: 0.55, format: SaveFormat.JPEG, base64: true });
+  return out.base64 ? `data:image/jpeg;base64,${out.base64}` : out.uri;
+}
 
 export function Learn({ childIds, parent }: { childIds: string[]; parent: boolean }) {
   const { data, update } = useFamily();
   const [childId, setChildId] = useState(childIds[0] ?? '');
   const [subject, setSubject] = useState('');
   const [text, setText] = useState('');
-  const [photo, setPhoto] = useState<string | undefined>();
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [editing, setEditing] = useState<Topic | null>(null);
   if (!data) return null;
@@ -24,21 +37,26 @@ export function Learn({ childIds, parent }: { childIds: string[]; parent: boolea
   const topics = (data.topics ?? []).filter(t => childIds.includes(t.childId));
 
   async function pick(camera: boolean) {
-    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.35, base64: true };
+    setMsg('');
+    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1, allowsMultipleSelection: !camera, selectionLimit: MAX_PHOTOS - photos.length };
     if (camera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) { setMsg('Kamera nicht erlaubt. Bitte in den Einstellungen freigeben.'); return; }
     }
     const res = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-    if (res.canceled || !res.assets[0]) return;
-    const a = res.assets[0];
-    setPhoto(a.base64 ? `data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}` : a.uri);
+    if (res.canceled || !res.assets.length) return;
+    setBusy(true);
+    try {
+      const small = await Promise.all(res.assets.slice(0, MAX_PHOTOS - photos.length).map(shrink));
+      setPhotos(p => [...p, ...small]);
+    } catch { setMsg('Foto konnte nicht geladen werden. Bitte nochmal versuchen.'); }
+    setBusy(false);
   }
 
   function save() {
-    const t: Topic = { id: uid(), childId, subject: subject.trim(), text: text.trim(), photo, date: today() };
+    const t: Topic = { id: uid(), childId, subject: subject.trim() || 'Schule', text: text.trim() || `${photos.length} ${photos.length === 1 ? 'Seite' : 'Seiten'}`, photos, date: today() };
     update(d => ({ ...d, topics: [t, ...(d.topics ?? [])].slice(0, MAX_TOPICS) }));
-    setSubject(''); setText(''); setPhoto(undefined); setMsg('Thema gespeichert.');
+    setSubject(''); setText(''); setPhotos([]); setMsg('Thema gespeichert.');
   }
 
   return (
@@ -50,21 +68,33 @@ export function Learn({ childIds, parent }: { childIds: string[]; parent: boolea
         <Text style={s.h2}>Was kam heute dran?</Text>
         <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Daraus entsteht eine kurze Übung, mit der ihr seht, ob das Thema verstanden wurde.</Text>
         {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
-        <Text style={s.label}>Fach</Text>
+        <Text style={s.label}>Fach (optional)</Text>
         <TextInput style={s.input} value={subject} onChangeText={setSubject} placeholder="z. B. Mathe" />
-        <Text style={s.label}>Thema</Text>
+        <Text style={s.label}>Thema (optional, wenn Fotos dabei sind)</Text>
         <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top' }]} multiline value={text} onChangeText={setText} placeholder="z. B. Brüche mit gleichem Nenner addieren" />
-        <View style={s.row}>
-          {Platform.OS !== 'web' && <Button ghost title="Foto machen" onPress={() => pick(true)} />}
-          <Button ghost title={Platform.OS === 'web' ? 'Foto oder Screenshot hochladen' : 'Aus Fotos wählen'} onPress={() => pick(false)} />
-        </View>
-        {photo && (
-          <View style={{ gap: 6 }}>
-            <Image source={{ uri: photo }} style={{ width: '100%', height: 200, borderRadius: 10, backgroundColor: C.surface2 }} resizeMode="contain" />
-            <Button ghost title="Foto entfernen" onPress={() => setPhoto(undefined)} />
+        <Text style={s.label}>Fotos ({photos.length} von {MAX_PHOTOS})</Text>
+        {photos.length > 0 && (
+          <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+            {photos.map((ph, i) => (
+              <View key={i} style={{ width: 110 }}>
+                <Image source={{ uri: ph }} style={{ width: 110, height: 150, borderRadius: 8, backgroundColor: C.surface2 }} resizeMode="cover" />
+                <Pressable accessibilityLabel={`Seite ${i + 1} entfernen`} onPress={() => setPhotos(p => p.filter((_, j) => j !== i))}
+                  style={{ position: 'absolute', top: 4, right: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: '#fff', fontWeight: '800' }}>✕</Text>
+                </Pressable>
+                <Text style={[s.muted, { fontSize: 12, textAlign: 'center' }]}>Seite {i + 1}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+        {photos.length < MAX_PHOTOS && (
+          <View style={s.row}>
+            {Platform.OS !== 'web' && <Button ghost title="Foto machen" onPress={() => pick(true)} />}
+            <Button ghost title={busy ? 'Lädt …' : photos.length ? 'Weitere Seiten hinzufügen' : Platform.OS === 'web' ? 'Fotos oder Screenshots hochladen' : 'Aus Fotos wählen'} disabled={busy} onPress={() => pick(false)} />
           </View>
         )}
-        <Button title="Thema speichern" disabled={!subject.trim() || !text.trim() || !childId} onPress={save} />
+        <Button title="Thema speichern" disabled={busy || !childId || (!photos.length && !text.trim())} onPress={save} />
+        {!photos.length && !text.trim() ? <Text style={[s.muted, { fontSize: 13 }]}>Ein Foto oder ein paar Worte zum Thema reichen.</Text> : null}
         {msg ? <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text> : null}
       </View>
       <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
@@ -88,7 +118,12 @@ function TopicRow({ topic, childName, onMsg, onCreate }: { topic: Topic; childNa
   }
   return (
     <View style={[s.row, { backgroundColor: C.bg, padding: 12, borderRadius: 12, flexWrap: 'nowrap', alignItems: 'flex-start' }]}>
-      {topic.photo ? <Image source={{ uri: topic.photo }} style={{ width: 56, height: 56, borderRadius: 8 }} /> : null}
+      {photosOf(topic).length ? (
+        <View>
+          <Image source={{ uri: photosOf(topic)[0] }} style={{ width: 56, height: 56, borderRadius: 8 }} />
+          {photosOf(topic).length > 1 && <Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>{photosOf(topic).length} Seiten</Text>}
+        </View>
+      ) : null}
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[s.text, { fontWeight: '700' }]}>{topic.subject}: {topic.text}</Text>
         <View style={[s.row, { gap: 8 }]}>

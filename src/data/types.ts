@@ -11,7 +11,7 @@ export interface Completion { id: string; taskId: string; childId: string; date:
 export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string }
 export interface Reward { id: string; title: string; cost: number }
 export interface RewardRequest { id: string; childId: string; rewardId: string; at: string }
-export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; date: string }
+export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; photos?: string[]; date: string }
 
 export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
 export interface Question { q: string; solution: string }
