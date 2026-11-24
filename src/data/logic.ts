@@ -1,5 +1,5 @@
 import { TEMPLATES } from './templates';
-import { Child, Completion, FamilyData, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
+import { Child, Completion, FamilyData, Parent, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 export const today = (d = new Date()) => {
@@ -58,13 +58,25 @@ export function addPoints(data: FamilyData, childId: string, points: number, rea
 }
 
 export const CHILD_COLORS = ['#e2583e', '#4b55c4', '#2b8a4b', '#b26a00', '#a23b8c'];
+export const PARENT_COLORS = ['#c2477a', '#2f7fb5', '#6b5b45', '#5a6b2b'];
+export const ALL_COLORS = [...CHILD_COLORS, ...PARENT_COLORS, '#0f6e73', '#e0a100'];
 
-export function newFamily(name: string, pin: string, kids: { name: string; grade?: string }[]): FamilyData {
+/** Eltern der Familie. Ältere Daten ohne Eltern bekommen Mama und Papa. */
+export function parentsOf(d: FamilyData): Parent[] {
+  return d.parents ?? [{ id: 'mama', name: 'Mama', color: PARENT_COLORS[0] }, { id: 'papa', name: 'Papa', color: PARENT_COLORS[1] }];
+}
+export type Person = { id: string; name: string; color: string; role: 'eltern' | 'kind' };
+export function peopleOf(d: FamilyData): Person[] {
+  return [...parentsOf(d).map(p => ({ ...p, role: 'eltern' as const })), ...d.children.map(c => ({ id: c.id, name: c.name, color: c.color, role: 'kind' as const }))];
+}
+
+export function newFamily(name: string, pin: string, kids: { name: string; grade?: string }[], parentNames: string[] = ['Mama', 'Papa']): FamilyData {
   const children: Child[] = kids.map((k, i) => ({ id: uid(), name: k.name, grade: k.grade, color: CHILD_COLORS[i % CHILD_COLORS.length] }));
   return {
     version: 1,
     family: { id: uid(), name, parentPin: pin },
     children,
+    parents: parentNames.filter(n => n.trim()).map((n, i) => ({ id: uid(), name: n.trim(), color: PARENT_COLORS[i % PARENT_COLORS.length] })),
     tasks: children.flatMap(c => [0, 1, 6, 9].map(i => ({ ...TEMPLATES[i], id: uid(), childId: c.id, active: true }))),
     completions: [],
     ledger: [],
@@ -125,4 +137,14 @@ export function finishCheck(data: FamilyData, sheet: Worksheet, results: boolean
 /** Letzter Stand des Verständnisses zu einem Thema. */
 export function topicUnderstanding(data: FamilyData, topicId: string): Understanding | undefined {
   return (data.worksheets ?? []).find(w => w.topicId === topicId && w.status === 'geprueft')?.understanding;
+}
+
+/** Eigene Termine an einem Tag. childIds = null zeigt alle (Eltern). Kinder sehen keine Termine der Geschwister. */
+export function eventsOn(d: FamilyData, date: string, childIds: string[] | null) {
+  const parentIds = parentsOf(d).map(p => p.id);
+  const wd = new Date(date + 'T12:00:00').getDay();
+  return (d.events ?? [])
+    .filter(e => (e.weekly ? new Date(e.date + 'T12:00:00').getDay() === wd && e.date <= date : e.date === date))
+    .filter(e => !childIds || e.who.length === 0 || e.who.some(w => childIds.includes(w) || parentIds.includes(w)))
+    .sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99'));
 }

@@ -3,6 +3,8 @@ export type DayTime = 'morgens' | 'mittags' | 'abends';
 export type Repeat = 'einmal' | 'taeglich' | 'werktags';
 
 export interface Child { id: string; name: string; color: string; grade?: string }
+/** Elternteil, z. B. Mama oder Papa. Für Kalender und Anzeige, wer gerade am Pad ist. */
+export interface Parent { id: string; name: string; color: string }
 export interface Task {
   id: string; childId: string; title: string; kind: TaskKind; points: number;
   repeat: Repeat; date?: string; // date nur bei 'einmal' (YYYY-MM-DD)
@@ -43,7 +45,7 @@ export interface Worksheet {
 export interface CalEvent {
   id: string; title: string; date: string; // YYYY-MM-DD
   time?: string; // HH:MM
-  who: string[]; // leer = ganze Familie, sonst Kinder-IDs
+  who: string[]; // leer = ganze Familie, sonst IDs von Kindern oder Eltern
   weekly?: boolean;
   icon?: string;
 }
@@ -52,6 +54,7 @@ export interface FamilyData {
   version: 1;
   family: { id: string; name: string; parentPin: string };
   children: Child[];
+  parents?: Parent[];
   tasks: Task[];
   completions: Completion[];
   ledger: LedgerEntry[];

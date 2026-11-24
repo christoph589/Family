@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { confirm, pointsOf, tasksFor, today, toggleByChild, undoConfirm } from '../data/logic';
+import { confirm, eventsOn, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm } from '../data/logic';
 import { Child, TaskKind } from '../data/types';
 import { C, s } from '../ui/theme';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
@@ -9,9 +9,30 @@ export function Today({ childIds, parent }: { childIds: string[]; parent: boolea
   const { data } = useFamily();
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
+  const people = peopleOf(data);
+  const events = eventsOn(data, today(), parent ? null : childIds);
   return (
-    <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
-      {kids.map(k => <ChildColumn key={k.id} child={k} parent={parent} />)}
+    <View style={{ gap: 16 }}>
+      {events.length > 0 && (
+        <View style={[s.card, { gap: 8 }]}>
+          <Text style={s.label}>Termine heute</Text>
+          <View style={[s.row, { gap: 8 }]}>
+            {events.map(e => {
+              const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
+              const color = ps.length === 1 ? ps[0].color : C.accent;
+              return (
+                <View key={e.id} style={{ borderLeftWidth: 5, borderLeftColor: color, backgroundColor: color + '14', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 150, flexGrow: 1, flexBasis: 150 }}>
+                  <Text style={[s.text, { fontWeight: '800' }]}>{e.time ? e.time + ' ' : ''}{e.icon ? e.icon + ' ' : ''}{e.title}</Text>
+                  <Text style={[s.muted, { fontSize: 12 }]}>{ps.length ? ps.map(p => p.name).join(', ') : 'Ganze Familie'}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+      <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
+        {kids.map(k => <ChildColumn key={k.id} child={k} parent={parent} />)}
+      </View>
     </View>
   );
 }
@@ -35,8 +56,8 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
             <View key={task.id} style={[s.row, { backgroundColor: bg, padding: 12, borderRadius: 12, flexWrap: 'nowrap', borderWidth: 1, borderColor: st === 'wartet' ? C.warn : 'transparent', opacity: st === 'bestaetigt' ? 0.65 : 1 }]}>
               <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: !!st }} accessibilityLabel={task.title}
                 onPress={() => update(d => (st === 'bestaetigt' && !task.selfCheck ? (parent ? undoConfirm(d, task, date) : d) : toggleByChild(d, task, date)))}
-                style={{ width: 36, height: 36, borderRadius: 10, borderWidth: 2, borderColor: st === 'bestaetigt' ? C.ok : st === 'wartet' ? C.warn : child.color, backgroundColor: st === 'bestaetigt' ? C.ok : st === 'wartet' ? C.warn : C.surface, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>{st === 'bestaetigt' ? '✓' : st === 'wartet' ? '?' : ''}</Text>
+                style={{ width: 44, height: 44, borderRadius: 12, borderWidth: 2, borderColor: st === 'bestaetigt' ? C.ok : st === 'wartet' ? C.warn : child.color, backgroundColor: st === 'bestaetigt' ? C.ok : st === 'wartet' ? C.warn : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 22 }}>{st === 'bestaetigt' ? '✓' : st === 'wartet' ? '?' : ''}</Text>
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[s.text, { fontWeight: '700', textDecorationLine: st === 'bestaetigt' ? 'line-through' : 'none' }]}>{task.icon ? task.icon + ' ' : ''}{task.title}</Text>

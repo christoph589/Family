@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { GCal, GEvent, getMcp, GOOGLE_ERROR, listCalendars, listWeek } from '../data/google';
-import { isDueOn, today, uid } from '../data/logic';
-import { CalEvent, Child } from '../data/types';
+import { isDueOn, peopleOf, Person, today, uid } from '../data/logic';
+import { CalEvent } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 
@@ -40,17 +40,20 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
 
   if (!data) return null;
   const kids = data.children;
-  const colorFor = (who: string[]) => (who.length === 1 ? kids.find(k => k.id === who[0])?.color ?? C.accent : C.accent);
-  const childInTitle = (t: string) => kids.find(k => t.toLowerCase().split(/[^\p{L}]+/u).includes(k.name.toLowerCase()));
-  const visible = (who: string[]) => parent || who.length === 0 || who.some(w => childIds.includes(w));
+  const people = peopleOf(data);
+  const parentIds = people.filter(p => p.role === 'eltern').map(p => p.id);
+  const colorFor = (who: string[]) => (who.length === 1 ? people.find(k => k.id === who[0])?.color ?? C.accent : C.accent);
+  const personInTitle = (t: string) => people.find(k => t.toLowerCase().split(/[^\p{L}]+/u).includes(k.name.toLowerCase()));
+  // Kinder sehen Familientermine, eigene und die der Eltern, aber nicht die der Geschwister.
+  const visible = (who: string[]) => parent || who.length === 0 || who.some(w => childIds.includes(w) || parentIds.includes(w));
 
   function itemsFor(date: string): Item[] {
     const wd = parse(date).getDay();
     const own: Item[] = (data!.events ?? [])
       .filter(e => (e.weekly ? parse(e.date).getDay() === wd && e.date <= date : e.date === date) && visible(e.who))
-      .map(e => ({ key: e.id, time: e.time, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: colorFor(e.who), tag: e.who.length ? e.who.map(w => kids.find(k => k.id === w)?.name).join(', ') : 'Alle' }));
+      .map(e => ({ key: e.id, time: e.time, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: colorFor(e.who), tag: e.who.length ? e.who.map(w => people.find(k => k.id === w)?.name).filter(Boolean).join(', ') : 'Alle' }));
     const g: Item[] = google.filter(e => e.date === date).map(e => {
-      const kid = childInTitle(e.title);
+      const kid = personInTitle(e.title);
       return { key: 'g' + e.id, time: e.time, title: e.title, color: kid?.color ?? '#4285f4', tag: 'Google' };
     });
     const tasks: Item[] = data!.tasks
@@ -78,7 +81,7 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
         {parent && <Button title="+ Termin" onPress={() => setAdding(true)} />}
       </View>
 
-      {adding && <EventForm kids={kids} days={days} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); }} />}
+      {adding && <EventForm people={people} days={days} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); }} />}
 
       <View style={[s.row, { alignItems: 'stretch', gap: 10 }]}>
         {days.map((d, i) => {
@@ -119,7 +122,7 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
             </View>
           ) : (
             <View style={s.row}>
-              <Text style={[s.muted, { flex: 1 }]}>Termine aus deinem Google Kalender hier anzeigen (nur lesen). Steht ein Kindername im Termin, bekommt er die Farbe des Kindes.</Text>
+              <Text style={[s.muted, { flex: 1 }]}>Termine aus deinem Google Kalender hier anzeigen (nur lesen). Steht ein Name aus der Familie im Termin (z. B. „Papa“), bekommt er dessen Farbe.</Text>
               <Button title={gState === 'loading' ? 'Lädt …' : 'Verbinden'} disabled={gState === 'loading'} onPress={connect} />
             </View>
           )}
@@ -141,7 +144,7 @@ function EventRow({ item, canDelete, onDelete }: { item: Item; canDelete: boolea
   );
 }
 
-function EventForm({ kids, days, onSave, onCancel }: { kids: Child[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void }) {
+function EventForm({ people, days, onSave, onCancel }: { people: Person[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void }) {
   const [title, setTitle] = useState('');
   const [icon, setIcon] = useState('');
   const [date, setDate] = useState(days.includes(today()) ? today() : days[0]);
@@ -165,7 +168,7 @@ function EventForm({ kids, days, onSave, onCancel }: { kids: Child[]; days: stri
       {!timeOk && <Text style={{ color: C.danger }}>Uhrzeit bitte so: 16:30</Text>}
       <Text style={s.label}>Für wen</Text>
       <View style={[s.row, { gap: 8 }]}>
-        {[{ id: '', name: 'Ganze Familie', color: C.accent }, ...kids].map(k => {
+        {[{ id: '', name: 'Ganze Familie', color: C.accent }, ...people].map(k => {
           const on = k.id ? who.includes(k.id) : who.length === 0;
           return (
             <Pressable key={k.id || 'all'} onPress={() => setWho(w => (!k.id ? [] : w.includes(k.id) ? w.filter(x => x !== k.id) : [...w, k.id]))}

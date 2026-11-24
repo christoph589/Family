@@ -13,6 +13,7 @@ export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promis
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [kids, setKids] = useState([{ name: '', grade: '' }]);
+  const [parents, setParents] = useState(['Mama', 'Papa']);
   const valid = name.trim() && /^\d{4}$/.test(pin) && kids.some(k => k.name.trim());
   const setKid = (i: number, k: Partial<{ name: string; grade: string }>) => setKids(ks => ks.map((x, j) => (j === i ? { ...x, ...k } : x)));
 
@@ -28,6 +29,16 @@ export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promis
         <Text style={[s.muted, { fontSize: 13 }]}>Mit der PIN bestätigst du erledigte Aufgaben und trägst Noten ein. Kinder sehen nur ihre eigene Ansicht.</Text>
       </View>
       <View style={s.card}>
+        <Text style={s.label}>Eltern</Text>
+        <View style={s.row}>
+          {parents.map((p, i) => (
+            <TextInput key={i} style={[s.input, { flex: 1, minWidth: 120 }]} value={p} placeholder="Name" accessibilityLabel={`Elternteil ${i + 1}`}
+              onChangeText={t => setParents(ps => ps.map((x, j) => (j === i ? t : x)))} />
+          ))}
+        </View>
+        <Text style={[s.muted, { fontSize: 13 }]}>Ein Feld leer lassen, wenn es nur ein Elternteil gibt.</Text>
+      </View>
+      <View style={s.card}>
         <Text style={s.label}>Kinder</Text>
         {kids.map((k, i) => (
           <View key={i} style={s.row}>
@@ -39,7 +50,7 @@ export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promis
       </View>
       {!!err && <Text style={{ color: C.danger }}>{err}</Text>}
       <Button title={busy ? 'Moment …' : 'Loslegen'} disabled={!valid || busy} onPress={() => {
-        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined })));
+        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined })), parents);
         if (!onCreate) return replace(d);
         setBusy(true); setErr('');
         onCreate(d).catch(e => { setErr(e.message); setBusy(false); });

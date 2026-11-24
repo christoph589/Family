@@ -5,6 +5,8 @@ import { cloudEnabled, cloudStore, DeviceLink, getLink, signOut } from './src/da
 import { FamilyProvider, useFamily } from './src/data/FamilyContext';
 import { Connect } from './src/screens/Connect';
 import { Devices } from './src/screens/Devices';
+import { Family } from './src/screens/Family';
+import { peopleOf } from './src/data/logic';
 import { Calendar } from './src/screens/Calendar';
 import { Grades } from './src/screens/Grades';
 import { Learn } from './src/screens/Learn';
@@ -12,11 +14,11 @@ import { Manage } from './src/screens/Manage';
 import { Points } from './src/screens/Points';
 import { Setup } from './src/screens/Setup';
 import { Today } from './src/screens/Today';
-import { Button, Segmented } from './src/ui/Button';
+import { Button } from './src/ui/Button';
 import { C, s } from './src/ui/theme';
 
 type Tab = 'heute' | 'kalender' | 'lernen' | 'punkte' | 'noten' | 'aufgaben';
-type Profile = { kind: 'eltern' } | { kind: 'kind'; id: string };
+type Profile = { kind: 'eltern'; id: string } | { kind: 'kind'; id: string };
 
 const LinkCtx = createContext<{ link: DeviceLink; unlink: () => void } | null>(null);
 
@@ -51,13 +53,23 @@ function CloudApp() {
   );
 }
 
+function Avatar({ name, color, size = 44 }: { name: string; color: string; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.45 }}>{name[0]?.toUpperCase()}</Text>
+    </View>
+  );
+}
+
+const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', noten: '📝', aufgaben: '⚙️' };
+
 function Root() {
   const { data, loading, replace, saveError } = useFamily();
   const cloud = useContext(LinkCtx);
   const ownChild = cloud?.link.role === 'kind' ? cloud.link.childId : undefined;
   const [profile, setProfile] = useState<Profile | null>(ownChild ? { kind: 'kind', id: ownChild } : null);
   const [tab, setTab] = useState<Tab>('heute');
-  const [askPin, setAskPin] = useState(false);
+  const [askPin, setAskPin] = useState<string | null>(null);
   const [pin, setPin] = useState('');
   const [pinErr, setPinErr] = useState(false);
 
@@ -69,34 +81,40 @@ function Root() {
     </View>
   ) : <Setup />}</SafeAreaView>;
 
+  const people = peopleOf(data).filter(p => p.role === 'eltern' || !ownChild || p.id === ownChild);
   const parent = profile?.kind === 'eltern';
   if (!profile) {
+    const tryPin = () => {
+      if (pin === data.family.parentPin) { setProfile({ kind: 'eltern', id: askPin! }); setAskPin(null); setPin(''); setTab('heute'); }
+      else setPinErr(true);
+    };
     return (
       <SafeAreaView style={s.screen}>
-        <ScrollView contentContainerStyle={[s.pad, { maxWidth: 560 }]}>
-          <Text style={s.h1}>{data.family.name}</Text>
-          <Text style={s.muted}>Wer bist du?</Text>
-          {data.children.filter(c => !ownChild || c.id === ownChild).map(c => (
-            <Pressable key={c.id} onPress={() => { setProfile({ kind: 'kind', id: c.id }); setTab('heute'); }}
-              style={[s.card, s.row, { flexWrap: 'nowrap', borderLeftWidth: 6, borderLeftColor: c.color }]}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.color, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 20 }}>{c.name[0]}</Text>
-              </View>
-              <Text style={s.h2}>{c.name}</Text>
-            </Pressable>
-          ))}
-          {!askPin ? (
-            <Button ghost title="Eltern" onPress={() => setAskPin(true)} />
-          ) : (
-            <View style={s.card}>
-              <Text style={s.label}>Eltern-PIN</Text>
-              <TextInput autoFocus style={s.input} value={pin} secureTextEntry keyboardType="number-pad"
+        <ScrollView contentContainerStyle={[s.pad, { maxWidth: 720, paddingTop: 32 }]}>
+          <Text style={[s.h1, { textAlign: 'center' }]}>{data.family.name}</Text>
+          <Text style={[s.muted, { textAlign: 'center', fontSize: 18 }]}>Wer bist du?</Text>
+          <View style={[s.row, { justifyContent: 'center', gap: 14 }]}>
+            {people.map(p => (
+              <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.name}
+                onPress={() => { setPinErr(false); setPin(''); if (p.role === 'kind') { setProfile({ kind: 'kind', id: p.id }); setTab('heute'); } else setAskPin(p.id); }}
+                style={({ pressed }) => [s.card, { width: 150, alignItems: 'center', paddingVertical: 22, borderWidth: 3, borderColor: askPin === p.id ? p.color : 'transparent', opacity: pressed ? 0.8 : 1 }]}>
+                <Avatar name={p.name} color={p.color} size={72} />
+                <Text style={[s.h2, { textAlign: 'center' }]} numberOfLines={1}>{p.name}</Text>
+                {p.role === 'eltern' && <Text style={[s.muted, { fontSize: 12 }]}>mit PIN</Text>}
+              </Pressable>
+            ))}
+          </View>
+          {askPin && (
+            <View style={[s.card, { maxWidth: 360, alignSelf: 'center', width: '100%' }]}>
+              <Text style={s.label}>PIN für {people.find(p => p.id === askPin)?.name}</Text>
+              <TextInput autoFocus style={[s.input, { fontSize: 24, letterSpacing: 8, textAlign: 'center' }]} value={pin} secureTextEntry keyboardType="number-pad"
+                onSubmitEditing={tryPin}
                 onChangeText={t => { setPin(t.replace(/\D/g, '').slice(0, 4)); setPinErr(false); }} />
               {pinErr && <Text style={{ color: C.danger }}>PIN stimmt nicht.</Text>}
-              <Button title="Weiter" onPress={() => {
-                if (pin === data.family.parentPin) { setProfile({ kind: 'eltern' }); setAskPin(false); setPin(''); }
-                else setPinErr(true);
-              }} />
+              <View style={s.row}>
+                <Button title="Weiter" disabled={pin.length !== 4} onPress={tryPin} style={{ flex: 1 }} />
+                <Button ghost title="Abbrechen" onPress={() => setAskPin(null)} />
+              </View>
             </View>
           )}
         </ScrollView>
@@ -107,33 +125,66 @@ function Root() {
   const childIds = profile.kind === 'kind' ? [profile.id] : data.children.map(c => c.id);
   const sheetBadge = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === (parent ? 'abgegeben' : 'offen')).length
     + (parent ? (data.topics ?? []).filter(t => !(data.worksheets ?? []).some(w => w.topicId === t.id)).length : 0);
-  const tabs: { value: Tab; label: string }[] = [{ value: 'heute', label: 'Heute' }, { value: 'kalender', label: 'Kalender' }, { value: 'lernen', label: sheetBadge ? `Lernen (${sheetBadge})` : 'Lernen' }, { value: 'punkte', label: parent && (data.requests ?? []).length ? `Punkte (${(data.requests ?? []).length})` : 'Punkte' }];
-  if (parent) tabs.push({ value: 'noten', label: 'Noten' }, { value: 'aufgaben', label: 'Aufgaben' });
-  const who = profile.kind === 'kind' ? data.children.find(c => c.id === profile.id)?.name : 'Eltern';
+  const reqBadge = parent ? (data.requests ?? []).length : 0;
+  const tabs: { value: Tab; label: string; badge?: number }[] = [
+    { value: 'heute', label: 'Heute' }, { value: 'kalender', label: 'Kalender' },
+    { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge },
+  ];
+  if (parent) tabs.push({ value: 'noten', label: 'Noten' }, { value: 'aufgaben', label: 'Verwalten' });
+  const me = peopleOf(data).find(p => p.id === profile.id) ?? { name: 'Eltern', color: C.accent };
   const dateStr = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <SafeAreaView style={s.screen}>
-      <ScrollView contentContainerStyle={s.pad}>
-        <View style={[s.row, { justifyContent: 'space-between' }]}>
-          <View>
-            <Text style={s.h1}>{data.family.name}</Text>
-            <Text style={s.muted}>{dateStr} · {who}</Text>
+      <View style={{ backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.line }}>
+        <View style={[s.row, { flexWrap: 'nowrap', paddingHorizontal: 16, paddingVertical: 10, maxWidth: 1100, width: '100%', alignSelf: 'center' }]}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[s.h2, { fontSize: 18 }]} numberOfLines={1}>{data.family.name}</Text>
+            <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={1}>{dateStr}</Text>
           </View>
-          <View style={[s.row, { flexShrink: 1, maxWidth: '100%' }]}>
-            <Segmented value={tab} onChange={setTab} options={tabs} />
-            <Button ghost title="Wechseln" onPress={() => { setProfile(null); setTab('heute'); }} />
-          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${me.name}, Person wechseln`}
+            onPress={() => { setProfile(null); setTab('heute'); }}
+            style={[s.row, { flexWrap: 'nowrap', backgroundColor: C.bg, borderRadius: 99, paddingVertical: 4, paddingLeft: 4, paddingRight: 12, gap: 8 }]}>
+            <Avatar name={me.name} color={me.color} size={34} />
+            <View>
+              <Text style={{ fontWeight: '800', color: C.fg }}>{me.name}</Text>
+              <Text style={{ fontSize: 11, color: C.muted }}>wechseln</Text>
+            </View>
+          </Pressable>
         </View>
+      </View>
+      <ScrollView contentContainerStyle={[s.pad, { paddingBottom: 32 }]}>
         {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
         {tab === 'heute' && <Today childIds={childIds} parent={parent} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
         {tab === 'noten' && parent && <Grades />}
+        {tab === 'aufgaben' && parent && <Family />}
         {tab === 'aufgaben' && parent && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
         {tab === 'aufgaben' && parent && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
       </ScrollView>
+      <View style={{ backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.line }}>
+        <View style={{ flexDirection: 'row', maxWidth: 720, width: '100%', alignSelf: 'center' }}>
+          {tabs.map(t => {
+            const on = tab === t.value;
+            return (
+              <Pressable key={t.value} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.badge ? `${t.label}, ${t.badge} neu` : t.label}
+                onPress={() => setTab(t.value)} style={{ flex: 1, alignItems: 'center', paddingVertical: 8, gap: 2 }}>
+                <View style={{ paddingHorizontal: 14, paddingVertical: 3, borderRadius: 99, backgroundColor: on ? me.color + '22' : 'transparent' }}>
+                  <Text style={{ fontSize: 22, opacity: on ? 1 : 0.55 }}>{TAB_ICON[t.value]}</Text>
+                  {!!t.badge && (
+                    <View style={{ position: 'absolute', top: -2, right: 2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{t.badge}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={{ fontSize: 12, fontWeight: on ? '800' : '600', color: on ? C.fg : C.muted }} numberOfLines={1}>{t.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
