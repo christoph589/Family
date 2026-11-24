@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { finishCheck, setSheet, today, uid, UNDERSTANDING_LABEL } from '../data/logic';
 import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
@@ -54,7 +54,12 @@ export function KidSheets({ childId, openId, setOpenId }: { childId: string; ope
   return (
     <View style={[s.card, { borderWidth: open.length ? 2 : 0, borderColor: C.accent }]}>
       <Text style={s.h2}>Deine Übungen</Text>
-      {active ? <SolveSheet sheet={active} onDone={() => setOpenId(null)} /> : open.map(w => (
+      <Modal visible={!!active} animationType="slide" onRequestClose={() => setOpenId(null)}>
+        <SafeAreaView style={s.screen}>
+          {active && <SolveSheet sheet={active} onDone={() => setOpenId(null)} />}
+        </SafeAreaView>
+      </Modal>
+      {open.map(w => (
         <View key={w.id} style={[s.row, { backgroundColor: C.bg, padding: 12, borderRadius: 12 }]}>
           <Text style={[s.text, { flex: 1, minWidth: 160, fontWeight: '700' }]}>{w.title}</Text>
           <Button title={`Lösen (${w.questions.length})`} onPress={() => setOpenId(w.id)} style={{ paddingVertical: 8 }} />
@@ -76,24 +81,38 @@ export function KidSheets({ childId, openId, setOpenId }: { childId: string; ope
   );
 }
 
+// Angefangene Antworten bleiben erhalten, wenn das Kind den Test kurz verlässt.
+const drafts: Record<string, string[]> = {};
+
 function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void }) {
   const { update } = useFamily();
-  const [answers, setAnswers] = useState<string[]>(sheet.questions.map(() => ''));
-  const complete = answers.every(a => a.trim());
+  const [answers, setAnswersState] = useState<string[]>(drafts[sheet.id] ?? sheet.questions.map(() => ''));
+  const setAnswers = (fn: (a: string[]) => string[]) => setAnswersState(a => (drafts[sheet.id] = fn(a)));
+  const done = answers.filter(a => a.trim()).length;
+  const complete = done === sheet.questions.length;
   return (
-    <View style={{ gap: 12 }}>
-      <Text style={[s.text, { fontWeight: '700' }]}>{sheet.title}</Text>
-      {sheet.questions.map((q, i) => (
-        <View key={i} style={{ gap: 6, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
-          <Text style={[s.text, { fontWeight: '700' }]}>{i + 1}. {q.q}</Text>
-          <TextInput style={[s.input, { backgroundColor: C.surface }]} value={answers[i]} onChangeText={t => setAnswers(a => a.map((x, j) => (j === i ? t : x)))} placeholder="Deine Antwort" />
+    <View style={{ flex: 1 }}>
+      <View style={[s.row, { flexWrap: 'nowrap', padding: 16, gap: 12, backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.line }]}>
+        <Button ghost title="‹ Zurück" onPress={onDone} style={{ paddingVertical: 8, paddingHorizontal: 12 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={[s.text, { fontWeight: '800' }]} numberOfLines={1}>{sheet.title}</Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>{done} von {sheet.questions.length} beantwortet</Text>
         </View>
-      ))}
-      <View style={s.row}>
-        <Button ghost title="Später weiter" onPress={onDone} />
-        <Button title="Abgeben" disabled={!complete} onPress={() => { update(d => setSheet(d, { ...sheet, answers: answers.map(a => a.trim()), status: 'abgegeben' })); onDone(); }} />
       </View>
-      {!complete && <Text style={s.muted}>Beantworte alle Fragen, dann kannst du abgeben.</Text>}
+      <ScrollView contentContainerStyle={[s.pad, { maxWidth: 700 }]} keyboardShouldPersistTaps="handled">
+        {sheet.questions.map((q, i) => (
+          <View key={i} style={[s.card, { gap: 8 }]}>
+            <Text style={s.label}>Frage {i + 1}</Text>
+            <Text style={[s.text, { fontWeight: '700', fontSize: 18 }]}>{q.q}</Text>
+            <TextInput style={s.input} value={answers[i]} onChangeText={t => setAnswers(a => a.map((x, j) => (j === i ? t : x)))} placeholder="Deine Antwort" />
+          </View>
+        ))}
+        <Button title="Abgeben" disabled={!complete} onPress={() => {
+          update(d => setSheet(d, { ...sheet, answers: answers.map(a => a.trim()), status: 'abgegeben' }));
+          delete drafts[sheet.id]; onDone();
+        }} />
+        {!complete && <Text style={[s.muted, { textAlign: 'center' }]}>Beantworte alle Fragen, dann kannst du abgeben. Du kannst auch zurück und später weitermachen.</Text>}
+      </ScrollView>
     </View>
   );
 }
