@@ -101,6 +101,8 @@ export interface CalEvent {
   pick?: string;
   /** z. B. "Mitbringen: 5 €, Turnbeutel" (aus Elternbrief) */
   note?: string;
+  /** Erinnerung: Minuten vorher, -1 = Vorabend 19 Uhr. Fehlt = keine. */
+  remind?: number;
 }
 
 export interface FamilyData {

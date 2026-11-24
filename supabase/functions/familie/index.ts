@@ -2,6 +2,8 @@
 //
 // GET  /familie?ics=<token>          Familienkalender als iCal-Abo (für iPhone, Mac, Google, Outlook)
 // POST /familie {action:'import', url} Fremden Kalender (iCal-Link) einlesen, nur für angemeldete Geräte
+// POST /familie {action:'push_key' | 'push_sub' | 'push_test'}  Erinnerungen aufs Handy (Web-Push), braucht fix-05-erinnerungen.sql
+// POST /familie {action:'tick', token}  kommt alle 5 Minuten vom Zeitplan aus fix-05 und verschickt fällige Erinnerungen
 // POST /familie {action:'ai', prompt, images} KI-Test und Vokabel-Foto, nur für Mitglieder einer Familie,
 //      höchstens AI_DAILY Aufrufe pro Familie und Tag. Braucht das Secret ANTHROPIC_API_KEY und fix-03-ki.sql.
 //
@@ -13,6 +15,7 @@
 import ICAL from 'npm:ical.js@1.5.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.119.2';
 import Anthropic from 'npm:@anthropic-ai/sdk@1.7.0';
+import webpush from 'npm:web-push@3.6.7';
 
 const URL_ = Deno.env.get('SUPABASE_URL')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -222,6 +225,113 @@ async function runAi(body: any, userId: string, admin: any) {
   }
 }
 
+// ---------- Erinnerungen (Web-Push) ----------
+
+async function vapid(admin: any) {
+  const { data: cfg, error } = await admin.from('push_config').select('public_key, private_key, tick_token').eq('id', 1).single();
+  if (error || !cfg) throw new Error('no_sql');
+  if (!cfg.public_key) {
+    const k = webpush.generateVAPIDKeys();
+    await admin.from('push_config').update({ public_key: k.publicKey, private_key: k.privateKey }).eq('id', 1);
+    cfg.public_key = k.publicKey; cfg.private_key = k.privateKey;
+  }
+  webpush.setVapidDetails('https://christoph589.github.io/Family/', cfg.public_key, cfg.private_key);
+  return cfg as { public_key: string; private_key: string; tick_token: string };
+}
+
+/** Berliner Ortszeit als "Minuten seit 1970", damit sich Zeiten einfach vergleichen lassen. */
+function berlinNowMin() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date()).map(x => [x.type, x.value]));
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) / 60000;
+}
+const dayMin = (date: string) => Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10)) / 60000;
+const hm = (t?: string) => (t ? +t.slice(0, 2) * 60 + +t.slice(3, 5) : null);
+const isoOf = (min: number) => new Date(min * 60000).toISOString().slice(0, 10);
+
+type RemEv = Ev & { remind?: number; bring?: string; pick?: string; note?: string };
+/** Fällige Erinnerungen: remind = Minuten vorher, -1 = Vorabend 19 Uhr. Ganztägige Termine gelten ab 8 Uhr. */
+function dueReminders(events: RemEv[], now: number) {
+  const out: { ev: RemEv; date: string }[] = [];
+  const today = Math.floor(now / 1440) * 1440;
+  for (const e of events) {
+    if (e.remind === undefined || e.remind === null || !e.date) continue;
+    const base = dayMin(e.date);
+    for (let d = today - 1440; d <= today + 2 * 1440; d += 1440) {
+      if (d < base || (d !== base && !(e.weekly && (d - base) % (7 * 1440) === 0))) continue;
+      const start = d + (hm(e.time) ?? 8 * 60);
+      const fire = e.remind === -1 ? d - 1440 + 19 * 60 : start - e.remind;
+      if (fire <= now && fire > now - 30) out.push({ ev: e, date: isoOf(d) });
+    }
+  }
+  return out;
+}
+
+function recipients(e: RemEv, d: any): Set<string> | null {
+  if (!e.who?.length) return null; // ganze Familie
+  const kids = new Set((d.children ?? []).map((c: any) => c.id));
+  const to = new Set<string>([...e.who, ...[e.bring, e.pick].filter(Boolean) as string[]]);
+  if (e.who.some(w => kids.has(w)) && !e.bring && !e.pick) for (const p of d.parents ?? []) if (p.admin !== false) to.add(p.id);
+  return to;
+}
+
+async function sendTo(admin: any, rows: any[], payload: object) {
+  let sent = 0;
+  for (const r of rows) {
+    try { await webpush.sendNotification(r.sub, JSON.stringify(payload), { TTL: 3600 }); sent++; }
+    catch (e: any) { if (e?.statusCode === 404 || e?.statusCode === 410) await admin.from('push_subs').delete().eq('endpoint', r.endpoint); }
+  }
+  return sent;
+}
+
+async function tick(body: any, admin: any) {
+  const cfg = await vapid(admin);
+  if (String(body.token ?? '') !== cfg.tick_token) return json({ error: 'forbidden' }, 403);
+  const now = berlinNowMin();
+  const { data: subs } = await admin.from('push_subs').select('endpoint, family_id, person_id, sub');
+  const byFam = new Map<string, any[]>();
+  for (const s of subs ?? []) byFam.set(s.family_id, [...(byFam.get(s.family_id) ?? []), s]);
+  let total = 0;
+  for (const [fid, rows] of byFam) {
+    const { data: st } = await admin.from('family_state').select('data').eq('family_id', fid).single();
+    const d = st?.data as any;
+    if (!d) continue;
+    const people = [...(d.parents ?? []), ...(d.children ?? [])];
+    const name = (id?: string) => people.find((p: any) => p.id === id)?.name;
+    for (const { ev, date } of dueReminders(d.events ?? [], now)) {
+      const key = `${ev.id}|${date}|${ev.remind}`;
+      const { error } = await admin.from('push_sent').insert({ family_id: fid, key });
+      if (error) continue; // schon verschickt
+      const to = recipients(ev, d);
+      const target = rows.filter(r => !to || !r.person_id || to.has(r.person_id));
+      const when = ev.remind === -1 || ev.remind >= 1440 ? (ev.time ? `Morgen ${ev.time} Uhr` : 'Morgen') : ev.time ? `Heute ${ev.time} Uhr` : 'Heute';
+      const lines = [ev.who?.length ? ev.who.map(name).filter(Boolean).join(', ') : '', ev.bring || ev.pick ? [name(ev.bring) && `🚗 ${name(ev.bring)}`, name(ev.pick) && `🏠 ${name(ev.pick)}`].filter(Boolean).join(' · ') : '', ev.note ?? ''].filter(Boolean);
+      total += await sendTo(admin, target, { title: `${ev.icon ? ev.icon + ' ' : ''}${ev.title}`, body: [when, ...lines].join('\n'), tag: key });
+    }
+  }
+  await admin.from('push_sent').delete().lt('sent_at', new Date(Date.now() - 14 * 864e5).toISOString());
+  return json({ ok: true, sent: total });
+}
+
+async function pushAction(body: any, userId: string, admin: any) {
+  let cfg;
+  try { cfg = await vapid(admin); } catch { return json({ error: 'no_sql' }, 500); }
+  if (body.action === 'push_key') return json({ key: cfg.public_key });
+  const { data: mem } = await admin.from('members').select('family_id').eq('user_id', userId).limit(1);
+  if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const sub = body.sub;
+  if (!sub?.endpoint || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) return json({ error: 'bad_request' }, 400);
+  if (body.action === 'push_sub') {
+    if (body.off) { await admin.from('push_subs').delete().eq('endpoint', sub.endpoint).eq('user_id', userId); return json({ ok: true }); }
+    await admin.from('push_subs').upsert({ endpoint: sub.endpoint, family_id: mem[0].family_id, user_id: userId, person_id: body.person ? String(body.person).slice(0, 40) : null, sub });
+    return json({ ok: true });
+  }
+  if (body.action === 'push_test') {
+    const n = await sendTo(admin, [{ endpoint: sub.endpoint, sub }], { title: '🔔 Familienplaner', body: 'So sehen Erinnerungen an Termine aus.', tag: 'test' });
+    return json({ ok: n > 0 });
+  }
+  return json({ error: 'unknown_action' }, 400);
+}
+
 // ---------- Server ----------
 
 if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => {
@@ -241,6 +351,11 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       return new Response(ics, { headers: { ...cors, 'content-type': 'text/calendar; charset=utf-8', 'cache-control': 'max-age=300' } });
     }
 
+    if (req.method === 'POST' && req.headers.get('content-type')?.includes('json') && !req.headers.get('Authorization')) {
+      const body = await req.clone().json().catch(() => ({}));
+      if (body.action === 'tick') return await tick(body, admin);
+    }
+
     if (req.method === 'POST') {
       const auth = req.headers.get('Authorization') ?? '';
       const userClient = createClient(URL_, ANON, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
@@ -248,6 +363,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       if (!user?.user) return json({ error: 'not_signed_in' }, 401);
       const body = await req.json();
       if (body.action === 'ai') return await runAi(body, user.user.id, admin);
+      if (String(body.action).startsWith('push_')) return await pushAction(body, user.user.id, admin);
       if (body.action === 'import') {
         let url = String(body.url ?? '').trim().replace(/^webcals?:\/\//i, 'https://');
         try { url = new URL(url).toString(); } catch { return json({ error: 'bad_url' }, 400); }

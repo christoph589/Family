@@ -11,12 +11,13 @@ import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/Cal
 import { C, s } from '../ui/theme';
 import { useFeedItems } from '../data/feeds';
 import { LetterImport } from './Letter';
+import { PushSetup } from '../ui/Push';
 
 const parse = (d: string) => new Date(d + 'T12:00:00');
 
 type Item = CalItem;
 
-export function Calendar({ childIds, parent }: { childIds: string[]; parent: boolean }) {
+export function Calendar({ childIds, parent, meId }: { childIds: string[]; parent: boolean; meId?: string }) {
   const { data, update } = useFamily();
   const [mode, setMode] = useState<CalMode>('woche');
   const [sel, setSel] = useState<{ it: CalItem; date: string } | null>(null);
@@ -80,6 +81,7 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
           {(() => { const ev = (data.events ?? []).find(e => e.id === sel.it.key); if (!ev) return null; const dt = driveText(ev, people); return (<>
             {dt ? <Text style={[s.text, { fontWeight: '700' }]}>{dt}</Text> : null}
             {ev.note ? <Text style={s.text}>📝 {ev.note}</Text> : null}
+            {ev.remind !== undefined ? <Text style={s.muted}>{remindLabel(ev.remind)}</Text> : null}
           </>); })()}
           <View style={s.row}>
             {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button ghost title="✏️ Bearbeiten" onPress={() => { setEditing((data.events ?? []).find(e => e.id === sel.it.key) ?? null); setSel(null); }} />}
@@ -90,6 +92,7 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
       )}
       <CalViews mode={mode} anchor={anchor} itemsFor={itemsFor} onItemPress={(it, date) => setSel({ it, date })} onPickDay={d => { setAnchor(d); setMode('tag'); }}
         renderItem={it => <EventRow key={it.key} item={it} canDelete={parent && !/^[gtsb]/.test(it.key)} onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />} />
+      <PushSetup meId={meId} />
 
       {parent && gState !== 'off' && (
         <View style={s.card}>
@@ -147,6 +150,7 @@ export function EventForm({ people, days, onSave, onCancel, initial }: { people:
   const [bring, setBring] = useState(initial?.bring ?? '');
   const [pick, setPick] = useState(initial?.pick ?? '');
   const [note, setNote] = useState(initial?.note ?? '');
+  const [remind, setRemind] = useState<number | undefined>(initial ? initial.remind : 60);
   const adults = people.filter(p => p.role === 'eltern');
   const re = /^([01]?\d|2[0-3]):[0-5]\d$/;
   const fix = (t: string) => t.padStart(5, '0');
@@ -201,6 +205,18 @@ export function EventForm({ people, days, onSave, onCancel, initial }: { people:
       <Text style={s.label}>Wer fährt? (optional)</Text>
       <DriverRow label="🚗 Bringt" adults={adults} value={bring} onChange={setBring} />
       <DriverRow label="🏠 Holt ab" adults={adults} value={pick} onChange={setPick} />
+      <Text style={s.label}>🔔 Erinnerung</Text>
+      <View style={[s.row, { gap: 8 }]}>
+        {REMINDERS.map(r => {
+          const on = remind === r.value;
+          return (
+            <Pressable key={String(r.value)} onPress={() => setRemind(r.value)} accessibilityRole="radio" accessibilityState={{ checked: on }}
+              style={[s.chip, { paddingVertical: 7, paddingHorizontal: 12, backgroundColor: on ? C.accent : C.bg }]}>
+              <Text style={{ fontWeight: '700', color: on ? '#fff' : C.fg }}>{r.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
       <Text style={s.label}>Notiz (optional)</Text>
       <TextInput style={s.input} value={note} onChangeText={setNote} placeholder="z. B. Mitbringen: Turnbeutel, 5 €" accessibilityLabel="Notiz" />
       <Pressable onPress={() => setWeekly(v => !v)} style={s.row} accessibilityRole="checkbox" accessibilityState={{ checked: weekly }}>
@@ -211,7 +227,7 @@ export function EventForm({ people, days, onSave, onCancel, initial }: { people:
       </Pressable>
       <View style={s.row}>
         <Button ghost title="Abbrechen" onPress={onCancel} />
-        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: initial?.id ?? uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly, bring: bring || undefined, pick: pick || undefined, note: note.trim() || undefined })} />
+        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: initial?.id ?? uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly, bring: bring || undefined, pick: pick || undefined, note: note.trim() || undefined, remind })} />
       </View>
     </View>
   );
@@ -233,6 +249,12 @@ function DriverRow({ label, adults, value, onChange }: { label: string; adults: 
     </View>
   );
 }
+
+export const REMINDERS: { value: number | undefined; label: string }[] = [
+  { value: undefined, label: 'Keine' }, { value: 15, label: '15 Min vorher' }, { value: 60, label: '1 Std vorher' },
+  { value: -1, label: 'Vorabend' }, { value: 1440, label: '1 Tag vorher' },
+];
+export const remindLabel = (v?: number) => (v === undefined ? '' : `🔔 ${REMINDERS.find(r => r.value === v)?.label ?? `${v} Min vorher`}`);
 
 /** "🚗 Papa bringt · 🏠 Mama holt ab" */
 export function driveText(e: { bring?: string; pick?: string }, people: { id: string; name: string }[]) {
