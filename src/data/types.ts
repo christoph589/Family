@@ -73,6 +73,7 @@ export interface Worksheet {
 export interface CalEvent {
   id: string; title: string; date: string; // YYYY-MM-DD
   time?: string; // HH:MM
+  end?: string; // HH:MM, optional
   who: string[]; // leer = ganze Familie, sonst IDs von Kindern oder Eltern
   weekly?: boolean;
   icon?: string;
@@ -90,6 +91,9 @@ export interface FamilyData {
   requests?: RewardRequest[];
   ideas?: Idea[];
   money?: Record<string, MoneyAccount>;
+  meals?: Meal[];
+  recipes?: Recipe[];
+  shopping?: ShopItem[];
   /** Jahr, in dem der Geburtstagsbonus vergeben wurde, je Kind */
   birthdayBonus?: Record<string, number>;
   topics?: Topic[];
@@ -105,3 +109,9 @@ export const EXAM_POINTS: Record<number, number> = { 1: 40, 2: 30, 3: 15, 4: 5, 
 
 // Punkte fürs Üben. Es zählt, dass geübt wird, nicht wie viel richtig ist.
 export const PRACTICE_POINTS = 10;
+
+export type MealSlot = 'fruehstueck' | 'mittag' | 'abend';
+export interface Meal { id: string; date: string; slot: MealSlot; title: string }
+/** Gericht mit Zutaten, wird aus dem Essensplan gemerkt */
+export interface Recipe { id: string; title: string; ingredients: string[] }
+export interface ShopItem { id: string; title: string; done: boolean; at: string; by?: string }

@@ -11,6 +11,7 @@ import { Board } from './src/screens/Board';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { birthdaysOn, payAllowances, peopleOf, today } from './src/data/logic';
 import { Money } from './src/screens/Money';
+import { Food } from './src/screens/Food';
 import { Calendar } from './src/screens/Calendar';
 import { Grades } from './src/screens/Grades';
 import { Learn } from './src/screens/Learn';
@@ -21,7 +22,7 @@ import { Today } from './src/screens/Today';
 import { Button } from './src/ui/Button';
 import { C, s } from './src/ui/theme';
 
-type Tab = 'heute' | 'kalender' | 'lernen' | 'punkte' | 'geld' | 'aufgaben';
+type Tab = 'heute' | 'kalender' | 'lernen' | 'punkte' | 'geld' | 'essen' | 'aufgaben';
 type Profile = { kind: 'eltern'; id: string } | { kind: 'kind'; id: string };
 
 const LinkCtx = createContext<{ link: DeviceLink; unlink: () => void } | null>(null);
@@ -65,7 +66,7 @@ function Avatar({ name, color, size = 44 }: { name: string; color: string; size?
   );
 }
 
-const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', aufgaben: '⚙️' };
+const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', essen: '🍽️', aufgaben: '⚙️' };
 
 function Root() {
   const { data, loading, replace, saveError, update } = useFamily();
@@ -152,9 +153,8 @@ function Root() {
   const reqBadge = parent ? (data.requests ?? []).length + (data.ideas ?? []).length : 0;
   const tabs: { value: Tab; label: string; badge?: number }[] = [
     { value: 'heute', label: 'Heute' }, { value: 'kalender', label: 'Kalender' },
-    { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge }, { value: 'geld', label: 'Geld' },
+    { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge }, { value: 'geld', label: 'Geld' }, { value: 'essen', label: 'Essen' },
   ];
-  if (parent) tabs.push({ value: 'aufgaben', label: 'Verwalten' });
   const me = peopleOf(data).find(p => p.id === profile.id) ?? { name: 'Eltern', color: C.accent };
   const dateStr = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -166,6 +166,12 @@ function Root() {
             <Text style={[s.h2, { fontSize: 18 }]} numberOfLines={1}>{data.family.name}</Text>
             <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={1}>{dateStr}</Text>
           </View>
+          {parent && (
+            <Pressable accessibilityRole="button" accessibilityLabel="Verwalten" onPress={() => setTab('aufgaben')}
+              style={{ width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: tab === 'aufgaben' ? me.color + '22' : C.bg }}>
+              <Text style={{ fontSize: 20 }}>⚙️</Text>
+            </Pressable>
+          )}
           <Pressable accessibilityRole="button" accessibilityLabel={`${me.name}, Person wechseln`}
             onPress={() => { setProfile(null); setTab('heute'); }}
             style={[s.row, { flexWrap: 'nowrap', backgroundColor: C.bg, borderRadius: 99, paddingVertical: 4, paddingLeft: 4, paddingRight: 12, gap: 8 }]}>
@@ -186,6 +192,7 @@ function Root() {
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
         {tab === 'lernen' && parent && <Grades />}
         {tab === 'geld' && <Money childIds={childIds} parent={parent} />}
+        {tab === 'essen' && <Food who={me.name} />}
         {tab === 'aufgaben' && parent && <Holiday />}
         {tab === 'aufgaben' && parent && <Family />}
         {tab === 'aufgaben' && parent && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}

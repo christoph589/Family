@@ -16,6 +16,7 @@ type Item = CalItem;
 export function Calendar({ childIds, parent }: { childIds: string[]; parent: boolean }) {
   const { data, update } = useFamily();
   const [mode, setMode] = useState<CalMode>('woche');
+  const [sel, setSel] = useState<{ it: CalItem; date: string } | null>(null);
   const [anchor, setAnchor] = useState(today());
   const [google, setGoogle] = useState<GEvent[]>([]);
   const [gState, setGState] = useState<'off' | 'avail' | 'loading' | 'ok' | 'error'>('off');
@@ -62,7 +63,17 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
 
       {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); }} />}
 
-      <CalViews mode={mode} anchor={anchor} itemsFor={itemsFor} onPickDay={d => { setAnchor(d); setMode('tag'); }}
+      {sel && (
+        <View style={[s.card, { borderLeftWidth: 6, borderLeftColor: sel.it.color }]}>
+          <Text style={s.h2}>{sel.it.title}</Text>
+          <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
+          <View style={s.row}>
+            {parent && !/^[gtsb]/.test(sel.it.key) && <Button title="Termin löschen" color={C.danger} onPress={() => { update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
+            <Button ghost title="Schließen" onPress={() => setSel(null)} />
+          </View>
+        </View>
+      )}
+      <CalViews mode={mode} anchor={anchor} itemsFor={itemsFor} onItemPress={(it, date) => setSel({ it, date })} onPickDay={d => { setAnchor(d); setMode('tag'); }}
         renderItem={it => <EventRow key={it.key} item={it} canDelete={parent && !/^[gtsb]/.test(it.key)} onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />} />
 
       {parent && gState !== 'off' && (
@@ -109,14 +120,17 @@ function EventRow({ item, canDelete, onDelete }: { item: Item; canDelete: boolea
   );
 }
 
-function EventForm({ people, days, onSave, onCancel }: { people: Person[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void }) {
+export function EventForm({ people, days, onSave, onCancel }: { people: Person[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void }) {
   const [title, setTitle] = useState('');
   const [icon, setIcon] = useState('');
   const [date, setDate] = useState(days.includes(today()) ? today() : days[0]);
   const [time, setTime] = useState('');
+  const [end, setEnd] = useState('');
   const [who, setWho] = useState<string[]>([]);
   const [weekly, setWeekly] = useState(false);
-  const timeOk = !time || /^([01]?\d|2[0-3]):[0-5]\d$/.test(time);
+  const re = /^([01]?\d|2[0-3]):[0-5]\d$/;
+  const fix = (t: string) => t.padStart(5, '0');
+  const timeOk = (!time || re.test(time)) && (!end || (re.test(end) && !!time && fix(end) > fix(time)));
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
       <Text style={s.h2}>Neuer Termin</Text>
@@ -127,10 +141,12 @@ function EventForm({ people, days, onSave, onCancel }: { people: Person[]; days:
       <Text style={s.label}>Tag</Text>
       <Segmented value={date} onChange={setDate} options={days.map((d, i) => ({ value: d, label: `${WD[i]} ${parse(d).getDate()}.` }))} />
       <View style={s.row}>
-        <TextInput style={[s.input, { width: 110 }]} value={time} onChangeText={setTime} placeholder="16:30" accessibilityLabel="Uhrzeit" />
-        <Text style={s.muted}>Uhrzeit (optional)</Text>
+        <TextInput style={[s.input, { width: 90 }]} value={time} onChangeText={setTime} placeholder="16:30" accessibilityLabel="Uhrzeit" />
+        <Text style={s.muted}>bis</Text>
+        <TextInput style={[s.input, { width: 90 }]} value={end} onChangeText={setEnd} placeholder="18:00" accessibilityLabel="Ende" />
+        <Text style={s.muted}>leer = ganztägig</Text>
       </View>
-      {!timeOk && <Text style={{ color: C.danger }}>Uhrzeit bitte so: 16:30</Text>}
+      {!timeOk && <Text style={{ color: C.danger }}>Uhrzeit bitte so: 16:30. Das Ende muss nach dem Beginn liegen.</Text>}
       <Text style={s.label}>Für wen</Text>
       <View style={[s.row, { gap: 8 }]}>
         {[{ id: '', name: 'Ganze Familie', color: C.accent }, ...people].map(k => {
@@ -151,7 +167,7 @@ function EventForm({ people, days, onSave, onCancel }: { people: Person[]; days:
       </Pressable>
       <View style={s.row}>
         <Button ghost title="Abbrechen" onPress={onCancel} />
-        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? time.padStart(5, '0') : undefined, who, weekly })} />
+        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly })} />
       </View>
     </View>
   );

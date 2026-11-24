@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { birthdaysOn, eventsOn, isDueOn, peopleOf, schoolOn, today } from '../data/logic';
 import { FamilyData } from '../data/types';
@@ -6,7 +6,9 @@ import { Button, Segmented } from './Button';
 import { C, s } from './theme';
 
 export type CalMode = 'tag' | '3tage' | 'woche' | 'monat';
-export type CalItem = { key: string; time?: string; title: string; color: string; tag?: string };
+export type CalItem = { key: string; time?: string; end?: string; title: string; color: string; tag?: string; badge?: string; who?: string[] };
+/** Filter nach Personen: leer = alle. Familientermine (ohne Personen) bleiben immer sichtbar. */
+export const matchesPeople = (it: CalItem, ids: string[]) => !ids.length || !it.who?.length || it.who.some(w => ids.includes(w));
 export const CAL_MODES: { value: CalMode; label: string }[] = [
   { value: 'tag', label: 'Tag' }, { value: '3tage', label: '3 Tage' }, { value: 'woche', label: 'Woche' }, { value: 'monat', label: 'Monat' },
 ];
@@ -47,18 +49,20 @@ export function rangeLabel(mode: CalMode, anchor: string) {
 export function baseItems(data: FamilyData, date: string, childIds: string[] | null): CalItem[] {
   const people = peopleOf(data);
   const kids = data.children.filter(k => !childIds || childIds.includes(k.id));
-  const bd: CalItem[] = birthdaysOn(data, date).map(b => ({ key: 'b' + b.child.id, title: `🎂 ${b.child.name}${b.age !== undefined ? ` wird ${b.age}` : ''}`, color: b.child.color, tag: 'Geburtstag' }));
+  // Kürzel: erster Buchstabe, bei gleichem Anfangsbuchstaben zwei (Mia/Mama -> Mi/Ma)
+  const ini = (n: string) => (people.filter(p => p.name[0] === n[0]).length > 1 ? n.slice(0, 2) : n[0]);
+  const bd: CalItem[] = birthdaysOn(data, date).map(b => ({ key: 'b' + b.child.id, title: `🎂 ${b.child.name}${b.age !== undefined ? ` wird ${b.age}` : ''}`, color: b.child.color, tag: 'Geburtstag', who: [b.child.id] }));
   const school = kids.flatMap(k => {
     const sd = schoolOn(data, k.id, date);
-    return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, title: `🏫 Schule${sd.to ? ' bis ' + sd.to : ''}`, color: k.color, tag: k.name }] : [];
+    return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, end: sd.to, title: '🏫 Schule', color: k.color, tag: k.name, badge: ini(k.name), who: [k.id] }] : [];
   });
   const ev = eventsOn(data, date, childIds).map(e => {
     const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
-    return { key: e.id, time: e.time, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, tag: ps.length ? ps.map(p => p.name).join(', ') : 'Alle' };
+    return { key: e.id, time: e.time, end: e.end, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, tag: ps.length ? ps.map(p => p.name).join(', ') : 'Alle', badge: ps.length ? ps.map(p => ini(p.name)).join(' ') : 'Alle', who: e.who };
   });
   const tasks = data.tasks
     .filter(t => t.repeat === 'einmal' && t.date === date && isDueOn(t, date, data) && (!childIds || childIds.includes(t.childId)))
-    .map(t => ({ key: 't' + t.id, title: `${t.icon ? t.icon + ' ' : ''}${t.title}`, color: data.children.find(k => k.id === t.childId)?.color ?? C.muted, tag: 'Aufgabe' }));
+    .map(t => ({ key: 't' + t.id, title: `${t.icon ? t.icon + ' ' : ''}${t.title}`, color: data.children.find(k => k.id === t.childId)?.color ?? C.muted, tag: 'Aufgabe', who: [t.childId] }));
   return [...bd, ...school, ...ev].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99')).concat(tasks);
 }
 
@@ -82,18 +86,20 @@ export function CalNav({ mode, anchor, onMode, onAnchor, right }: { mode: CalMod
 function Row({ it, big }: { it: CalItem; big?: boolean }) {
   return (
     <View style={{ borderLeftWidth: 4, borderLeftColor: it.color, backgroundColor: it.color + '12', borderRadius: 6, paddingVertical: big ? 8 : 5, paddingHorizontal: 8 }}>
-      <Text style={{ fontWeight: '700', color: C.fg, fontSize: big ? 17 : 13 }}>{it.time ? `${it.time} ` : ''}{it.title}</Text>
+      <Text style={{ fontWeight: '700', color: C.fg, fontSize: big ? 17 : 13 }}>{it.time ? `${it.time}${it.end ? '–' + it.end : ''} ` : ''}{it.title}</Text>
       {it.tag ? <Text style={{ color: C.muted, fontSize: big ? 13 : 11 }}>{it.tag}</Text> : null}
     </View>
   );
 }
 
 /** Kalender in vier Ansichten. renderItem erlaubt z. B. Löschen im Eltern-Kalender. */
-export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat }: {
+export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat, onItemPress }: {
   mode: CalMode; anchor: string; itemsFor: (date: string) => CalItem[];
   renderItem?: (it: CalItem, big: boolean) => ReactNode; onPickDay?: (date: string) => void;
   /** innerhalb einer Karte: Tage grau statt weiß */
   flat?: boolean;
+  /** Tipp auf einen Termin im Stundenraster */
+  onItemPress?: (it: CalItem, date: string) => void;
 }) {
   const { width } = useWindowDimensions();
   const days = daysOf(mode, anchor);
@@ -138,7 +144,9 @@ export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat }
     );
   }
 
-  const big = mode === 'tag';
+  if (mode !== 'woche' || width >= 700) return <TimeGrid days={days} itemsFor={itemsFor} flat={flat} onItemPress={onItemPress} />;
+
+  const big = false;
   return (
     <View style={[s.row, { alignItems: 'stretch', gap: 10 }]}>
       {days.map(d => {
@@ -154,6 +162,104 @@ export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat }
           </View>
         );
       })}
+    </View>
+  );
+}
+
+const toMin = (t?: string) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
+/** Stundenraster wie ein Wandkalender: ganztägige Einträge oben, Termine als Blöcke nach Uhrzeit. */
+function TimeGrid({ days, itemsFor, flat, onItemPress }: { days: string[]; itemsFor: (d: string) => CalItem[]; flat?: boolean; onItemPress?: (it: CalItem, date: string) => void }) {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t); }, []);
+  const H = 46;
+  const all = days.map(d => itemsFor(d));
+  const timed = all.flat().filter(i => i.time);
+  const minH = Math.min(7, ...timed.map(i => Math.floor(toMin(i.time)! / 60)));
+  const maxH = Math.max(21, ...timed.map(i => Math.ceil((toMin(i.end) ?? toMin(i.time)! + 60) / 60)));
+  const hours = Array.from({ length: maxH - minH }, (_, i) => minH + i);
+  const t = today();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const GUTTER = 34;
+
+  const layout = (items: CalItem[]) => {
+    const ev = items.filter(i => i.time).map(i => {
+      const start = toMin(i.time)!;
+      const end = Math.max(start + 30, toMin(i.end) ?? start + 60);
+      return { it: i, start, end, lane: 0, lanes: 1 };
+    }).sort((a, b) => a.start - b.start || b.end - a.end);
+    let cluster: typeof ev = [];
+    let clusterEnd = -1;
+    const flush = () => { const n = Math.max(...cluster.map(c => c.lane)) + 1; cluster.forEach(c => (c.lanes = n)); cluster = []; };
+    for (const e of ev) {
+      if (cluster.length && e.start >= clusterEnd) { flush(); clusterEnd = -1; }
+      const used = new Set(cluster.filter(c => c.end > e.start).map(c => c.lane));
+      let lane = 0; while (used.has(lane)) lane++;
+      e.lane = lane; cluster.push(e); clusterEnd = Math.max(clusterEnd, e.end);
+    }
+    if (cluster.length) flush();
+    return ev;
+  };
+
+  return (
+    <View style={[s.card, { padding: flat ? 0 : 8, gap: 0, backgroundColor: flat ? 'transparent' : C.surface }]}>
+      <View style={{ flexDirection: 'row', paddingLeft: GUTTER }}>
+        {days.map(d => (
+          <View key={d} style={{ flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 6 }}>
+            <Text style={{ fontWeight: '800', color: d === t ? C.accent : C.fg, fontSize: 14 }} numberOfLines={1}>
+              {parse(d).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric' })}
+            </Text>
+          </View>
+        ))}
+      </View>
+      {all.some(items => items.some(i => !i.time)) && (
+        <View style={{ flexDirection: 'row', paddingLeft: GUTTER, gap: 2, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: C.line }}>
+          {all.map((items, i) => (
+            <View key={days[i]} style={{ flex: 1, minWidth: 0, gap: 2 }}>
+              {items.filter(x => !x.time).map(x => (
+                <Pressable key={x.key} disabled={!onItemPress} onPress={() => onItemPress?.(x, days[i])}
+                  style={{ backgroundColor: x.color + '33', borderLeftWidth: 3, borderLeftColor: x.color, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2 }}>
+                  <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '700', color: C.fg }}>{x.title}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ))}
+        </View>
+      )}
+      <View style={{ flexDirection: 'row' }}>
+        <View style={{ width: GUTTER }}>
+          {hours.map(h => <View key={h} style={{ height: H }}><Text style={{ fontSize: 11, color: C.muted, textAlign: 'right', paddingRight: 6, marginTop: -7 }}>{h}</Text></View>)}
+        </View>
+        {days.map((d, di) => (
+          <View key={d} style={{ flex: 1, minWidth: 0, height: hours.length * H, borderLeftWidth: 1, borderLeftColor: C.line, backgroundColor: d === t ? C.accent + '08' : 'transparent' }}>
+            {hours.map((h, i) => <View key={h} style={{ position: 'absolute', top: i * H, left: 0, right: 0, borderTopWidth: 1, borderTopColor: C.line }} />)}
+            {layout(all[di]).map(({ it, start, end, lane, lanes }) => {
+              const top = ((start - minH * 60) / 60) * H;
+              const height = Math.max(22, ((end - start) / 60) * H - 2);
+              return (
+                <Pressable key={it.key} disabled={!onItemPress} onPress={() => onItemPress?.(it, d)} accessibilityLabel={`${it.time}${it.end ? ' bis ' + it.end : ''} ${it.title}`}
+                  style={{ position: 'absolute', top, height, left: `${(lane / lanes) * 100}%`, width: `${100 / lanes}%`, padding: 1 }}>
+                  <View style={{ flex: 1, backgroundColor: it.color + '40', borderLeftWidth: 4, borderLeftColor: it.color, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, overflow: 'hidden' }}>
+                    <Text numberOfLines={height > 40 ? 2 : 1} style={{ fontSize: 12, fontWeight: '800', color: C.fg }}>{it.title}</Text>
+                    {height > 34 && <Text numberOfLines={1} style={{ fontSize: 10, color: C.muted }}>{it.time}{it.end ? ' – ' + it.end : ''}</Text>}
+                    {it.badge && height > 50 && (
+                      <View style={{ position: 'absolute', right: 3, bottom: 3, backgroundColor: it.color, borderRadius: 4, paddingHorizontal: 4 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{it.badge}</Text>
+                      </View>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+            {d === t && nowMin >= minH * 60 && nowMin <= maxH * 60 && (
+              <View pointerEvents="none" style={{ position: 'absolute', left: -4, right: 0, top: ((nowMin - minH * 60) / 60) * H, flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.danger }} />
+                <View style={{ flex: 1, height: 2, backgroundColor: C.danger }} />
+              </View>
+            )}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
