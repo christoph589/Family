@@ -50,7 +50,7 @@ export interface Reward { id: string; title: string; cost: number; childId?: str
 /** Eigener Wunsch eines Kindes, Eltern legen den Punktepreis fest und schalten frei. */
 export interface Idea { id: string; childId: string; title: string; at: string }
 export interface RewardRequest { id: string; childId: string; rewardId: string; at: string }
-export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; photos?: string[]; date: string }
+export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; photos?: string[]; date: string; /** Wer das Thema angelegt hat (Person-ID) */ by?: string }
 
 export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
 export interface Question {

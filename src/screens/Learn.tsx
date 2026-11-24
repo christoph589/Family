@@ -25,7 +25,7 @@ async function shrink(a: ImagePicker.ImagePickerAsset): Promise<string> {
   return out.base64 ? `data:image/jpeg;base64,${out.base64}` : out.uri;
 }
 
-export function Learn({ childIds, parent }: { childIds: string[]; parent: boolean }) {
+export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: boolean; meId?: string }) {
   const { data, update } = useFamily();
   const [childId, setChildId] = useState(childIds[0] ?? '');
   const [subject, setSubject] = useState('');
@@ -57,7 +57,7 @@ export function Learn({ childIds, parent }: { childIds: string[]; parent: boolea
   }
 
   function save() {
-    const t: Topic = { id: uid(), childId, subject: subject.trim() || 'Schule', text: text.trim() || `${photos.length} ${photos.length === 1 ? 'Seite' : 'Seiten'}`, photos, date: today() };
+    const t: Topic = { id: uid(), childId, subject: subject.trim() || 'Schule', text: text.trim() || `${photos.length} ${photos.length === 1 ? 'Seite' : 'Seiten'}`, photos, date: today(), by: meId };
     update(d => ({ ...d, topics: [t, ...(d.topics ?? [])].slice(0, MAX_TOPICS) }));
     setSubject(''); setText(''); setPhotos([]); setMsg('Thema gespeichert.');
   }
@@ -124,6 +124,8 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
   const latest = sheets[0];
   const parent = !!onCreate;
   const date = new Date(topic.date + 'T12:00:00').toLocaleDateString('de-DE');
+  const byP = topic.by ? [...(data?.parents ?? []), ...(data?.children ?? [])].find(p => p.id === topic.by) : undefined;
+  const by = byP ? { id: byP.id, name: (byP as any).title ? `${byP.name} (${(byP as any).title})` : byP.name } : undefined;
 
   async function print() {
     try { await Print.printAsync({ html: worksheetHtml(topic, childName, date, latest?.questions ?? []) }); }
@@ -161,11 +163,11 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[s.text, { fontWeight: '700' }]}>{topic.subject}: {topic.text}</Text>
         <View style={[s.row, { gap: 8 }]}>
-          <Text style={[s.muted, { fontSize: 12 }]}>{childName} · {date}</Text>
+          <Text style={[s.muted, { fontSize: 12 }]}>{by && by.id !== topic.childId ? `Für ${childName} · von ${by.name}` : by ? `Von ${childName} selbst` : `Für ${childName}`} · {date}</Text>
           {u && <UnderstandingChip u={u} />}
         </View>
         {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>KI liest die Fotos und erstellt den Test. Das dauert meist 20 bis 60 Sekunden.</Text></View>}
-        {!busy && !sheets.length && !ai && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>{parent ? 'Noch kein Test. Die KI gibt es im Test nur im Web-Link.' : 'Wartet auf einen Test'}</Text>}
+        {!busy && !sheets.length && !ai && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>{parent ? 'Noch kein Test. KI-Tests laufen in der Live-App noch nicht, bis dahin „Selbst Fragen schreiben“.' : 'Wartet auf einen Test'}</Text>}
         {open && !parent && !busy && <Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Test ist bereit</Text>}
         {open && parent && <Text style={[s.muted, { fontSize: 13 }]}>Test liegt bei {childName}, noch nicht gelöst</Text>}
         {waiting && <Text style={[s.muted, { fontSize: 13 }]}>{parent ? 'Abgegeben, oben prüfen' : 'Abgegeben, Eltern schauen drüber'}</Text>}
@@ -174,7 +176,7 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
           {ai && !open && !waiting && !busy && <Button title={sheets.length ? 'Neuen Test erstellen' : 'Test erstellen'} style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={makeTest} />}
           {busy && <Button ghost title="Abbrechen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => ctl.current?.abort()} />}
           {parent && !busy && <Button ghost title="Selbst Fragen schreiben" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={onCreate} />}
-          <Button ghost title="Drucken" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={print} />
+          {latest && <Button ghost title="Drucken" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={print} />}
           {parent && <Button ghost title="Löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => update(d => ({ ...d, topics: (d.topics ?? []).filter(x => x.id !== topic.id) }))} />}
         </View>
       </View>
