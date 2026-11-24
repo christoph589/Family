@@ -57,20 +57,48 @@ Thema laut Eingabe: ${topic.text}
 ${images.length ? `Dazu ${images.length} Foto(s) aus Heft, Tafel, Arbeitsblatt oder einer korrigierten Arbeit. Lies sie genau. Wenn Fehler oder Korrekturen zu sehen sind, konzentriere dich auf genau diese Stellen.` : ''}
 
 Regeln:
-- 5 Fragen, vom Leichten zum Schweren, in kindgerechter Sprache passend zur Klassenstufe.
-- Keine Fragen, die man aus dem Foto einfach abschreiben kann. Neue Zahlen und Beispiele verwenden.
-- Jede Frage hat eine kurze, eindeutige Lösung (Zahl, Wort oder kurzer Satz), damit Eltern sie leicht abgleichen können.
-- Bei Rechenaufgaben die Lösung als Zahl oder Bruch, ohne Rechenweg.
+- 5 bis 6 Aufgaben, vom Leichten zum Schweren, in kindgerechter Sprache passend zur Klassenstufe.
+- Übernimm die AUFGABENARTEN aus den Fotos. Gibt es dort Brüche, Tabellen, Diagramme, Zahlenstrahle, Bruchkreise oder geometrische Figuren, dann muss der Test genau solche Aufgaben enthalten, mit neuen Zahlen.
+- Keine Aufgaben, die man aus dem Foto abschreiben kann.
+- Lösungen kurz und eindeutig (Zahl, Bruch, Wort), damit Eltern sie leicht abgleichen können. Brüche immer als 3/4 schreiben, gekürzt.
 - Keine Namen von echten Personen aus den Fotos übernehmen.
 
+Aufgabentypen:
+1. "text": freie Antwort. {"type":"text","q":"Frage","solution":"3/4"}
+2. "choice": Auswahl, 3 bis 4 Möglichkeiten, solution ist exakt eine davon. {"type":"choice","q":"...","options":["1/2","2/3","3/4"],"solution":"3/4"}
+3. "table": Tabelle zum Ausfüllen. In rows steht "?" für jedes leere Feld. solution nennt die Werte der "?"-Felder zeilenweise von links nach rechts, getrennt mit " | ". Für Ankreuz-Tabellen trägt das Kind "x" oder "-" ein.
+   {"type":"table","q":"Kreuze an, wodurch die Zahl teilbar ist (x oder -).","table":{"header":["Zahl","durch 2","durch 3"],"rows":[["12","?","?"],["15","?","?"]]},"solution":"x | x | - | x"}
+
+Zeichnungen: Jede Aufgabe darf zusätzlich "figure" haben, eine einfache SVG-Zeichnung, wenn das Thema Bilder braucht (Bruchkreis oder Bruchstreifen mit gefärbten Teilen, Zahlenstrahl, Säulendiagramm, Koordinatensystem, Figur mit Maßen). SVG-Regeln: beginnt mit <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220">, nur rect, circle, line, path, polygon, polyline, text, g; Linien schwarz, Füllungen hell (#9ecae1, #fdd49e, #ffffff); Schrift font-family="Arial" font-size zwischen 14 und 18; keine Bilder, Links, Skripte oder Styles. Die Zeichnung darf die Lösung nicht direkt verraten. Zeichne genau und mathematisch korrekt (bei einem Bruchkreis gleich große Teile).
+
 Antworte nur mit JSON in genau dieser Form:
-{"title": "kurzer Titel des Themas", "questions": [{"q": "Frage", "solution": "Lösung"}]}`;
+{"title": "kurzer Titel des Themas", "questions": [ ...Aufgaben wie oben... ]}`;
 
   const res = await sample.json<GeneratedQuiz>(prompt, { images: images.length ? images : undefined, signal, cache: false });
   const questions = (Array.isArray(res?.questions) ? res.questions : [])
-    .map(x => ({ q: String(x?.q ?? '').trim(), solution: String(x?.solution ?? '').trim() }))
-    .filter(x => x.q && x.solution)
+    .map(cleanQuestion)
+    .filter((x): x is Question => !!x)
     .slice(0, 10);
   if (!questions.length) throw { code: 'invalid_json' };
   return { title: String(res.title || topic.text).slice(0, 80), questions };
+}
+
+const str = (v: unknown, max = 500) => String(v ?? '').trim().slice(0, max);
+
+/** Prüft eine Aufgabe der KI und wirft unbrauchbare Teile weg. */
+function cleanQuestion(x: any): Question | null {
+  const q = str(x?.q), solution = str(x?.solution);
+  if (!q || !solution) return null;
+  const figure = typeof x?.figure === 'string' && x.figure.trim().startsWith('<svg') ? x.figure.slice(0, 20000) : undefined;
+  if (x?.type === 'choice' && Array.isArray(x.options)) {
+    const options = x.options.map((o: unknown) => str(o, 120)).filter(Boolean).slice(0, 5);
+    if (options.length >= 2 && options.includes(solution)) return { type: 'choice', q, solution, options, figure };
+  }
+  if (x?.type === 'table' && Array.isArray(x?.table?.rows)) {
+    const header = (Array.isArray(x.table.header) ? x.table.header : []).map((h: unknown) => str(h, 40)).slice(0, 8);
+    const rows: string[][] = x.table.rows.slice(0, 10).map((r: unknown) => (Array.isArray(r) ? r.map(c => str(c, 40)).slice(0, 8) : []));
+    const blanks = rows.flat().filter(c => c === '?').length;
+    if (blanks > 0 && solution.split('|').length === blanks) return { type: 'table', q, solution, table: { header, rows }, figure };
+  }
+  return { type: 'text', q, solution, figure };
 }

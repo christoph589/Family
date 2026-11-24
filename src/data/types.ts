@@ -14,7 +14,17 @@ export interface RewardRequest { id: string; childId: string; rewardId: string; 
 export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; photos?: string[]; date: string }
 
 export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
-export interface Question { q: string; solution: string }
+export interface Question {
+  q: string;
+  /** Text/Auswahl: die Lösung. Tabelle: Lösungen der leeren Felder in Lesereihenfolge, getrennt mit " | ". */
+  solution: string;
+  type?: 'text' | 'choice' | 'table';
+  options?: string[];
+  /** Zeichnung als SVG (Bruchkreis, Zahlenstrahl, Diagramm). Wird vor der Anzeige bereinigt. */
+  figure?: string;
+  /** Tabelle: "?" markiert ein Feld zum Ausfüllen. */
+  table?: { header: string[]; rows: string[][] };
+}
 export interface Worksheet {
   id: string; childId: string; topicId?: string; title: string; date: string;
   questions: Question[];

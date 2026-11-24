@@ -4,9 +4,10 @@ import { useFamily } from '../data/FamilyContext';
 import { finishCheck, setSheet, today, uid, UNDERSTANDING_LABEL } from '../data/logic';
 import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
 import { Button } from '../ui/Button';
+import { MathText } from '../ui/Math';
+import { AnswerView, isAnswered, isCorrect, QuestionInput } from './QuestionViews';
 import { C, s } from '../ui/theme';
 
-const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ').replace(/,/g, '.');
 
 /** Eltern legen eine Arbeit an. Später schlägt die KI Fragen und Lösungen vor. */
 export function SheetEditor({ topic, onDone }: { topic: Topic; onDone: () => void }) {
@@ -72,9 +73,7 @@ export function KidSheets({ childId, openId, setOpenId }: { childId: string; ope
             <Text style={[s.text, { fontWeight: '700', flex: 1 }]}>{w.title}</Text>
             {w.understanding && <UnderstandingChip u={w.understanding} />}
           </View>
-          {w.questions.map((q, i) => (w.results?.[i] ? null : (
-            <Text key={i} style={[s.text, { fontSize: 14 }]}>{q.q}: richtig ist <Text style={{ fontWeight: '700' }}>{q.solution}</Text></Text>
-          )))}
+          {w.questions.map((q, i) => (w.results?.[i] ? null : <AnswerView key={i} q={q} answer={w.answers?.[i] ?? ''} />))}
         </View>
       ))}
     </View>
@@ -88,7 +87,7 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
   const { update } = useFamily();
   const [answers, setAnswersState] = useState<string[]>(drafts[sheet.id] ?? sheet.questions.map(() => ''));
   const setAnswers = (fn: (a: string[]) => string[]) => setAnswersState(a => (drafts[sheet.id] = fn(a)));
-  const done = answers.filter(a => a.trim()).length;
+  const done = sheet.questions.filter((q, i) => isAnswered(q, answers[i] ?? '')).length;
   const complete = done === sheet.questions.length;
   return (
     <View style={{ flex: 1 }}>
@@ -103,8 +102,7 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
         {sheet.questions.map((q, i) => (
           <View key={i} style={[s.card, { gap: 8 }]}>
             <Text style={s.label}>Frage {i + 1}</Text>
-            <Text style={[s.text, { fontWeight: '700', fontSize: 18 }]}>{q.q}</Text>
-            <TextInput style={s.input} value={answers[i]} onChangeText={t => setAnswers(a => a.map((x, j) => (j === i ? t : x)))} placeholder="Deine Antwort" />
+            <QuestionInput q={q} value={answers[i] ?? ''} onChange={t => setAnswers(a => a.map((x, j) => (j === i ? t : x)))} />
           </View>
         ))}
         <Button title="Abgeben" disabled={!complete} onPress={() => {
@@ -132,16 +130,15 @@ export function ReviewSheets({ childIds }: { childIds: string[] }) {
 
 function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
   const { update } = useFamily();
-  const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => norm(sheet.answers?.[i] ?? '') === norm(q.solution)));
+  const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '')));
   return (
     <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
       <Text style={[s.text, { fontWeight: '700' }]}>{name}: {sheet.title}</Text>
       {sheet.questions.map((q, i) => (
         <View key={i} style={[s.row, { flexWrap: 'nowrap', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }]}>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={[s.text, { fontWeight: '700' }]}>{i + 1}. {q.q}</Text>
-            <Text style={s.text}>Antwort: <Text style={{ fontWeight: '700' }}>{sheet.answers?.[i]}</Text></Text>
-            <Text style={s.muted}>Lösung: {q.solution}</Text>
+          <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+            <Text style={s.label}>Frage {i + 1}</Text>
+            <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} />
           </View>
           <Pressable accessibilityRole="switch" accessibilityState={{ checked: res[i] }} onPress={() => setRes(r => r.map((x, j) => (j === i ? !x : x)))}
             style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: res[i] ? C.okSoft : '#f8dcd8', borderWidth: 1, borderColor: res[i] ? C.ok : C.danger }}>

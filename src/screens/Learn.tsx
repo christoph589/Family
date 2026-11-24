@@ -6,7 +6,8 @@ import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextIn
 import { useFamily } from '../data/FamilyContext';
 import { setSheet, today, topicUnderstanding, uid } from '../data/logic';
 import { AI_ERROR, generateQuiz, getSample } from '../ai/generate';
-import { Topic } from '../data/types';
+import { Question, Topic } from '../data/types';
+import { sanitizeSvg } from '../ui/Math';
 import { Button, Segmented } from '../ui/Button';
 import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
 import { C, s } from '../ui/theme';
@@ -125,7 +126,7 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
   const date = new Date(topic.date + 'T12:00:00').toLocaleDateString('de-DE');
 
   async function print() {
-    try { await Print.printAsync({ html: worksheetHtml(topic, childName, date, latest?.questions.map(q => q.q) ?? []) }); }
+    try { await Print.printAsync({ html: worksheetHtml(topic, childName, date, latest?.questions ?? []) }); }
     catch { onMsg('Drucken geht in dieser Vorschau nicht. In der App oder im normalen Browser klappt es.'); }
   }
 
@@ -183,19 +184,31 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
 
 const esc = (v: string) => v.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
-/** Arbeitsblatt als HTML mit den Fragen des letzten Tests. */
-export function worksheetHtml(t: Topic, name: string, date: string, tasks: string[] = []) {
-  const lines = Array.from({ length: 14 }, () => '<div class="line"></div>').join('');
+const frac = (v: string) => esc(v).replace(/(\d+)\s*\/\s*(\d+)/g, '<span class="fr"><span>$1</span><span class="dn">$2</span></span>');
+
+function questionHtml(q: Question): string {
+  const fig = sanitizeSvg(q.figure);
+  let body = '';
+  if (q.type === 'choice' && q.options) body = `<ul class="opts">${q.options.map(o => `<li>☐ ${frac(o)}</li>`).join('')}</ul>`;
+  else if (q.type === 'table' && q.table) body = `<table><tr>${q.table.header.map(h => `<th>${frac(h)}</th>`).join('')}</tr>${q.table.rows.map(r => `<tr>${r.map(c => `<td>${c === '?' ? '' : frac(c)}</td>`).join('')}</tr>`).join('')}</table>`;
+  else body = '<div class="line"></div><div class="line"></div>';
+  return `<li><div class="q">${frac(q.q)}</div>${fig ? `<div class="fig">${fig}</div>` : ''}${body}</li>`;
+}
+
+/** Arbeitsblatt als HTML mit den Aufgaben des letzten Tests. */
+export function worksheetHtml(t: Topic, name: string, date: string, questions: Question[] = []) {
   return `<html><head><meta charset="utf-8"><style>
     body{font-family:Helvetica,Arial,sans-serif;margin:32px;color:#111}
     .head{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:8px}
     h1{font-size:22px;margin:16px 0 4px} .sub{color:#555}
-    ol{font-size:16px;line-height:1.6} .line{border-bottom:1px solid #999;height:34px}
+    ol{font-size:16px;line-height:1.5;padding-left:22px} li{margin:0 0 22px;page-break-inside:avoid}
+    .q{font-weight:bold;margin-bottom:6px} .line{border-bottom:1px solid #999;height:32px}
+    .fig svg{max-width:360px;height:auto} table{border-collapse:collapse;margin-top:6px} th,td{border:1px solid #555;padding:6px 12px;min-width:48px;height:28px;text-align:center}
+    .opts{list-style:none;padding:0} .fr{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.85em;line-height:1.05;margin:0 2px} .dn{border-top:1.5px solid #111}
   </style></head><body>
     <div class="head"><b>Name: ${esc(name)}</b><span>Datum: ${date}</span></div>
-    <h1>${esc(t.subject)}: ${esc(t.text)}</h1>
+    <h1>${frac(t.subject)}: ${frac(t.text)}</h1>
     <div class="sub">Tages-Übung</div>
-    ${tasks.length ? `<ol>${tasks.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<p>Schreibe auf, was du heute zu diesem Thema gelernt hast, und rechne oder schreibe ein eigenes Beispiel.</p>'}
-    ${lines}
+    ${questions.length ? `<ol>${questions.map(questionHtml).join('')}</ol>` : '<p>Schreibe auf, was du heute zu diesem Thema gelernt hast, und rechne oder schreibe ein eigenes Beispiel.</p>' + Array.from({ length: 12 }, () => '<div class="line"></div>').join('')}
   </body></html>`;
 }
