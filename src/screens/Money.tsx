@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { accountOf, addTx, ageOf, allowanceHint, balanceOf, euro, setAccount, today } from '../data/logic';
 import { tipFor } from '../data/moneyTips';
+import { PersonHead } from '../ui/Avatar';
 import { Child, MoneyTx } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
@@ -42,11 +43,8 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
   const spentMonth = acc.tx.filter(t => t.cents < 0 && t.date.slice(0, 7) === today().slice(0, 7)).reduce((a, t) => a - t.cents, 0);
 
   return (
-    <View style={[s.card, { flexGrow: 1, flexBasis: 320, borderTopWidth: 6, borderTopColor: child.color }]}>
-      <View style={[s.row, { justifyContent: 'space-between' }]}>
-        <Text style={s.h2}>{child.name}s Geld</Text>
-        <Text style={{ fontSize: 30, fontWeight: '800', color: bal < 0 ? C.danger : C.fg }}>{euro(bal)}</Text>
-      </View>
+    <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
+      <PersonHead name={child.name} color={child.color} photo={child.photo} sub="Taschengeld-Konto" value={euro(bal)} />
       {acc.allowance ? (
         <Text style={s.muted}>Taschengeld: {euro(acc.allowance.cents)} pro {acc.allowance.every === 'woche' ? 'Woche' : 'Monat'}{spentMonth ? ` · diesen Monat ausgegeben: ${euro(spentMonth)}` : ''}</Text>
       ) : parent ? <Text style={s.muted}>Noch kein regelmäßiges Taschengeld eingestellt.</Text> : null}

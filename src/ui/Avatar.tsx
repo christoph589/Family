@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, Platform, Text, View } from 'react-native';
 import { Button } from './Button';
-import { C, s } from './theme';
+import { C, grad, s } from './theme';
 
 /** Rundes Profilbild: Foto, sonst Anfangsbuchstabe auf der Personenfarbe. */
 export function Avatar({ name, color, photo, size = 44 }: { name: string; color: string; photo?: string; size?: number }) {
@@ -100,3 +100,24 @@ export function PhotoCropper({ src, onDone, onCancel }: { src: string; onDone: (
     </View>
   );
 }
+
+/** Kopfzeile einer Personen-Karte: farbiges Band mit Foto, Name und einer Zahl rechts. */
+export function PersonHead({ name, color, photo, sub, value }: { name: string; color: string; photo?: string; sub?: string; value?: string }) {
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, margin: -20, marginBottom: 2, padding: 16, paddingHorizontal: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24 }, gradBand(color)]}>
+      <View style={{ borderRadius: 28, borderWidth: 3, borderColor: '#ffffffaa' }}>
+        <Avatar name={name} color={color} photo={photo} size={44} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 }} numberOfLines={1}>{name}</Text>
+        {sub ? <Text style={{ color: '#ffffffd0', fontSize: 13, fontWeight: '600' }} numberOfLines={1}>{sub}</Text> : null}
+      </View>
+      {value ? (
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color }}>{value}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+const gradBand = (c: string) => grad(c, c + 'c0');

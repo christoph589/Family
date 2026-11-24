@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
+import { PersonHead } from '../ui/Avatar';
 import { Child, SchoolDay, Timetable as TT } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
@@ -46,9 +47,9 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
   const empty = !DAYS.some(([k]) => tt[k]?.from || tt[k]?.lessons?.some(Boolean));
 
   return (
-    <View style={[s.card, { borderTopWidth: 6, borderTopColor: child.color }]}>
-      <View style={[s.row, { justifyContent: 'space-between' }]}>
-        <Text style={s.h2}>Stundenplan {child.name}</Text>
+    <View style={s.card}>
+      <PersonHead name={child.name} color={child.color} photo={child.photo} sub="Stundenplan" />
+      <View style={[s.row, { justifyContent: 'flex-end' }]}>
         {parent && !edit && <Button ghost title={empty ? 'Eintragen' : 'Bearbeiten'} onPress={() => setEdit(child.timetable ?? {})} />}
       </View>
       {kids.length > 1 && !edit && <Segmented value={child.id} onChange={setChildId} options={kids.map(k => ({ value: k.id, label: k.name }))} />}

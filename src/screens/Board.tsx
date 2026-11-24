@@ -11,7 +11,7 @@ import { EventForm } from './Calendar';
 import { mealsOn } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, s } from '../ui/theme';
-import { Avatar } from '../ui/Avatar';
+import { Avatar, PersonHead } from '../ui/Avatar';
 import { useFeedItems } from '../data/feeds';
 
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
@@ -164,14 +164,8 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
   const open = items.filter(i => i.completion?.status !== 'bestaetigt');
   const sd = schoolOn(data, child.id, date);
   return (
-    <View style={[s.card, { flexGrow: 1, flexBasis: 260, borderTopWidth: 6, borderTopColor: child.color }]}>
-      <View style={[s.row, { flexWrap: 'nowrap' }]}>
-        <Avatar name={child.name} color={child.color} photo={child.photo} size={52} />
-        <Text style={[s.h2, { flex: 1, fontSize: 24 }]} numberOfLines={1}>{child.name}</Text>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 30, fontWeight: '800', color: child.color }}>⭐ {pointsOf(data, child.id)}</Text>
-        </View>
-      </View>
+    <View style={[s.card, { flexGrow: 1, flexBasis: 260 }]}>
+      <PersonHead name={child.name} color={child.color} photo={child.photo} value={`⭐ ${pointsOf(data, child.id)}`} />
       {sd && (sd.from || sd.to) ? <Text style={[s.text, { fontWeight: '700' }]}>🏫 Schule {sd.from ?? '?'}–{sd.to ?? '?'}</Text> : null}
       <View>
         <Text style={[s.muted, { marginBottom: 4 }]}>{done} von {items.length} erledigt</Text>

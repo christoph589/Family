@@ -29,7 +29,7 @@ export interface MoneyAccount {
 }
 /** Elternteil, z. B. Mama oder Papa. Für Kalender und Anzeige, wer gerade am Pad ist. */
 /** Erwachsene in der Familie. admin=false: z. B. Oma/Opa, eigene PIN, keine Einstellungen, kein Geld, keine Punkte-Freigabe. */
-export interface Parent { id: string; name: string; color: string; admin?: boolean; pin?: string; photo?: string }
+export interface Parent { id: string; name: string; color: string; admin?: boolean; pin?: string; photo?: string; /** z. B. Papa, Mama, Oma */ title?: string }
 export interface Task {
   id: string; childId: string; title: string; kind: TaskKind; points: number;
   repeat: Repeat; date?: string; // date nur bei 'einmal' (YYYY-MM-DD)

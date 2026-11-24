@@ -47,7 +47,7 @@ export function Family() {
               <Avatar name={r.name} color={r.color} photo={r.photo} size={44} />
             </Pressable>
             <TextInput style={[s.input, { flex: 1, minWidth: 0 }]} value={r.name} onChangeText={t => rename(r.id, r.role, t.slice(0, 24))} accessibilityLabel="Name"
-              placeholder={r.role === 'kind' ? 'Name des Kindes' : 'z. B. Mama, Papa, Oma'} autoFocus={focusId === r.id} selectTextOnFocus />
+              placeholder={r.role === 'kind' ? 'Name des Kindes' : 'Vorname, z. B. Christoph'} autoFocus={focusId === r.id} selectTextOnFocus />
             <Text style={[s.muted, { flexShrink: 0 }]}>{r.role === 'kind' ? 'Kind' : isAdmin(parents.find(p => p.id === r.id)) ? 'Admin' : 'Erwachsen'}</Text>
             {r.role === 'eltern' && parents.length > 1 && !(isAdmin(parents.find(p => p.id === r.id)) && parents.filter(isAdmin).length === 1) && (
               <Pressable onPress={() => setParents(ps => ps.filter(p => p.id !== r.id))}><Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text></Pressable>
@@ -73,6 +73,11 @@ export function Family() {
             const set = (patch: Partial<typeof p>) => setParents(ps => ps.map(x => (x.id === p.id ? { ...x, ...patch } : x)));
             return (
               <View style={{ marginLeft: 50, gap: 8 }}>
+                <View style={[s.row, { flexWrap: 'nowrap' }]}>
+                  <Text style={s.muted}>Rolle</Text>
+                  <TextInput style={[s.input, { flex: 1, minWidth: 0, paddingVertical: 8 }]} value={p.title ?? ''} onChangeText={t => set({ title: t.slice(0, 16) || undefined })}
+                    placeholder="z. B. Papa, Mama, Oma" accessibilityLabel={`Rolle von ${r.name}`} />
+                </View>
                 <View style={s.row}>
                   {[{ v: true, l: 'Admin (alle Rechte)' }, { v: false, l: 'Ohne Admin, z. B. Oma, Opa' }].map(o => (
                     <Pressable key={String(o.v)} accessibilityRole="button" disabled={lastAdmin && !o.v}

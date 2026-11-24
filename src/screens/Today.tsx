@@ -2,7 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn, gradeLabel, ageOf, birthdaysOn, giveBirthdayBonus, BIRTHDAY_BONUS } from '../data/logic';
 import { Child, TaskKind } from '../data/types';
-import { C, s } from '../ui/theme';
+import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar } from '../ui/Avatar';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
 
@@ -37,23 +37,31 @@ export function Today({ childIds, parent }: { childIds: string[]; parent: boolea
         </View>
       )}
       {events.length > 0 && (
-        <View style={[s.card, { gap: 8 }]}>
-          <Text style={s.label}>Termine heute</Text>
-          <View style={[s.row, { gap: 8 }]}>
+        <View style={{ gap: 10 }}>
+          <Text style={s.label}>Heute geplant</Text>
+          <View style={[s.row, { gap: 10 }]}>
             {events.map(e => {
               const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
               const color = ps.length === 1 ? ps[0].color : C.accent;
               return (
-                <View key={e.id} style={{ borderLeftWidth: 5, borderLeftColor: color, backgroundColor: color + '14', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, minWidth: 150, flexGrow: 1, flexBasis: 150 }}>
-                  <Text style={[s.text, { fontWeight: '800' }]}>{e.time ? e.time + ' ' : ''}{e.icon ? e.icon + ' ' : ''}{e.title}</Text>
-                  <Text style={[s.muted, { fontSize: 12 }]}>{ps.length ? ps.map(p => p.name).join(', ') : 'Ganze Familie'}</Text>
+                <View key={e.id} style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.surface, borderRadius: 20, padding: 12, paddingRight: 16, minWidth: 220, flexGrow: 1, flexBasis: 220 }, SHADOW.sm]}>
+                  <View style={{ width: 54, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center', ...grad(color, color + 'b3') }}>
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: e.time ? 15 : 22 }}>{e.time ?? (e.icon || '📌')}</Text>
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[s.text, { fontWeight: '800' }]} numberOfLines={1}>{e.icon && e.time ? e.icon + ' ' : ''}{e.title}</Text>
+                    <View style={[s.row, { gap: 4, marginTop: 4 }]}>
+                      {ps.length ? ps.map(p => <Avatar key={p.id} name={p.name} color={p.color} photo={p.photo} size={20} />) : null}
+                      <Text style={[s.muted, { fontSize: 12 }]} numberOfLines={1}>{ps.length ? ps.map(p => p.name).join(', ') : 'Ganze Familie'}{e.end ? ` · bis ${e.end}` : ''}</Text>
+                    </View>
+                  </View>
                 </View>
               );
             })}
           </View>
         </View>
       )}
-      <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
+      <View style={[s.row, { alignItems: 'flex-start', gap: 18 }]}>
         {kids.map(k => <ChildColumn key={k.id} child={k} parent={parent} />)}
       </View>
     </View>
@@ -74,24 +82,25 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
         <Text style={s.label}>{label}</Text>
         {list.map(({ task, completion }) => {
           const st = completion?.status;
-          const bg = st === 'wartet' ? C.warnSoft : C.bg;
+          const bg = st === 'wartet' ? C.warnSoft : C.surface2;
           return (
-            <View key={task.id} style={[s.row, { backgroundColor: bg, padding: 12, borderRadius: 12, flexWrap: 'nowrap', borderWidth: 1, borderColor: st === 'wartet' ? C.warn : 'transparent', opacity: st === 'bestaetigt' ? 0.65 : 1 }]}>
+            <View key={task.id} style={[s.row, { backgroundColor: bg, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 18, flexWrap: 'nowrap', gap: 12, borderWidth: 1.5, borderColor: st === 'wartet' ? C.warn + '88' : 'transparent', opacity: st === 'bestaetigt' ? 0.6 : 1 }]}>
               <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: !!st }} accessibilityLabel={task.title}
                 onPress={() => update(d => (st === 'bestaetigt' && !task.selfCheck ? (parent ? undoConfirm(d, task, date) : d) : toggleByChild(d, task, date)))}
-                style={{ width: 44, height: 44, borderRadius: 12, borderWidth: 2, borderColor: st === 'bestaetigt' ? C.ok : st === 'wartet' ? C.warn : child.color, backgroundColor: st === 'bestaetigt' ? C.ok : st === 'wartet' ? C.warn : C.surface, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 22 }}>{st === 'bestaetigt' ? '✓' : st === 'wartet' ? '?' : ''}</Text>
+                style={[{ width: 46, height: 46, borderRadius: 23, borderWidth: st ? 0 : 2.5, borderColor: child.color + '88', backgroundColor: st === 'bestaetigt' ? C.ok : st === 'wartet' ? C.warn : C.surface, alignItems: 'center', justifyContent: 'center' }, st ? SHADOW.sm : null]}>
+                <Text style={{ color: st ? '#fff' : child.color + '55', fontWeight: '800', fontSize: st ? 22 : 20 }}>{st === 'bestaetigt' ? '✓' : st === 'wartet' ? '⏳' : task.icon ?? ''}</Text>
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[s.text, { fontWeight: '700', textDecorationLine: st === 'bestaetigt' ? 'line-through' : 'none' }]}>{task.icon ? task.icon + ' ' : ''}{task.title}</Text>
-                <Text style={[s.muted, { fontSize: 12 }]}>{st === 'wartet' ? 'Wartet auf Eltern' : st === 'bestaetigt' ? (task.selfCheck ? 'Erledigt' : 'Bestätigt') : task.time ? TIME_LABEL[task.time] : task.repeat === 'einmal' ? 'Heute' : REPEAT_LABEL[task.repeat]}</Text>
+                <Text style={[s.text, { fontWeight: '700', textDecorationLine: st === 'bestaetigt' ? 'line-through' : 'none' }]} numberOfLines={2}>{task.title}</Text>
+                <Text style={[s.muted, { fontSize: 12, color: st === 'wartet' ? C.warn : C.muted, fontWeight: st === 'wartet' ? '700' : '400' }]}>{st === 'wartet' ? 'Wartet auf Eltern' : st === 'bestaetigt' ? (task.selfCheck ? 'Erledigt' : 'Bestätigt') : task.time ? TIME_LABEL[task.time] : task.repeat === 'einmal' ? 'Heute' : REPEAT_LABEL[task.repeat]}</Text>
               </View>
               {parent && st !== 'bestaetigt' ? (
-                <Pressable onPress={() => update(d => confirm(d, task, date))} style={{ backgroundColor: C.ok, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8 }}>
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Bestätigen +{task.points}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={`${task.title} bestätigen, plus ${task.points} Punkte`} onPress={() => update(d => confirm(d, task, date))}
+                  style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.ok, paddingHorizontal: 12, height: 36, borderRadius: 18 }, SHADOW.sm]}>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>✓ +{task.points}</Text>
                 </Pressable>
               ) : (
-                <Text style={[s.chip, { backgroundColor: child.color + '22', color: child.color, fontWeight: '700', fontSize: 12 }]}>+{task.points} P</Text>
+                <View style={[s.chip, { backgroundColor: child.color + '1f' }]}><Text style={{ color: child.color, fontWeight: '800', fontSize: 12 }}>+{task.points}</Text></View>
               )}
             </View>
           );
@@ -100,39 +109,40 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
     );
   };
   return (
-    <View style={[s.card, { flexGrow: 1, flexBasis: 320, borderTopWidth: 6, borderTopColor: child.color }]}>
-      <View style={[s.row, { flexWrap: 'nowrap' }]}>
-        <Avatar name={child.name} color={child.color} photo={child.photo} size={48} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.h2}>{child.name}</Text>
-          {gradeLabel(child) ? <Text style={s.muted}>{gradeLabel(child)}{ageOf(child) !== undefined ? ` · ${ageOf(child)} Jahre` : ''}</Text> : null}
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 28, fontWeight: '800', color: child.color }}>{pointsOf(data!, child.id)}</Text>
-          <Text style={[s.muted, { fontSize: 12 }]}>Punkte</Text>
-        </View>
-      </View>
-      {(() => {
-        const sd = schoolOn(data!, child.id, date);
-        if (!sd) return null;
-        const lessons = (sd.lessons ?? []).filter(Boolean);
-        return (
-          <View style={{ backgroundColor: child.color + '14', borderRadius: 12, padding: 10, gap: 2 }}>
-            <Text style={[s.text, { fontWeight: '800' }]}>🏫 Schule {sd.from ?? '?'}–{sd.to ?? '?'}</Text>
-            {lessons.length > 0 && <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>{lessons.join(' · ')}</Text>}
+    <View style={[s.card, { flexGrow: 1, flexBasis: 330, padding: 0, overflow: 'hidden', gap: 0 }]}>
+      <View style={{ padding: 18, gap: 14, ...grad(child.color, child.color + 'c0') }}>
+        <View style={[s.row, { flexWrap: 'nowrap', gap: 12 }]}>
+          <View style={{ borderRadius: 30, borderWidth: 3, borderColor: '#ffffffaa' }}>
+            <Avatar name={child.name} color={child.color} photo={child.photo} size={52} />
           </View>
-        );
-      })()}
-      <View>
-        <Text style={[s.muted, { fontSize: 13, marginBottom: 4 }]}>{done} von {items.length} erledigt</Text>
-        <View style={{ height: 10, backgroundColor: C.surface2, borderRadius: 99, overflow: 'hidden' }}>
-          <View style={{ height: '100%', width: `${pct}%`, backgroundColor: child.color, borderRadius: 99 }} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800', letterSpacing: -0.3 }} numberOfLines={1}>{child.name}</Text>
+            {gradeLabel(child) ? <Text style={{ color: '#ffffffd0', fontSize: 13, fontWeight: '600' }}>{gradeLabel(child)}{ageOf(child) !== undefined ? ` · ${ageOf(child)} Jahre` : ''}</Text> : null}
+          </View>
+          <View style={{ backgroundColor: '#ffffff', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: child.color }}>⭐ {pointsOf(data!, child.id)}</Text>
+          </View>
+        </View>
+        <View style={{ gap: 6 }}>
+          <View style={[s.row, { justifyContent: 'space-between' }]}>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{items.length ? (done === items.length ? 'Alles geschafft! 🎉' : `${done} von ${items.length} erledigt`) : 'Heute frei'}</Text>
+            {(() => { const sd = schoolOn(data!, child.id, date); return sd ? <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>🏫 {sd.from ?? '?'}–{sd.to ?? '?'}</Text> : null; })()}
+          </View>
+          <View style={{ height: 8, backgroundColor: '#ffffff40', borderRadius: 99, overflow: 'hidden' }}>
+            <View style={{ height: '100%', width: `${pct}%`, backgroundColor: '#fff', borderRadius: 99 }} />
+          </View>
         </View>
       </View>
+      <View style={{ padding: 16, gap: 14 }}>
+      {(() => {
+        const lessons = (schoolOn(data!, child.id, date)?.lessons ?? []).filter(Boolean);
+        return lessons.length ? <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>📖 {lessons.join(' · ')}</Text> : null;
+      })()}
       {group('routine', 'Routinen')}
       {group('hausaufgabe', 'Schule')}
       {group('pflicht', 'Haushalt')}
-      {items.length === 0 && <Text style={s.muted}>Heute steht nichts an.</Text>}
+      {items.length === 0 && <Text style={[s.muted, { textAlign: 'center', paddingVertical: 8 }]}>Heute steht nichts an. 🌤️</Text>}
+      </View>
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { Idea } from '../data/types';
 import { useFamily } from '../data/FamilyContext';
 import { addPoints, decideIdea, decideRequest, pointsOf, proposeIdea, requestReward, reservedOf } from '../data/logic';
 import { Button } from '../ui/Button';
+import { PersonHead } from '../ui/Avatar';
 import { C, s } from '../ui/theme';
 
 export function Points({ childIds, parent }: { childIds: string[]; parent: boolean }) {
@@ -43,11 +44,8 @@ export function Points({ childIds, parent }: { childIds: string[]; parent: boole
           const log = data.ledger.filter(l => l.childId === k.id).slice(0, 10);
           const mine = (data.requests ?? []).filter(r => r.childId === k.id);
           return (
-            <View key={k.id} style={[s.card, { flexGrow: 1, flexBasis: 320, borderTopWidth: 6, borderTopColor: k.color }]}>
-              <View style={[s.row, { justifyContent: 'space-between' }]}>
-                <Text style={s.h2}>{k.name}</Text>
-                <Text style={{ fontSize: 28, fontWeight: '800', color: k.color }}>{p} P</Text>
-              </View>
+            <View key={k.id} style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
+              <PersonHead name={k.name} color={k.color} photo={k.photo} sub="Punktekonto" value={`⭐ ${p}`} />
               {free !== p && <Text style={s.muted}>{p - free} P sind für Wünsche reserviert.</Text>}
               <Text style={s.label}>Einlösen</Text>
               {data.rewards.filter(r => !r.childId || r.childId === k.id).map(r => {
