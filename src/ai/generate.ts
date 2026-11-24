@@ -103,3 +103,30 @@ function cleanQuestion(x: any): Question | null {
   }
   return { type: 'text', q, solution, figure };
 }
+
+export interface ExtractedVocab { title: string; lang: string; cards: { front: string; back: string }[] }
+
+/** Liest Vokabeln von Fotos einer Buchseite oder eines Vokabelhefts. Nur wo die KI verfügbar ist. */
+export async function extractVocab(photos: string[], langHint: string, signal?: AbortSignal): Promise<ExtractedVocab> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  if (!images.length) throw { code: 'image_rejected' };
+  const prompt = `Auf den Fotos ist eine Vokabelliste aus einem Schulbuch oder Vokabelheft eines deutschen Schulkinds.
+Lies ALLE Vokabeln vollständig ab, in der Reihenfolge der Seite.
+- "front": das Wort oder die Wendung in der Fremdsprache (${langHint || 'meist Englisch'}), so wie es dasteht, inklusive Zusätzen wie "to" bei Verben oder Artikel.
+- "back": die deutsche Bedeutung. Mehrere Bedeutungen mit ", " trennen.
+- Lautschrift, Seitenzahlen, Beispielsätze und Unit-Überschriften weglassen.
+- Nichts erfinden. Unleserliches weglassen.
+- "lang": die Fremdsprache auf Deutsch, z. B. "Englisch", "Französisch", "Latein".
+- "title": kurzer Titel, z. B. die Unit oder das Thema der Seite ("Unit 3: At school").
+Antworte nur mit JSON: {"title":"...","lang":"...","cards":[{"front":"...","back":"..."}]}`;
+  const res = await sample.json<ExtractedVocab>(prompt, { images, signal, cache: false });
+  const cards = (Array.isArray(res?.cards) ? res.cards : [])
+    .map(c => ({ front: str(c?.front, 120), back: str(c?.back, 120) }))
+    .filter(c => c.front && c.back)
+    .slice(0, 150);
+  if (!cards.length) throw { code: 'invalid_json' };
+  return { title: str(res?.title, 60), lang: str(res?.lang, 30), cards };
+}

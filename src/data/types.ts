@@ -52,6 +52,11 @@ export interface Idea { id: string; childId: string; title: string; at: string }
 export interface RewardRequest { id: string; childId: string; rewardId: string; at: string }
 export interface Topic { id: string; childId: string; subject: string; text: string; photo?: string; photos?: string[]; date: string; /** Wer das Thema angelegt hat (Person-ID) */ by?: string }
 
+/** Vokabeltrainer: Karteikasten nach Leitner. box 0 = neu, 5 = sitzt. */
+export interface VocabCard { id: string; front: string; back: string; box: number; due: string; right: number; wrong: number }
+export interface VocabDeck { id: string; childId: string; title: string; lang: string; cards: VocabCard[]; createdAt: string; by?: string }
+export interface VocabStats { streak: number; last?: string; best: number; total: number }
+
 export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
 export interface Question {
   q: string;
@@ -102,6 +107,8 @@ export interface FamilyData {
   /** Jahr, in dem der Geburtstagsbonus vergeben wurde, je Kind */
   birthdayBonus?: Record<string, number>;
   topics?: Topic[];
+  vocab?: VocabDeck[];
+  vocabStats?: Record<string, VocabStats>;
   worksheets?: Worksheet[];
   events?: CalEvent[];
   settings?: { googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };

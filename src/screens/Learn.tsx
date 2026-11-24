@@ -11,13 +11,15 @@ import { sanitizeSvg } from '../ui/Math';
 import { Button, Segmented } from '../ui/Button';
 import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
 import { C, s } from '../ui/theme';
+import { Vocab } from './Vocab';
+import { dueCount } from '../data/vocab';
 
 const MAX_TOPICS = 30; // Fotos liegen vorerst lokal, deshalb begrenzt.
 const MAX_PHOTOS = 8;
 const photosOf = (t: Topic) => t.photos ?? (t.photo ? [t.photo] : []);
 
 /** Verkleinert ein Foto auf max. 1400 px Breite, damit es lesbar bleibt, aber wenig Speicher braucht. */
-async function shrink(a: ImagePicker.ImagePickerAsset): Promise<string> {
+export async function shrink(a: ImagePicker.ImagePickerAsset): Promise<string> {
   const ctx = ImageManipulator.manipulate(a.uri);
   if (a.width > 1400) ctx.resize({ width: 1400 });
   const img = await ctx.renderAsync();
@@ -35,6 +37,7 @@ export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: 
   const [msg, setMsg] = useState('');
   const [editing, setEditing] = useState<Topic | null>(null);
   const [solveId, setSolveId] = useState<string | null>(null);
+  const [part, setPart] = useState<'themen' | 'vokabeln'>('themen');
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const topics = (data.topics ?? []).filter(t => childIds.includes(t.childId));
@@ -62,8 +65,13 @@ export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: 
     setSubject(''); setText(''); setPhotos([]); setMsg('Thema gespeichert.');
   }
 
+  const vocabDue = childIds.reduce((n, id) => n + dueCount(data, id), 0);
+  const tabs = <Segmented value={part} onChange={setPart} options={[{ value: 'themen', label: '📚 Themen & Tests' }, { value: 'vokabeln', label: `🧠 Vokabeln${vocabDue ? ` (${vocabDue})` : ''}` }]} />;
+  if (part === 'vokabeln') return <View style={{ gap: 16 }}>{tabs}<Vocab childIds={childIds} parent={parent} meId={meId} /></View>;
+
   return (
     <View style={{ gap: 16 }}>
+    {tabs}
     {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
     {editing && <SheetEditor topic={editing} onDone={() => setEditing(null)} />}
     <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>

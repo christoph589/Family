@@ -6,6 +6,7 @@ import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar } from '../ui/Avatar';
 import { shoppingFor, untilLabel } from './Food';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
+import { dueCount, liveStreak } from '../data/vocab';
 
 export function Today({ childIds, parent }: { childIds: string[]; parent: boolean }) {
   const { data, update } = useFamily();
@@ -138,6 +139,20 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
       {(() => {
         const lessons = (schoolOn(data!, child.id, date)?.lessons ?? []).filter(Boolean);
         return lessons.length ? <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>📖 {lessons.join(' · ')}</Text> : null;
+      })()}
+      {(() => {
+        const n = dueCount(data!, child.id), st = liveStreak(data!, child.id);
+        const doneToday = data!.vocabStats?.[child.id]?.last === date;
+        if (!n && !(st && !doneToday)) return null;
+        return (
+          <View style={[s.row, { alignItems: 'center', backgroundColor: '#fff4ec', borderRadius: 16, padding: 12, flexWrap: 'nowrap' }]}>
+            <Text style={{ fontSize: 22 }}>{st ? '🔥' : '🧠'}</Text>
+            <Text style={[s.text, { fontSize: 14, flexShrink: 1 }]}>
+              {n ? <Text style={{ fontWeight: '800' }}>{n} Vokabeln warten</Text> : <Text style={{ fontWeight: '800' }}>Vokabel-Serie retten</Text>}
+              {st ? <Text style={{ color: C.muted }}>{doneToday ? ` · ${st} Tage am Stück` : ` · ${st} Tage Serie, heute noch üben`}</Text> : <Text style={{ color: C.muted }}> · unter Lernen</Text>}
+            </Text>
+          </View>
+        );
       })()}
       {(() => {
         const need = shoppingFor(data!, child.id);
