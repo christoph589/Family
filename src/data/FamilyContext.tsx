@@ -67,7 +67,7 @@ export function FamilyProvider({ children, store = localStore }: { children: Rea
     let alive = true;
     store.load()
       .then(s => { if (alive) { base.current = s; show(); } })
-      .catch(() => alive && setSaveError('Daten konnten nicht geladen werden.'))
+      .catch(e => alive && setSaveError(`Daten konnten nicht geladen werden. (${e?.message ?? e})`))
       .finally(() => alive && setLoading(false));
     const off = store.subscribe?.((d, v) => {
       if (v <= base.current.version) return;

@@ -153,6 +153,16 @@ drop policy if exists state_read on public.family_state;
 create policy state_read on public.family_state for select using (public.is_member(family_id));
 -- Schreiben nur über save_state(), deshalb keine insert/update-Policy.
 
+grant usage on schema public to anon, authenticated;
+grant select on public.families, public.members, public.family_state to authenticated;
+grant delete on public.members to authenticated;
+grant execute on function public.create_family(text, jsonb) to authenticated;
+grant execute on function public.join_family(text, text, text) to authenticated;
+grant execute on function public.save_state(uuid, integer, jsonb) to authenticated;
+grant execute on function public.rotate_join_code(uuid) to authenticated;
+grant execute on function public.is_member(uuid) to authenticated;
+grant execute on function public.is_parent(uuid) to authenticated;
+
 revoke all on function public.create_family(text, jsonb) from anon;
 revoke all on function public.save_state(uuid, integer, jsonb) from anon;
 revoke all on function public.rotate_join_code(uuid) from anon;

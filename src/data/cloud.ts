@@ -54,7 +54,8 @@ export async function signOut() { await sb().auth.signOut(); await setLink(null)
 export async function myParentFamily(): Promise<string | null> {
   const { data: u } = await sb().auth.getUser();
   if (!u.user) return null;
-  const { data } = await sb().from('members').select('family_id').eq('user_id', u.user.id).eq('role', 'eltern').limit(1);
+  const { data, error } = await sb().from('members').select('family_id').eq('user_id', u.user.id).eq('role', 'eltern').limit(1);
+  if (error) throw friendly(error);
   return data?.[0]?.family_id ?? null;
 }
 
