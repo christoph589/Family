@@ -1,8 +1,8 @@
 import { Pressable, Text, View, ViewStyle } from 'react-native';
 import { C, s } from './theme';
-export function Button({ title, onPress, ghost, color, disabled, style }: { title: string; onPress: () => void; ghost?: boolean; color?: string; disabled?: boolean; style?: ViewStyle }) {
+export function Button({ title, onPress, ghost, color, disabled, style, accessibilityLabel }: { title: string; onPress: () => void; ghost?: boolean; color?: string; disabled?: boolean; style?: ViewStyle; accessibilityLabel?: string }) {
   return (
-    <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress}
+    <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} disabled={disabled} onPress={onPress}
       style={({ pressed }) => [s.btn, ghost && s.ghost, color ? { backgroundColor: color } : null, { opacity: disabled ? 0.4 : pressed ? 0.8 : 1 }, style]}>
       <Text style={[s.btnText, ghost && s.ghostText]}>{title}</Text>
     </Pressable>

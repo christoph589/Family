@@ -6,10 +6,11 @@ import { TIME_ORDER } from '../data/templates';
 const TIME_ICON: Record<string, string> = { morgens: ' 🌅', mittags: ' ☀️', abends: ' 🌙' };
 import { Child, FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
+import { baseItems, CalMode, CalNav, CalViews } from '../ui/CalViews';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, s } from '../ui/theme';
 
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-const plus = (n: number) => { const x = new Date(); x.setHours(12); x.setDate(x.getDate() + n); return iso(x); };
 
 /** Wandansicht: nur lesen, für ein Tablet an der Wand. Aktualisiert sich selbst. */
 export function Board({ onExit }: { onExit: () => void }) {
@@ -18,6 +19,12 @@ export function Board({ onExit }: { onExit: () => void }) {
   const [now, setNow] = useState(new Date());
   const [ask, setAsk] = useState(false);
   const [pin, setPin] = useState('');
+  const [mode, setMode] = useState<CalMode>('woche');
+  const [anchor, setAnchor] = useState(today());
+  const [touched, setTouched] = useState(0);
+  useEffect(() => { AsyncStorage.getItem('familienplaner:boardView').then(v => v && setMode(v as CalMode), () => {}); }, []);
+  // Nach 2 Minuten ohne Bedienung zurück zu heute
+  useEffect(() => { const t = setTimeout(() => setAnchor(today()), 120000); return () => clearTimeout(t); }, [anchor, mode, touched]);
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 15000); return () => clearInterval(t); }, []);
   // Bildschirm anlassen, soweit der Browser das erlaubt
   useEffect(() => {
@@ -36,7 +43,7 @@ export function Board({ onExit }: { onExit: () => void }) {
   const holiday = holidayLabel(data, date);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: wide ? 24 : 16, gap: 16 }}>
+    <ScrollView onTouchStart={() => setTouched(x => x + 1)} style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: wide ? 24 : 16, gap: 16 }}>
       <View style={[s.row, { justifyContent: 'space-between', alignItems: 'flex-end' }]}>
         <View>
           <Text style={{ fontSize: wide ? 64 : 44, fontWeight: '800', color: C.fg, lineHeight: wide ? 68 : 48 }}>
@@ -80,19 +87,9 @@ export function Board({ onExit }: { onExit: () => void }) {
         </View>
       </View>
 
-      <View style={[s.card, { gap: 10 }]}>
-        <Text style={s.label}>Die nächsten Tage</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-          {[1, 2, 3, 4, 5, 6].map(n => {
-            const d = plus(n);
-            return (
-              <View key={d} style={{ flexGrow: 1, flexBasis: wide ? 150 : 140, backgroundColor: C.bg, borderRadius: 12, padding: 10, gap: 6 }}>
-                <Text style={{ fontWeight: '800', color: C.fg }}>{new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' })}</Text>
-                <DayEvents data={data} date={d} />
-              </View>
-            );
-          })}
-        </View>
+      <View style={[s.card, { gap: 12 }]}>
+        <CalNav mode={mode} anchor={anchor} onMode={m => { setMode(m); setAnchor(date); AsyncStorage.setItem('familienplaner:boardView', m).catch(() => {}); }} onAnchor={setAnchor} />
+        <CalViews flat mode={mode} anchor={anchor} itemsFor={d => baseItems(data, d, null)} onPickDay={d => { setAnchor(d); setMode('tag'); }} />
       </View>
       <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Nur zum Ansehen. Abhaken geht auf den Geräten der Kinder oder in der Eltern-Ansicht.</Text>
       {people.length === 0 && null}

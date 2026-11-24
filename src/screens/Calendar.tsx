@@ -2,29 +2,27 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { GCal, GEvent, getMcp, GOOGLE_ERROR, listCalendars, listWeek } from '../data/google';
-import { birthdaysOn, isDueOn, peopleOf, Person, schoolOn, today, uid } from '../data/logic';
+import { peopleOf, Person, today, uid } from '../data/logic';
 import { CalEvent } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
+import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parse = (d: string) => new Date(d + 'T12:00:00');
-function mondayOf(d: Date) { const x = new Date(d); x.setHours(12); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
-function addDays(d: Date, n: number) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
-type Item = { key: string; time?: string; title: string; color: string; tag?: string };
+type Item = CalItem;
 
 export function Calendar({ childIds, parent }: { childIds: string[]; parent: boolean }) {
   const { data, update } = useFamily();
-  const [week, setWeek] = useState(() => mondayOf(new Date()));
+  const [mode, setMode] = useState<CalMode>('woche');
+  const [anchor, setAnchor] = useState(today());
   const [google, setGoogle] = useState<GEvent[]>([]);
   const [gState, setGState] = useState<'off' | 'avail' | 'loading' | 'ok' | 'error'>('off');
   const [gMsg, setGMsg] = useState('');
   const [cals, setCals] = useState<GCal[] | null>(null);
   const [adding, setAdding] = useState(false);
-  const days = Array.from({ length: 7 }, (_, i) => iso(addDays(week, i)));
+  const days = daysOf(mode, anchor);
   const calId = data?.settings?.googleCalendarId;
 
   useEffect(() => { getMcp().then(m => m && setGState(s => (s === 'off' ? 'avail' : s))); }, []);
@@ -32,39 +30,24 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
     if (!calId) return;
     let on = true;
     setGState('loading');
-    listWeek(calId, days[0], days[6])
+    listWeek(calId, days[0], days[days.length - 1])
       .then(ev => { if (on) { setGoogle(ev); setGState('ok'); setGMsg(''); } })
       .catch(e => { if (on) { setGState('error'); setGMsg(GOOGLE_ERROR[e?.code] ?? 'Google Kalender konnte nicht geladen werden.'); } });
     return () => { on = false; };
-  }, [calId, days[0]]);
+  }, [calId, days[0], days.length]);
 
   if (!data) return null;
-  const kids = data.children;
   const people = peopleOf(data);
-  const parentIds = people.filter(p => p.role === 'eltern').map(p => p.id);
-  const colorFor = (who: string[]) => (who.length === 1 ? people.find(k => k.id === who[0])?.color ?? C.accent : C.accent);
   const personInTitle = (t: string) => people.find(k => t.toLowerCase().split(/[^\p{L}]+/u).includes(k.name.toLowerCase()));
-  // Kinder sehen Familientermine, eigene und die der Eltern, aber nicht die der Geschwister.
-  const visible = (who: string[]) => parent || who.length === 0 || who.some(w => childIds.includes(w) || parentIds.includes(w));
 
   function itemsFor(date: string): Item[] {
-    const wd = parse(date).getDay();
-    const own: Item[] = (data!.events ?? [])
-      .filter(e => (e.weekly ? parse(e.date).getDay() === wd && e.date <= date : e.date === date) && visible(e.who))
-      .map(e => ({ key: e.id, time: e.time, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: colorFor(e.who), tag: e.who.length ? e.who.map(w => people.find(k => k.id === w)?.name).filter(Boolean).join(', ') : 'Alle' }));
     const g: Item[] = google.filter(e => e.date === date).map(e => {
       const kid = personInTitle(e.title);
       return { key: 'g' + e.id, time: e.time, title: e.title, color: kid?.color ?? '#4285f4', tag: 'Google' };
     });
-    const tasks: Item[] = data!.tasks
-      .filter(t => t.repeat === 'einmal' && t.date === date && isDueOn(t, date, data!) && (parent || childIds.includes(t.childId)))
-      .map(t => ({ key: 't' + t.id, title: `${t.icon ? t.icon + ' ' : ''}${t.title}`, color: kids.find(k => k.id === t.childId)?.color ?? C.muted, tag: 'Aufgabe' }));
-    const school: Item[] = kids.filter(k => parent || childIds.includes(k.id)).flatMap(k => {
-      const sd = schoolOn(data!, k.id, date);
-      return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, title: `🏫 Schule${sd.to ? ' bis ' + sd.to : ''}`, color: k.color, tag: k.name }] : [];
-    });
-    const bd: Item[] = birthdaysOn(data!, date).map(b => ({ key: 'b' + b.child.id, title: `🎂 ${b.child.name}${b.age !== undefined ? ` wird ${b.age}` : ''}`, color: b.child.color, tag: 'Geburtstag' }));
-    return [...bd, ...school, ...own, ...g].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99')).concat(tasks);
+    const base = baseItems(data!, date, parent ? null : childIds);
+    const tasks = base.filter(i => i.key.startsWith('t'));
+    return [...base.filter(i => !i.key.startsWith('t')), ...g].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).concat(tasks);
   }
 
   async function connect() {
@@ -73,37 +56,14 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
     catch (e: any) { setGState('error'); setGMsg(GOOGLE_ERROR[e?.code] ?? 'Google Kalender ist nicht erreichbar.'); }
   }
 
-  const range = `${parse(days[0]).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} bis ${parse(days[6]).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}`;
   return (
     <View style={{ gap: 16 }}>
-      <View style={[s.row, { justifyContent: 'space-between' }]}>
-        <View style={s.row}>
-          <Button ghost title="‹" onPress={() => setWeek(w => addDays(w, -7))} style={{ paddingHorizontal: 14 }} />
-          <Button ghost title="Diese Woche" onPress={() => setWeek(mondayOf(new Date()))} />
-          <Button ghost title="›" onPress={() => setWeek(w => addDays(w, 7))} style={{ paddingHorizontal: 14 }} />
-        </View>
-        <Text style={[s.text, { fontWeight: '700' }]}>{range}</Text>
-        {parent && <Button title="+ Termin" onPress={() => setAdding(true)} />}
-      </View>
+      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <Button title="+ Termin" onPress={() => setAdding(true)} /> : undefined} />
 
-      {adding && <EventForm people={people} days={days} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); }} />}
+      {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); }} />}
 
-      <View style={[s.row, { alignItems: 'stretch', gap: 10 }]}>
-        {days.map((d, i) => {
-          const items = itemsFor(d);
-          const isToday = d === today();
-          return (
-            <View key={d} style={[s.card, { flexGrow: 1, flexBasis: 140, minWidth: 0, padding: 12, gap: 8, borderWidth: isToday ? 2 : 0, borderColor: C.accent }]}>
-              <Text style={{ fontWeight: '800', color: isToday ? C.accent : C.fg }}>{WD[i]} {parse(d).getDate()}.</Text>
-              {items.length === 0 && <Text style={[s.muted, { fontSize: 13 }]}>frei</Text>}
-              {items.map(it => (
-                <EventRow key={it.key} item={it} canDelete={parent && !/^[gtsb]/.test(it.key)}
-                  onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />
-              ))}
-            </View>
-          );
-        })}
-      </View>
+      <CalViews mode={mode} anchor={anchor} itemsFor={itemsFor} onPickDay={d => { setAnchor(d); setMode('tag'); }}
+        renderItem={it => <EventRow key={it.key} item={it} canDelete={parent && !/^[gtsb]/.test(it.key)} onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />} />
 
       {parent && gState !== 'off' && (
         <View style={s.card}>
