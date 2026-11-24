@@ -12,7 +12,7 @@ import { shrink } from './Learn';
 
 type Row = LetterEvent & { key: string; on: boolean; who: string[] };
 
-/** Elternbrief fotografieren: Die KI schlägt Termine vor, Eltern haken ab und übernehmen. */
+/** Elternbrief als Foto, PDF oder Text: Die KI schlägt Termine vor, Eltern haken ab und übernehmen. */
 export function LetterImport({ onDone }: { onDone: (added: number) => void }) {
   const { data, update } = useFamily();
   const [ai, setAi] = useState<boolean | null>(null);
@@ -25,8 +25,12 @@ export function LetterImport({ onDone }: { onDone: (added: number) => void }) {
   if (!data) return null;
   const kids = data.children;
 
+  const [text, setText] = useState('');
+  const [typing, setTyping] = useState(false);
+
   async function pick(camera: boolean) {
     setMsg('');
+    if (Platform.OS === 'web' && !camera) return pickWeb();
     const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1, allowsMultipleSelection: !camera, selectionLimit: 4 };
     if (camera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -34,11 +38,29 @@ export function LetterImport({ onDone }: { onDone: (added: number) => void }) {
     }
     const res = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
     if (res.canceled || !res.assets.length) return;
-    setBusy(true);
+    run(() => Promise.all(res.assets.slice(0, 4).map(shrink)), '');
+  }
+
+  /** Im Browser: Fotos und PDFs gemischt, bis zu 4 Dateien. */
+  function pickWeb() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.multiple = true; input.accept = 'image/*,application/pdf,.pdf';
+    input.onchange = () => {
+      const list = Array.from(input.files ?? []).slice(0, 4);
+      if (!list.length) return;
+      const big = list.find(f => f.type === 'application/pdf' && f.size > 4_000_000);
+      if (big) { setMsg(`${big.name} ist zu groß (max. 4 MB). Bitte nur die Seiten mit Terminen oder den Text einfügen.`); return; }
+      run(() => Promise.all(list.map(readWebFile)), '');
+    };
+    input.click();
+  }
+
+  async function run(load: () => Promise<string[]>, txt: string) {
+    setMsg(''); setBusy(true);
     ctl.current = new AbortController();
     try {
-      const photos = await Promise.all(res.assets.slice(0, 4).map(shrink));
-      const out = await extractLetter(photos, kids.map(k => ({ name: k.name, grade: currentGrade(k) })), today(), ctl.current.signal);
+      const files = await load();
+      const out = await extractLetter(files, kids.map(k => ({ name: k.name, grade: currentGrade(k) })), today(), ctl.current.signal, txt);
       setSummary(out.summary);
       setRows(out.events.map(e => {
         const k = e.child ? kids.find(x => x.name.toLowerCase() === e.child!.toLowerCase()) : undefined;
@@ -46,7 +68,8 @@ export function LetterImport({ onDone }: { onDone: (added: number) => void }) {
       }));
       if (!out.events.length) setMsg('Im Brief habe ich keine Termine mit Datum gefunden.');
     } catch (e: any) {
-      if (e?.code !== 'cancelled') setMsg(AI_ERROR[e?.code] ?? 'Der Brief konnte nicht gelesen werden. Bitte nochmal versuchen.');
+      if (e?.code === 'image_rejected' && Platform.OS === 'web') setMsg('Die Datei konnte nicht gelesen werden. Bei PDFs muss die Server-Funktion einmal neu eingespielt werden, bis dahin den Text einfügen.');
+      else if (e?.code !== 'cancelled') setMsg(AI_ERROR[e?.code] ?? 'Der Brief konnte nicht gelesen werden. Bitte nochmal versuchen.');
     }
     setBusy(false);
   }
@@ -65,11 +88,19 @@ export function LetterImport({ onDone }: { onDone: (added: number) => void }) {
       {ai === false && <Text style={s.muted}>Das Lesen macht die KI. Dafür muss dieses Gerät mit dem Familienserver verbunden sein.</Text>}
       {ai && !rows && !busy && (
         <>
-          <Text style={s.muted}>Brief, Einladung oder Aushang fotografieren. Die KI sucht alle Termine heraus, du entscheidest, was in den Kalender kommt.</Text>
+          <Text style={s.muted}>Foto, PDF oder Text vom Brief, der Einladung oder dem Aushang. Die KI sucht alle Termine heraus, du entscheidest, was in den Kalender kommt.</Text>
           <View style={s.row}>
-            {Platform.OS !== 'web' && <Button title="Foto machen" onPress={() => pick(true)} />}
-            <Button title={Platform.OS === 'web' ? 'Foto hochladen' : 'Aus Fotos wählen'} onPress={() => pick(false)} />
+            {Platform.OS !== 'web' && <Button title="📷 Foto machen" onPress={() => pick(true)} />}
+            <Button title={Platform.OS === 'web' ? '📎 Foto oder PDF hochladen' : '🖼️ Aus Fotos wählen'} onPress={() => pick(false)} />
+            <Button ghost title="📝 Text einfügen" onPress={() => setTyping(v => !v)} />
           </View>
+          {typing && (
+            <>
+              <TextInput multiline value={text} onChangeText={setText} accessibilityLabel="Text des Elternbriefs" placeholder="Text aus E-Mail, Schul-App oder PDF hier einfügen"
+                style={[s.input, { minHeight: 140, textAlignVertical: 'top' }]} />
+              <Button title="Termine suchen" disabled={text.trim().length < 15} onPress={() => run(async () => [], text)} />
+            </>
+          )}
         </>
       )}
       {busy && (
@@ -113,4 +144,27 @@ export function LetterImport({ onDone }: { onDone: (added: number) => void }) {
       {rows && rows.length > 0 && <Text style={[s.muted, { fontSize: 13 }]}>Bitte kurz gegenprüfen, die KI kann sich bei Daten verlesen. Fahrer kannst du danach am Termin eintragen.</Text>}
     </View>
   );
+}
+
+function readWebFile(f: File): Promise<string> {
+  return new Promise((ok, fail) => {
+    const r = new FileReader();
+    r.onerror = () => fail({ code: 'image_rejected' });
+    r.onload = () => {
+      const url = String(r.result);
+      if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) return ok(url.replace(/^data:[^;]*;/, 'data:application/pdf;'));
+      // Fotos verkleinern: max. 1600 px, JPEG
+      const img = new Image();
+      img.onerror = () => fail({ code: 'image_rejected' });
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+        ok(c.toDataURL('image/jpeg', 0.7));
+      };
+      img.src = url;
+    };
+    r.readAsDataURL(f);
+  });
 }

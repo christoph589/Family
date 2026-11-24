@@ -171,7 +171,7 @@ export function parseIcs(text: string, fromIso: string, toIso: string): Out[] {
 const AI_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const AI_MODEL = 'claude-opus-5-5';
 const AI_DAILY = 30;
-const IMG = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
+const IMG = /^data:(image\/(?:jpeg|png|webp|gif)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/;
 const berlinDay = () => new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(new Date());
 
 async function runAi(body: any, userId: string, admin: any) {
@@ -182,7 +182,9 @@ async function runAi(body: any, userId: string, admin: any) {
   for (const raw of (Array.isArray(body.images) ? body.images : []).slice(0, 8)) {
     const m = IMG.exec(String(raw));
     if (!m || m[2].length > 6_000_000) return json({ error: 'image_rejected' }, 400);
-    images.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+    images.push(m[1] === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: m[1], data: m[2] } }
+      : { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
   }
 
   // Nur Mitglieder einer Familie, mit Tageslimit pro Familie (schützt vor hohen Kosten)
