@@ -1,7 +1,19 @@
 import { TEMPLATES } from './templates';
 import { Child, Completion, FamilyData, MoneyAccount, Parent, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
 
-export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+// Änderungen laufen u. U. mehrfach (Anzeige, Speichern, Konflikt). Damit dabei dieselben IDs entstehen,
+// nimmt withIdTape die IDs beim ersten Lauf auf und spielt sie danach wieder ab.
+let tape: { ids: string[]; pos: number } | null = null;
+export const uid = () => {
+  if (!tape) return newId();
+  if (tape.pos < tape.ids.length) return tape.ids[tape.pos++];
+  const id = newId(); tape.ids.push(id); tape.pos++; return id;
+};
+export function withIdTape<T>(ids: string[], run: () => T): T {
+  const prev = tape; tape = { ids, pos: 0 };
+  try { return run(); } finally { tape = prev; }
+}
 export const today = (d = new Date()) => {
   const z = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;

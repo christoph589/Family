@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { today, uid } from '../data/logic';
-import { FamilyData, MealSlot, Recipe } from '../data/types';
+import { peopleOf, today, uid } from '../data/logic';
+import { FamilyData, MealSlot, Recipe, ShopItem } from '../data/types';
+import { Avatar } from '../ui/Avatar';
+import { DateField } from '../ui/DateField';
 import { Button, Segmented } from '../ui/Button';
 import { addDays, daysOf, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
@@ -22,14 +24,14 @@ export function addToShopping(d: FamilyData, items: string[], by?: string): Fami
   return { ...d, shopping: [...unique.map(title => ({ id: uid(), title, done: false, at: new Date().toISOString(), by })), ...(d.shopping ?? [])] };
 }
 
-export function Food({ who }: { who: string }) {
+export function Food({ who, meId }: { who: string; meId?: string }) {
   const [tab, setTab] = useState<'plan' | 'liste'>('plan');
   const { data } = useFamily();
   const open = (data?.shopping ?? []).filter(i => !i.done).length;
   return (
     <View style={{ gap: 16 }}>
       <Segmented value={tab} onChange={setTab} options={[{ value: 'plan', label: '🍽️ Essensplan' }, { value: 'liste', label: `🛒 Einkaufsliste${open ? ` (${open})` : ''}` }]} />
-      {tab === 'plan' ? <MealPlan who={who} /> : <Shopping who={who} />}
+      {tab === 'plan' ? <MealPlan who={who} /> : <Shopping who={who} meId={meId} />}
     </View>
   );
 }
@@ -133,29 +135,127 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
 }
 const countUses = (d: FamilyData, r: Recipe) => (d.meals ?? []).filter(m => norm(m.title) === norm(r.title)).length;
 
-export function Shopping({ who }: { who: string }) {
+const STORES = ['Aldi', 'Lidl', 'Rewe', 'Edeka', 'Kaufland', 'Netto', 'Penny', 'dm', 'Rossmann', 'Drogerie', 'Apotheke', 'Baumarkt'];
+const fmtShort = (d: string) => parse(d).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' });
+/** Fälligkeit als kurzer Text mit Dringlichkeit */
+export function untilLabel(until?: string): { text: string; urgent: boolean } | null {
+  if (!until) return null;
+  const t = today();
+  if (until < t) return { text: `überfällig (${fmtShort(until)})`, urgent: true };
+  if (until === t) return { text: 'heute', urgent: true };
+  if (until === addDays(t, 1)) return { text: 'bis morgen', urgent: true };
+  return { text: `bis ${fmtShort(until)}`, urgent: false };
+}
+/** Offene Einkäufe für eine Person, dringende zuerst */
+export function shoppingFor(d: FamilyData, personId: string) {
+  return (d.shopping ?? []).filter(i => !i.done && i.forWho === personId).sort((a, b) => (a.until ?? '9').localeCompare(b.until ?? '9'));
+}
+
+export function Shopping({ who, meId }: { who: string; meId?: string }) {
   const { data, update } = useFamily();
   const [text, setText] = useState('');
+  const [edit, setEdit] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Partial<ShopItem>>({});
+  const [byStore, setByStore] = useState(false);
   if (!data) return null;
+  const people = peopleOf(data);
   const list = data.shopping ?? [];
-  const open = list.filter(i => !i.done);
+  const open = list.filter(i => !i.done).sort((a, b) => (a.until ?? '9').localeCompare(b.until ?? '9'));
   const done = list.filter(i => i.done);
-  const add = () => { if (!text.trim()) return; update(d => addToShopping(d, text.split(',').map(x => x.trim()), who)); setText(''); };
+  const kidMe = people.find(p => p.id === meId && p.role === 'kind');
+  const add = () => {
+    if (!text.trim()) return;
+    // IDs hier vergeben, nicht in update(): update() kann bei Sync-Konflikten mehrfach laufen
+    const extra = { ...draft, forWho: draft.forWho ?? kidMe?.id };
+    const items = text.split(',').map(x => x.trim()).filter(Boolean).map(title => ({ id: uid(), title, done: false, at: new Date().toISOString(), by: who, ...extra }));
+    update(d => {
+      const openT = new Set((d.shopping ?? []).filter(i => !i.done).map(i => norm(i.title)));
+      const fresh = items.filter((it, k) => !openT.has(norm(it.title)) && items.findIndex(x => norm(x.title) === norm(it.title)) === k);
+      return { ...d, shopping: [...fresh, ...(d.shopping ?? [])] };
+    });
+    setText(''); setDraft({});
+  };
   const toggle = (id: string) => update(d => ({ ...d, shopping: (d.shopping ?? []).map(i => (i.id === id ? { ...i, done: !i.done } : i)) }));
+  const patch = (id: string, p: Partial<ShopItem>) => update(d => ({ ...d, shopping: (d.shopping ?? []).map(i => (i.id === id ? { ...i, ...p } : i)) }));
+
+  const Details = ({ v, set }: { v: Partial<ShopItem>; set: (p: Partial<ShopItem>) => void }) => (
+    <View style={{ gap: 10, backgroundColor: C.bg, borderRadius: 16, padding: 12 }}>
+      <Text style={s.label}>Für wen</Text>
+      <View style={[s.row, { gap: 6 }]}>
+        <Pressable onPress={() => set({ forWho: undefined })} style={[s.chip, { paddingVertical: 7, backgroundColor: !v.forWho ? C.accent : C.surface }]}>
+          <Text style={{ fontWeight: '700', color: !v.forWho ? '#fff' : C.fg }}>Familie</Text>
+        </Pressable>
+        {people.map(p => (
+          <Pressable key={p.id} accessibilityLabel={`Für ${p.name}`} onPress={() => set({ forWho: p.id })}
+            style={[s.chip, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingLeft: 4, backgroundColor: v.forWho === p.id ? p.color : C.surface }]}>
+            <Avatar name={p.name} color={p.color} photo={p.photo} size={24} />
+            <Text style={{ fontWeight: '700', color: v.forWho === p.id ? '#fff' : C.fg }}>{p.name}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={s.label}>Bis wann</Text>
+      <DateField value={v.until ?? ''} onChange={x => set({ until: x || undefined })} label="Bis wann" placeholder="Egal" clearable />
+      <Text style={s.label}>Laden</Text>
+      <View style={[s.row, { gap: 6 }]}>
+        {STORES.map(st => (
+          <Pressable key={st} onPress={() => set({ store: v.store === st ? undefined : st })} style={[s.chip, { paddingVertical: 7, backgroundColor: v.store === st ? C.fg : C.surface }]}>
+            <Text style={{ fontWeight: '700', color: v.store === st ? '#fff' : C.fg }}>{st}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <TextInput style={s.input} value={v.note ?? ''} onChangeText={t => set({ note: t || undefined })} placeholder="Notiz, z. B. Angebot 1,99 € oder Größe 34" accessibilityLabel="Notiz" />
+    </View>
+  );
+
+  const Row = ({ i }: { i: ShopItem }) => {
+    const p = people.find(x => x.id === i.forWho);
+    const u = untilLabel(i.until);
+    const meta = [u?.text, i.store, i.note].filter(Boolean).join(' · ');
+    return (
+      <View style={{ borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8, gap: 8 }}>
+        <View style={[s.row, { flexWrap: 'nowrap' }]}>
+          <Pressable onPress={() => toggle(i.id)} accessibilityRole="checkbox" accessibilityState={{ checked: false }} accessibilityLabel={i.title}
+            style={{ width: 30, height: 30, borderRadius: 10, borderWidth: 2, borderColor: u?.urgent ? C.danger : C.accent }} />
+          {p ? <Avatar name={p.name} color={p.color} photo={p.photo} size={28} /> : null}
+          <Pressable onPress={() => { setEdit(edit === i.id ? null : i.id); }} style={{ flex: 1, minWidth: 0 }} accessibilityLabel={`${i.title} bearbeiten`}>
+            <Text style={[s.text, { fontSize: 18, fontWeight: '600' }]}>{i.title}{p ? <Text style={{ color: p.color, fontWeight: '800', fontSize: 14 }}>  für {p.name}</Text> : null}</Text>
+            {!!meta && <Text style={{ fontSize: 13, color: u?.urgent ? C.danger : C.muted, fontWeight: u?.urgent ? '700' : '500' }}>{meta}</Text>}
+          </Pressable>
+          <Pressable onPress={() => setEdit(edit === i.id ? null : i.id)} style={{ padding: 6 }} accessibilityLabel="Details"><Text style={{ fontSize: 18, color: C.muted }}>{edit === i.id ? '▴' : '⋯'}</Text></Pressable>
+        </View>
+        {edit === i.id && Details({ v: i, set: x => patch(i.id, x) })}
+      </View>
+    );
+  };
+
+  const groups = byStore
+    ? [...new Set(open.map(i => i.store ?? ''))].sort((a, b) => (a || 'zzz').localeCompare(b || 'zzz')).map(st => ({ st, items: open.filter(i => (i.store ?? '') === st) }))
+    : [{ st: '', items: open }];
+
   return (
-    <View style={[s.card, { maxWidth: 640, width: '100%' }]}>
+    <View style={[s.card, { maxWidth: 720, width: '100%' }]}>
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
         <TextInput style={[s.input, { flex: 1 }]} value={text} onChangeText={setText} onSubmitEditing={add} placeholder="Was fehlt? z. B. Milch, Brot" returnKeyType="done" />
         <Button title="+" accessibilityLabel="Hinzufügen" onPress={add} disabled={!text.trim()} />
       </View>
+      {!!text.trim() && (
+        <>
+          <Text style={[s.muted, { fontSize: 13 }]}>Optional: für wen, bis wann, welcher Laden.</Text>
+          {Details({ v: { ...draft, forWho: draft.forWho ?? kidMe?.id }, set: x => setDraft(d => ({ ...d, ...x })) })}
+        </>
+      )}
+      <View style={[s.row, { justifyContent: 'space-between' }]}>
+        <Text style={s.label}>Offen ({open.length})</Text>
+        {open.length > 1 && (
+          <Pressable onPress={() => setByStore(v => !v)}><Text style={{ color: C.accent, fontWeight: '700' }}>{byStore ? 'Nach Datum' : 'Nach Laden sortieren'}</Text></Pressable>
+        )}
+      </View>
       {open.length === 0 && <Text style={s.muted}>Alles da. 🎉</Text>}
-      {open.map(i => (
-        <Pressable key={i.id} onPress={() => toggle(i.id)} accessibilityRole="checkbox" accessibilityState={{ checked: false }} accessibilityLabel={i.title}
-          style={[s.row, { flexWrap: 'nowrap', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line }]}>
-          <View style={{ width: 28, height: 28, borderRadius: 8, borderWidth: 2, borderColor: C.accent }} />
-          <Text style={[s.text, { flex: 1, fontSize: 18 }]}>{i.title}</Text>
-          {i.by ? <Text style={[s.muted, { fontSize: 12 }]}>{i.by}</Text> : null}
-        </Pressable>
+      {groups.map(g => (
+        <View key={g.st || '-'}>
+          {byStore && <Text style={[s.label, { marginTop: 6, color: C.accent }]}>{g.st || 'Egal wo'}</Text>}
+          {g.items.map(i => <View key={i.id}>{Row({ i })}</View>)}
+        </View>
       ))}
       {done.length > 0 && (
         <>
@@ -166,13 +266,13 @@ export function Shopping({ who }: { who: string }) {
           {done.map(i => (
             <Pressable key={i.id} onPress={() => toggle(i.id)} accessibilityRole="checkbox" accessibilityState={{ checked: true }} accessibilityLabel={i.title}
               style={[s.row, { flexWrap: 'nowrap', paddingVertical: 6, opacity: 0.5 }]}>
-              <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: C.ok, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text></View>
+              <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: C.ok, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text></View>
               <Text style={[s.text, { flex: 1, textDecorationLine: 'line-through' }]}>{i.title}</Text>
             </Pressable>
           ))}
         </>
       )}
-      <Text style={[s.muted, { fontSize: 13 }]}>Alle in der Familie können etwas eintragen. Mit Komma gehen mehrere auf einmal.</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>Alle in der Familie können etwas eintragen. Mit Komma gehen mehrere auf einmal. Tipp auf einen Eintrag ändert Person, Datum und Laden.</Text>
     </View>
   );
 }

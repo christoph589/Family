@@ -118,6 +118,12 @@ export type MealSlot = 'fruehstueck' | 'mittag' | 'abend';
 export interface Meal { id: string; date: string; slot: MealSlot; title: string }
 /** Gericht mit Zutaten, wird aus dem Essensplan gemerkt */
 export interface Recipe { id: string; title: string; ingredients: string[] }
-export interface ShopItem { id: string; title: string; done: boolean; at: string; by?: string }
+export interface ShopItem {
+  id: string; title: string; done: boolean; at: string; by?: string;
+  /** Für wen (Personen-ID) */ forWho?: string;
+  /** Bis wann gebraucht (YYYY-MM-DD) */ until?: string;
+  /** Laden, z. B. Lidl */ store?: string;
+  /** z. B. „Angebot 1,99 €“ */ note?: string;
+}
 
 export interface Feed { id: string; name: string; url: string; color: string; who?: string; icon?: string }

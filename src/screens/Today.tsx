@@ -4,6 +4,7 @@ import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, t
 import { Child, TaskKind } from '../data/types';
 import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar } from '../ui/Avatar';
+import { shoppingFor, untilLabel } from './Food';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
 
 export function Today({ childIds, parent }: { childIds: string[]; parent: boolean }) {
@@ -137,6 +138,18 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
       {(() => {
         const lessons = (schoolOn(data!, child.id, date)?.lessons ?? []).filter(Boolean);
         return lessons.length ? <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>📖 {lessons.join(' · ')}</Text> : null;
+      })()}
+      {(() => {
+        const need = shoppingFor(data!, child.id);
+        if (!need.length) return null;
+        return (
+          <View style={{ backgroundColor: C.accentSoft, borderRadius: 16, padding: 12, gap: 4 }}>
+            <Text style={[s.label, { color: C.accent }]}>🛒 Braucht</Text>
+            {need.map(i => { const u = untilLabel(i.until); return (
+              <Text key={i.id} style={[s.text, { fontSize: 15 }]}><Text style={{ fontWeight: '700' }}>{i.title}</Text>{u ? <Text style={{ color: u.urgent ? C.danger : C.muted, fontSize: 13, fontWeight: u.urgent ? '800' : '500' }}>  {u.text}</Text> : null}{i.store ? <Text style={{ color: C.muted, fontSize: 13 }}> · {i.store}</Text> : null}</Text>
+            ); })}
+          </View>
+        );
       })()}
       {group('routine', 'Routinen')}
       {group('hausaufgabe', 'Schule')}

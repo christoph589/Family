@@ -1,3 +1,4 @@
+import { withIdTape } from './logic';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ConflictError, DataStore, localStore } from './store';
 import { FamilyData } from './types';
@@ -79,7 +80,8 @@ export function FamilyProvider({ children, store = localStore }: { children: Rea
 
   const update = useCallback((fn: Fn) => {
     if (!base.current.data) return;
-    pending.current.push(fn);
+    const ids: string[] = [];
+    pending.current.push(d => withIdTape(ids, () => fn(d)));
     show();
     flush();
   }, [show, flush]);

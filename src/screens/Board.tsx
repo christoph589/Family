@@ -8,7 +8,7 @@ import { Child, FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf, matchesPeople } from '../ui/CalViews';
 import { EventForm } from './Calendar';
-import { MealPlan, mealsOn, Shopping } from './Food';
+import { MealPlan, mealsOn, Shopping, shoppingFor, untilLabel } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, s, SHADOW } from '../ui/theme';
 import { Avatar, PersonHead } from '../ui/Avatar';
@@ -184,6 +184,9 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
     <View style={[s.card, { flexGrow: 1, flexBasis: 260 }]}>
       <PersonHead name={child.name} color={child.color} photo={child.photo} value={`⭐ ${pointsOf(data, child.id)}`} />
       {sd && (sd.from || sd.to) ? <Text style={[s.text, { fontWeight: '700' }]}>🏫 Schule {sd.from ?? '?'}–{sd.to ?? '?'}</Text> : null}
+      {shoppingFor(data, child.id).map(i => { const u = untilLabel(i.until); return (
+        <Text key={i.id} style={[s.text, { fontSize: 15 }]}>🛒 <Text style={{ fontWeight: '700' }}>{i.title}</Text>{u ? <Text style={{ color: u.urgent ? C.danger : C.muted, fontWeight: u.urgent ? '800' : '500' }}>  {u.text}</Text> : null}</Text>
+      ); })}
       <View>
         <Text style={[s.muted, { marginBottom: 4 }]}>{done} von {items.length} erledigt</Text>
         <View style={{ height: 12, backgroundColor: C.surface2, borderRadius: 99, overflow: 'hidden' }}>

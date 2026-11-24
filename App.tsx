@@ -220,7 +220,7 @@ function Root() {
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
         {tab === 'lernen' && admin && <Grades />}
         {tab === 'geld' && <Money childIds={childIds} parent={parent} />}
-        {tab === 'essen' && <Food who={me.name} />}
+        {tab === 'essen' && <Food who={me.name} meId={profile.id} />}
         {tab === 'aufgaben' && admin && (
           <View style={[s.row, { gap: 8 }]} accessibilityRole="tablist">
             {SETTINGS.filter(x => cloud || !x.cloud).map(x => (
