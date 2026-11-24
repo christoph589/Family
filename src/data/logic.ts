@@ -1,5 +1,5 @@
 import { TEMPLATES } from './templates';
-import { Child, Completion, FamilyData, Parent, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
+import { Child, Completion, FamilyData, MoneyAccount, Parent, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 export const today = (d = new Date()) => {
@@ -101,8 +101,8 @@ export function peopleOf(d: FamilyData): Person[] {
   return [...parentsOf(d).map(p => ({ ...p, role: 'eltern' as const })), ...d.children.map(c => ({ id: c.id, name: c.name, color: c.color, role: 'kind' as const }))];
 }
 
-export function newFamily(name: string, pin: string, kids: { name: string; grade?: string }[], parentNames: string[] = ['Mama', 'Papa']): FamilyData {
-  const children: Child[] = kids.map((k, i) => ({ id: uid(), name: k.name, grade: k.grade, color: CHILD_COLORS[i % CHILD_COLORS.length] }));
+export function newFamily(name: string, pin: string, kids: { name: string; grade?: string; birthday?: string; gender?: Child['gender'] }[], parentNames: string[] = ['Mama', 'Papa']): FamilyData {
+  const children: Child[] = kids.map((k, i) => ({ id: uid(), name: k.name, grade: k.grade, gradeYear: k.grade ? schoolYearOf(today()) : undefined, birthday: k.birthday, gender: k.gender, color: CHILD_COLORS[i % CHILD_COLORS.length] }));
   return {
     version: 1,
     family: { id: uid(), name, parentPin: pin },
@@ -206,4 +206,101 @@ export function decideIdea(d: FamilyData, ideaId: string, cost: number | null, f
   const rest = { ...d, ideas: (d.ideas ?? []).filter(i => i.id !== ideaId) };
   if (!idea || cost === null) return rest;
   return { ...rest, rewards: [...d.rewards, { id: uid(), title: idea.title, cost, childId: forAll ? undefined : idea.childId }] };
+}
+
+// ---------- Kinderprofil ----------
+
+/** Startjahr des Schuljahres (Schuljahr ab 1. August). */
+export function schoolYearOf(date: string) { const [y, m] = date.split('-').map(Number); return m >= 8 ? y : y - 1; }
+
+/** Aktuelle Klasse: eingetragene Klasse plus volle Schuljahre seitdem. "4b" wird zu "5b". */
+export function currentGrade(c: Child, date = today()): string | undefined {
+  if (!c.grade) return undefined;
+  const m = c.grade.match(/^(\d+)(.*)$/);
+  if (!m || c.gradeYear === undefined) return c.grade;
+  const n = Number(m[1]) + Math.max(0, schoolYearOf(date) - c.gradeYear);
+  return n > 13 ? 'fertig mit der Schule' : `${n}${m[2]}`;
+}
+export function gradeLabel(c: Child) { const g = currentGrade(c); return !g ? undefined : /^\d+$/.test(g) ? `${g}. Klasse` : /^\d/.test(g) ? `Klasse ${g}` : g; }
+
+export function ageOf(c: Child, date = today()): number | undefined {
+  if (!c.birthday) return undefined;
+  const [by, bm, bd] = c.birthday.split('-').map(Number);
+  const [y, m, d] = date.split('-').map(Number);
+  return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
+}
+export const isBirthday = (c: Child, date = today()) => !!c.birthday && c.birthday.slice(5) === date.slice(5);
+
+/** Geburtstage in den nächsten n Tagen (für Kalender und Wandansicht) */
+export function birthdaysOn(d: FamilyData, date: string) {
+  return d.children.filter(c => isBirthday(c, date)).map(c => ({ child: c, age: ageOf(c, date) }));
+}
+
+export const BIRTHDAY_BONUS = 25;
+export function giveBirthdayBonus(d: FamilyData, childId: string, date = today()): FamilyData {
+  const y = Number(date.slice(0, 4));
+  if (d.birthdayBonus?.[childId] === y) return d;
+  return { ...addPoints(d, childId, BIRTHDAY_BONUS, '🎂 Geburtstagsbonus'), birthdayBonus: { ...d.birthdayBonus, [childId]: y } };
+}
+
+/** Datum TT.MM.JJJJ zu YYYY-MM-DD, sonst null */
+export function parseGermanDate(t: string): string | null {
+  const m = t.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  const [dd, mm, yy] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const x = new Date(yy, mm - 1, dd);
+  if (x.getFullYear() !== yy || x.getMonth() !== mm - 1 || x.getDate() !== dd) return null;
+  return `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+}
+export const toGermanDate = (iso?: string) => (iso ? iso.split('-').reverse().join('.') : '');
+
+// ---------- Taschengeld ----------
+
+export const euro = (cents: number) => (cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+export const accountOf = (d: FamilyData, childId: string): MoneyAccount => d.money?.[childId] ?? { tx: [] };
+export const balanceOf = (d: FamilyData, childId: string) => accountOf(d, childId).tx.reduce((s, t) => s + t.cents, 0);
+export function setAccount(d: FamilyData, childId: string, fn: (a: MoneyAccount) => MoneyAccount): FamilyData {
+  return { ...d, money: { ...d.money, [childId]: fn(accountOf(d, childId)) } };
+}
+export function addTx(d: FamilyData, childId: string, cents: number, note: string, kind: import('./types').MoneyTx['kind'], date = today()): FamilyData {
+  return setAccount(d, childId, a => ({ ...a, tx: [{ id: uid(), date, cents, note, kind }, ...a.tx] }));
+}
+
+const addDaysIso = (date: string, n: number) => { const x = new Date(date + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+const addMonthIso = (date: string) => { const [y, m, d] = date.split('-').map(Number); const x = new Date(y, m, Math.min(d, 28), 12); return x.toISOString().slice(0, 10); };
+
+/**
+ * Bucht fälliges Taschengeld (wöchentlich oder monatlich ab "since").
+ * Idempotent: lastPaid merkt sich den letzten Zahltag. Gibt dieselben Daten zurück, wenn nichts fällig ist.
+ */
+export function payAllowances(d: FamilyData, date = today()): FamilyData {
+  let out = d;
+  for (const c of d.children) {
+    const a = accountOf(out, c.id).allowance;
+    if (!a || a.cents <= 0) continue;
+    let next = a.lastPaid ? (a.every === 'woche' ? addDaysIso(a.lastPaid, 7) : addMonthIso(a.lastPaid)) : a.since;
+    let last = a.lastPaid;
+    const tx: import('./types').MoneyTx[] = [];
+    let guard = 0;
+    while (next <= date && guard++ < 60) {
+      tx.unshift({ id: uid(), date: next, cents: a.cents, note: a.every === 'woche' ? 'Taschengeld (Woche)' : 'Taschengeld (Monat)', kind: 'taschengeld' });
+      last = next;
+      next = a.every === 'woche' ? addDaysIso(next, 7) : addMonthIso(next);
+    }
+    if (tx.length) out = setAccount(out, c.id, acc => ({ ...acc, allowance: { ...a, lastPaid: last }, tx: [...tx, ...acc.tx] }));
+  }
+  return out;
+}
+
+/**
+ * Grobe Richtwerte aus der Taschengeldtabelle der Jugendämter (Stand etwa 2024/25).
+ * Bis 9 Jahre wöchentlich, ab 10 monatlich. Nur Orientierung, keine Vorgabe.
+ */
+export function allowanceHint(age?: number): string | null {
+  if (age === undefined) return null;
+  if (age < 6) return 'Unter 6 Jahren: etwa 0,50 bis 1 € pro Woche';
+  const week: Record<number, string> = { 6: '1 bis 2 €', 7: '2 bis 3 €', 8: '3 bis 4 €', 9: '4 bis 5 €' };
+  if (week[age]) return `Mit ${age} Jahren: etwa ${week[age]} pro Woche`;
+  const month: Record<number, string> = { 10: '16,50 bis 19 €', 11: '19 bis 21 €', 12: '21 bis 24 €', 13: '24 bis 28 €', 14: '28 bis 33 €', 15: '33 bis 37 €', 16: '37 bis 46 €', 17: '46 bis 60 €' };
+  return month[age] ? `Mit ${age} Jahren: etwa ${month[age]} pro Monat` : 'Ab 18: eigenes Budget absprechen';
 }

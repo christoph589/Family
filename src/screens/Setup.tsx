@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
-import { newFamily } from '../data/logic';
+import { newFamily, parseGermanDate } from '../data/logic';
+import { KidDraft, KidFields, kidDraftValid } from '../ui/KidFields';
 import { useFamily } from '../data/FamilyContext';
 import { FamilyData } from '../data/types';
 
@@ -12,10 +13,11 @@ export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promis
   const [err, setErr] = useState('');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
-  const [kids, setKids] = useState([{ name: '', grade: '' }]);
+  const [kids, setKids] = useState<({ name: string } & KidDraft)[]>([{ name: '', grade: '', birthday: '' }]);
   const [parents, setParents] = useState(['Mama', 'Papa']);
-  const valid = name.trim() && /^\d{4}$/.test(pin) && kids.some(k => k.name.trim());
-  const setKid = (i: number, k: Partial<{ name: string; grade: string }>) => setKids(ks => ks.map((x, j) => (j === i ? { ...x, ...k } : x)));
+  const named = kids.filter(k => k.name.trim());
+  const valid = name.trim() && /^\d{4}$/.test(pin) && named.length > 0 && named.every(kidDraftValid);
+  const setKid = (i: number, k: Partial<{ name: string } & KidDraft>) => setKids(ks => ks.map((x, j) => (j === i ? { ...x, ...k } : x)));
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={[s.pad, { maxWidth: 560 }]}>
@@ -41,16 +43,17 @@ export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promis
       <View style={s.card}>
         <Text style={s.label}>Kinder</Text>
         {kids.map((k, i) => (
-          <View key={i} style={s.row}>
-            <TextInput style={[s.input, { flex: 2, minWidth: 120 }]} value={k.name} onChangeText={t => setKid(i, { name: t })} placeholder="Name" />
-            <TextInput style={[s.input, { flex: 1, minWidth: 90 }]} value={k.grade} onChangeText={t => setKid(i, { grade: t })} placeholder="Klasse" />
+          <View key={i} style={{ gap: 8, paddingBottom: 8, borderBottomWidth: i < kids.length - 1 ? 1 : 0, borderBottomColor: C.line }}>
+            <TextInput style={s.input} value={k.name} onChangeText={t => setKid(i, { name: t })} placeholder="Name" />
+            <KidFields value={k} name={k.name} onChange={v => setKid(i, v)} />
           </View>
         ))}
-        <Button ghost title="Weiteres Kind" onPress={() => setKids(ks => [...ks, { name: '', grade: '' }])} />
+        <Button ghost title="Weiteres Kind" onPress={() => setKids(ks => [...ks, { name: '', grade: '', birthday: '' }])} />
       </View>
+      {named.length > 0 && !named.every(kidDraftValid) && <Text style={s.muted}>Für jedes Kind bitte Geburtstag, Geschlecht und Klasse angeben. Daraus richte ich Alter, Geburtstag und Geld-Tipps aus. Die Klasse zählt jedes Schuljahr automatisch hoch.</Text>}
       {!!err && <Text style={{ color: C.danger }}>{err}</Text>}
       <Button title={busy ? 'Moment …' : 'Loslegen'} disabled={!valid || busy} onPress={() => {
-        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined })), parents);
+        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined, birthday: parseGermanDate(k.birthday) ?? undefined, gender: k.gender })), parents);
         if (!onCreate) return replace(d);
         setBusy(true); setErr('');
         onCreate(d).catch(e => { setErr(e.message); setBusy(false); });

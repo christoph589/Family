@@ -4,7 +4,7 @@ import * as Print from 'expo-print';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { setSheet, today, topicUnderstanding, uid } from '../data/logic';
+import { currentGrade, setSheet, today, topicUnderstanding, uid } from '../data/logic';
 import { AI_ERROR, generateQuiz, getSample } from '../ai/generate';
 import { Question, Topic } from '../data/types';
 import { sanitizeSvg } from '../ui/Math';
@@ -136,7 +136,7 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
     ctl.current = new AbortController();
     setBusy(true); onMsg('');
     try {
-      const quiz = await generateQuiz(topic, photosOf(topic), child?.name ?? childName, child?.grade, ctl.current.signal);
+      const quiz = await generateQuiz(topic, photosOf(topic), child?.name ?? childName, child ? currentGrade(child) : undefined, ctl.current.signal);
       const id = uid();
       const generic = topic.subject === 'Schule' || /^\d+ Seiten?$/.test(topic.text);
       update(d => setSheet(

@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react';
 import { loadHolidays, STATES } from '../data/holidays';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
+import { parseGermanDate } from '../data/logic';
 import { ALL_COLORS, autoHolidayOn, CHILD_COLORS, manualHolidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
 import { TEMPLATES } from '../data/templates';
+import { ageOf, gradeLabel, schoolYearOf, toGermanDate } from '../data/logic';
+import { Child } from '../data/types';
+import { KidDraft, KidFields } from '../ui/KidFields';
 import { FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
@@ -37,14 +41,12 @@ export function Family() {
               <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>{r.name[0]?.toUpperCase()}</Text>
             </Pressable>
             <TextInput style={[s.input, { flex: 1, minWidth: 0 }]} value={r.name} onChangeText={t => rename(r.id, r.role, t.slice(0, 24))} accessibilityLabel="Name" />
-            {r.role === 'kind' ? (
-              <TextInput style={[s.input, { width: 70 }]} value={data.children.find(c => c.id === r.id)?.grade ?? ''} placeholder="Klasse" accessibilityLabel={`Klasse von ${r.name}`}
-                onChangeText={t => update(d => ({ ...d, children: d.children.map(c => (c.id === r.id ? { ...c, grade: t.slice(0, 6) || undefined } : c)) }))} />
-            ) : <Text style={[s.muted, { flexShrink: 0, width: 70 }]}>Eltern</Text>}
+            <Text style={[s.muted, { flexShrink: 0 }]}>{r.role === 'kind' ? 'Kind' : 'Eltern'}</Text>
             {r.role === 'eltern' && parents.length > 1 && (
               <Pressable onPress={() => setParents(ps => ps.filter(p => p.id !== r.id))}><Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text></Pressable>
             )}
           </View>
+          {r.role === 'kind' && <KidProfileEdit child={data.children.find(c => c.id === r.id)!} />}
           {open === r.id && (
             <View style={[s.row, { gap: 8, paddingLeft: 50 }]}>
               {ALL_COLORS.map(c => (
@@ -151,6 +153,28 @@ export function Holiday() {
         </>
       )}
       <Text style={[s.muted, { fontSize: 13 }]}>In den Ferien pausieren Schulaufgaben. Routinen und Haushalt laufen weiter. Lernaufgaben, die ihr einzeln anlegt (Hausaufgabe, Nur heute), erscheinen trotzdem.</Text>
+    </View>
+  );
+}
+
+function KidProfileEdit({ child }: { child: Child }) {
+  const { update } = useFamily();
+  const [draft, setDraft] = useState<KidDraft>({ birthday: toGermanDate(child.birthday), gender: child.gender, grade: child.grade ?? '' });
+  const save = (patch: Partial<Child>) => update(d => ({ ...d, children: d.children.map(c => (c.id === child.id ? { ...c, ...patch } : c)) }));
+  const age = ageOf(child);
+  const missing = !child.birthday || !child.gender || !child.grade;
+  return (
+    <View style={{ paddingLeft: 50, gap: 4 }}>
+      <KidFields value={draft} name={child.name} onChange={v => {
+        const next = { ...draft, ...v };
+        setDraft(next);
+        if (v.gender) save({ gender: v.gender });
+        if (v.grade !== undefined) save({ grade: v.grade.trim() || undefined, gradeYear: schoolYearOf(today()) });
+        if (v.birthday !== undefined) { const iso = parseGermanDate(v.birthday); if (iso) save({ birthday: iso }); }
+      }} />
+      <Text style={[s.muted, { fontSize: 13, color: missing ? C.warn : C.muted }]}>
+        {missing ? 'Bitte Geburtstag, Geschlecht und Klasse ergänzen.' : `${age} Jahre · ${gradeLabel(child)} · Klasse zählt am 1. August hoch`}
+      </Text>
     </View>
   );
 }

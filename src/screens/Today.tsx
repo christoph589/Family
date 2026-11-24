@@ -1,19 +1,34 @@
 import { Pressable, Text, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn } from '../data/logic';
+import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn, gradeLabel, ageOf, birthdaysOn, giveBirthdayBonus, BIRTHDAY_BONUS } from '../data/logic';
 import { Child, TaskKind } from '../data/types';
 import { C, s } from '../ui/theme';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
 
 export function Today({ childIds, parent }: { childIds: string[]; parent: boolean }) {
-  const { data } = useFamily();
+  const { data, update } = useFamily();
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const people = peopleOf(data);
   const events = eventsOn(data, today(), parent ? null : childIds);
   const holiday = holidayLabel(data, today());
+  const bdays = birthdaysOn(data, today()).filter(b => parent || childIds.includes(b.child.id));
+  const year = Number(today().slice(0, 4));
   return (
     <View style={{ gap: 16 }}>
+      {bdays.map(({ child, age }) => (
+        <View key={child.id} style={[s.card, { backgroundColor: child.color, alignItems: 'center', paddingVertical: 24 }]}>
+          <Text style={{ fontSize: 48 }}>🎂🎉🎈</Text>
+          <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800', textAlign: 'center' }}>Alles Gute zum Geburtstag, {child.name}!</Text>
+          {age !== undefined && <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>Heute wirst du {age}.</Text>}
+          {parent && data.birthdayBonus?.[child.id] !== year && (
+            <Pressable onPress={() => update(d => giveBirthdayBonus(d, child.id))} style={{ backgroundColor: '#fff', borderRadius: 99, paddingHorizontal: 18, paddingVertical: 10 }}>
+              <Text style={{ color: child.color, fontWeight: '800' }}>🎁 Geburtstagsbonus +{BIRTHDAY_BONUS} Punkte</Text>
+            </Pressable>
+          )}
+          {data.birthdayBonus?.[child.id] === year && <Text style={{ color: '#fff', fontWeight: '700' }}>🎁 +{BIRTHDAY_BONUS} Geburtstagspunkte sind da!</Text>}
+        </View>
+      ))}
       {holiday && (
         <View style={[s.card, { backgroundColor: C.warnSoft, flexDirection: 'row', alignItems: 'center' }]}>
           <Text style={{ fontSize: 28 }}>🏖️</Text>
@@ -91,7 +106,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.h2}>{child.name}</Text>
-          {child.grade ? <Text style={s.muted}>{/^\d+$/.test(child.grade) ? `${child.grade}. Klasse` : child.grade}</Text> : null}
+          {gradeLabel(child) ? <Text style={s.muted}>{gradeLabel(child)}{ageOf(child) !== undefined ? ` · ${ageOf(child)} Jahre` : ''}</Text> : null}
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={{ fontSize: 28, fontWeight: '800', color: child.color }}>{pointsOf(data!, child.id)}</Text>

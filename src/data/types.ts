@@ -7,7 +7,25 @@ export type Repeat = 'einmal' | 'taeglich' | 'werktags' | 'vorSchultag';
 export interface SchoolDay { from?: string; to?: string; lessons?: string[] }
 /** Schlüssel 1 bis 5 = Montag bis Freitag */
 export type Timetable = Partial<Record<'1' | '2' | '3' | '4' | '5', SchoolDay>>;
-export interface Child { id: string; name: string; color: string; grade?: string; timetable?: Timetable }
+export type Gender = 'junge' | 'maedchen' | 'divers';
+export interface Child {
+  id: string; name: string; color: string;
+  /** Klasse wie eingegeben, z. B. "4" oder "4b". Steigt jedes Schuljahr automatisch (siehe gradeYear). */
+  grade?: string;
+  /** Startjahr des Schuljahres, in dem grade eingetragen wurde (Schuljahr beginnt am 1. August) */
+  gradeYear?: number;
+  birthday?: string; // YYYY-MM-DD
+  gender?: Gender;
+  timetable?: Timetable;
+}
+
+/** Taschengeld, bewusst getrennt von Punkten. Beträge in Cent. */
+export interface MoneyTx { id: string; date: string; cents: number; note: string; kind: 'taschengeld' | 'geschenk' | 'verdient' | 'ausgabe' | 'korrektur' }
+export interface MoneyAccount {
+  allowance?: { cents: number; every: 'woche' | 'monat'; since: string; lastPaid?: string };
+  goal?: { title: string; cents: number };
+  tx: MoneyTx[];
+}
 /** Elternteil, z. B. Mama oder Papa. Für Kalender und Anzeige, wer gerade am Pad ist. */
 export interface Parent { id: string; name: string; color: string }
 export interface Task {
@@ -71,6 +89,9 @@ export interface FamilyData {
   rewards: Reward[];
   requests?: RewardRequest[];
   ideas?: Idea[];
+  money?: Record<string, MoneyAccount>;
+  /** Jahr, in dem der Geburtstagsbonus vergeben wurde, je Kind */
+  birthdayBonus?: Record<string, number>;
   topics?: Topic[];
   worksheets?: Worksheet[];
   events?: CalEvent[];

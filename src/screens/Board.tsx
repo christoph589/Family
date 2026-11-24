@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { eventsOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today } from '../data/logic';
+import { birthdaysOn, eventsOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today } from '../data/logic';
 import { TIME_ORDER } from '../data/templates';
 const TIME_ICON: Record<string, string> = { morgens: ' 🌅', mittags: ' ☀️', abends: ' 🌙' };
 import { Child, FamilyData } from '../data/types';
@@ -64,6 +64,12 @@ export function Board({ onExit }: { onExit: () => void }) {
         )}
       </View>
 
+      {birthdaysOn(data, date).map(({ child, age }) => (
+        <View key={child.id} style={[s.card, { backgroundColor: child.color, flexDirection: 'row', alignItems: 'center', gap: 16 }]}>
+          <Text style={{ fontSize: 44 }}>🎂🎉</Text>
+          <Text style={{ color: '#fff', fontSize: wide ? 30 : 22, fontWeight: '800', flex: 1 }}>Alles Gute zum Geburtstag, {child.name}!{age !== undefined ? ` Heute ${age} Jahre.` : ''}</Text>
+        </View>
+      ))}
       <View style={{ flexDirection: wide ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
         <View style={[s.card, { width: wide ? 300 : '100%' }]}>
           <Text style={s.label}>Heute</Text>
@@ -96,6 +102,7 @@ export function Board({ onExit }: { onExit: () => void }) {
 
 function DayEvents({ data, date, big }: { data: FamilyData; date: string; big?: boolean }) {
   const people = peopleOf(data);
+  const bd = birthdaysOn(data, date).map(b => ({ id: 'b' + b.child.id, time: undefined as string | undefined, title: `🎂 ${b.child.name} hat Geburtstag${b.age !== undefined ? ` (${b.age})` : ''}`, color: b.child.color, who: b.child.name }));
   const school = data.children.flatMap(k => {
     const sd = schoolOn(data, k.id, date);
     return sd && (sd.from || sd.to) ? [{ id: 's' + k.id, time: sd.from, title: `🏫 Schule${sd.to ? ' bis ' + sd.to : ''}`, color: k.color, who: k.name }] : [];
@@ -104,7 +111,7 @@ function DayEvents({ data, date, big }: { data: FamilyData; date: string; big?: 
     const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
     return { id: e.id, time: e.time, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, who: ps.length ? ps.map(p => p.name).join(', ') : 'Alle' };
   });
-  const all = [...school, ...ev].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99'));
+  const all = [...bd, ...school, ...ev].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99'));
   if (!all.length) return <Text style={[s.muted, { fontSize: big ? 16 : 13 }]}>Keine Termine</Text>;
   return (
     <View style={{ gap: 6 }}>

@@ -9,7 +9,8 @@ import { Family, Holiday } from './src/screens/Family';
 import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { peopleOf } from './src/data/logic';
+import { birthdaysOn, payAllowances, peopleOf, today } from './src/data/logic';
+import { Money } from './src/screens/Money';
 import { Calendar } from './src/screens/Calendar';
 import { Grades } from './src/screens/Grades';
 import { Learn } from './src/screens/Learn';
@@ -20,7 +21,7 @@ import { Today } from './src/screens/Today';
 import { Button } from './src/ui/Button';
 import { C, s } from './src/ui/theme';
 
-type Tab = 'heute' | 'kalender' | 'lernen' | 'punkte' | 'noten' | 'aufgaben';
+type Tab = 'heute' | 'kalender' | 'lernen' | 'punkte' | 'geld' | 'aufgaben';
 type Profile = { kind: 'eltern'; id: string } | { kind: 'kind'; id: string };
 
 const LinkCtx = createContext<{ link: DeviceLink; unlink: () => void } | null>(null);
@@ -64,10 +65,10 @@ function Avatar({ name, color, size = 44 }: { name: string; color: string; size?
   );
 }
 
-const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', noten: '📝', aufgaben: '⚙️' };
+const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', aufgaben: '⚙️' };
 
 function Root() {
-  const { data, loading, replace, saveError } = useFamily();
+  const { data, loading, replace, saveError, update } = useFamily();
   const cloud = useContext(LinkCtx);
   const ownChild = cloud?.link.role === 'kind' ? cloud.link.childId : undefined;
   const [profile, setProfile] = useState<Profile | null>(ownChild ? { kind: 'kind', id: ownChild } : null);
@@ -75,6 +76,8 @@ function Root() {
   const [askPin, setAskPin] = useState<string | null>(null);
   const scroller = useRef<any>(null);
   const [board, setBoardState] = useState(false);
+  // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
+  useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
   useEffect(() => { AsyncStorage.getItem('familienplaner:board').then(v => v === '1' && setBoardState(true), () => {}); }, []);
   const setBoard = (on: boolean) => { setBoardState(on); AsyncStorage.setItem('familienplaner:board', on ? '1' : '0').catch(() => {}); };
   useEffect(() => { scroller.current?.scrollTo({ y: 0, animated: false }); }, [tab]);
@@ -109,6 +112,7 @@ function Root() {
                 onPress={() => { setPinErr(false); setPin(''); if (p.role === 'kind') { setProfile({ kind: 'kind', id: p.id }); setTab('heute'); } else setAskPin(p.id); }}
                 style={({ pressed }) => [s.card, { width: 150, alignItems: 'center', paddingVertical: 22, borderWidth: 3, borderColor: askPin === p.id ? p.color : 'transparent', opacity: pressed ? 0.8 : 1 }]}>
                 <Avatar name={p.name} color={p.color} size={72} />
+                {p.role === 'kind' && birthdaysOn(data, today()).some(b => b.child.id === p.id) && <Text style={{ position: 'absolute', top: 8, right: 12, fontSize: 28 }}>🎂</Text>}
                 <Text style={[s.h2, { textAlign: 'center' }]} numberOfLines={1}>{p.name}</Text>
                 {p.role === 'eltern' && <Text style={[s.muted, { fontSize: 12 }]}>mit PIN</Text>}
               </Pressable>
@@ -148,9 +152,9 @@ function Root() {
   const reqBadge = parent ? (data.requests ?? []).length + (data.ideas ?? []).length : 0;
   const tabs: { value: Tab; label: string; badge?: number }[] = [
     { value: 'heute', label: 'Heute' }, { value: 'kalender', label: 'Kalender' },
-    { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge },
+    { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge }, { value: 'geld', label: 'Geld' },
   ];
-  if (parent) tabs.push({ value: 'noten', label: 'Noten' }, { value: 'aufgaben', label: 'Verwalten' });
+  if (parent) tabs.push({ value: 'aufgaben', label: 'Verwalten' });
   const me = peopleOf(data).find(p => p.id === profile.id) ?? { name: 'Eltern', color: C.accent };
   const dateStr = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -180,7 +184,8 @@ function Root() {
         {tab === 'kalender' && <Timetable childIds={childIds} parent={parent} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} />}
-        {tab === 'noten' && parent && <Grades />}
+        {tab === 'lernen' && parent && <Grades />}
+        {tab === 'geld' && <Money childIds={childIds} parent={parent} />}
         {tab === 'aufgaben' && parent && <Holiday />}
         {tab === 'aufgaben' && parent && <Family />}
         {tab === 'aufgaben' && parent && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
