@@ -4,12 +4,12 @@ import { useFamily } from '../data/FamilyContext';
 import { GCal, GEvent, getMcp, GOOGLE_ERROR, listCalendars, listWeek } from '../data/google';
 import { peopleOf, Person, today, uid } from '../data/logic';
 import { CalEvent } from '../data/types';
-import { Button, Segmented } from '../ui/Button';
+import { Button } from '../ui/Button';
+import { DateField } from '../ui/DateField';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 
 const parse = (d: string) => new Date(d + 'T12:00:00');
-const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 type Item = CalItem;
 
@@ -61,7 +61,7 @@ export function Calendar({ childIds, parent }: { childIds: string[]; parent: boo
     <View style={{ gap: 16 }}>
       <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <Button title="+ Termin" onPress={() => setAdding(true)} /> : undefined} />
 
-      {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); }} />}
+      {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
 
       {sel && (
         <View style={[s.card, { borderLeftWidth: 6, borderLeftColor: sel.it.color }]}>
@@ -139,11 +139,14 @@ export function EventForm({ people, days, onSave, onCancel }: { people: Person[]
         <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={setTitle} placeholder="z. B. Fußballtraining" />
       </View>
       <Text style={s.label}>Tag</Text>
-      <Segmented value={date} onChange={setDate} options={days.map((d, i) => ({ value: d, label: `${WD[i]} ${parse(d).getDate()}.` }))} />
       <View style={s.row}>
-        <TextInput style={[s.input, { width: 90 }]} value={time} onChangeText={setTime} placeholder="16:30" accessibilityLabel="Uhrzeit" />
+        <DateField value={date} onChange={v => v && setDate(v)} label="Datum" />
+        <Text style={s.muted}>{date ? parse(date).toLocaleDateString('de-DE', { weekday: 'long' }) : ''}</Text>
+      </View>
+      <View style={s.row}>
+        <DateField type="time" value={time} onChange={setTime} label="Uhrzeit" />
         <Text style={s.muted}>bis</Text>
-        <TextInput style={[s.input, { width: 90 }]} value={end} onChangeText={setEnd} placeholder="18:00" accessibilityLabel="Ende" />
+        <DateField type="time" value={end} onChange={setEnd} label="Ende" />
         <Text style={s.muted}>leer = ganztägig</Text>
       </View>
       {!timeOk && <Text style={{ color: C.danger }}>Uhrzeit bitte so: 16:30. Das Ende muss nach dem Beginn liegen.</Text>}

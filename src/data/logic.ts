@@ -304,3 +304,23 @@ export function allowanceHint(age?: number): string | null {
   const month: Record<number, string> = { 10: '16,50 bis 19 €', 11: '19 bis 21 €', 12: '21 bis 24 €', 13: '24 bis 28 €', 14: '28 bis 33 €', 15: '33 bis 37 €', 16: '37 bis 46 €', 17: '46 bis 60 €' };
   return month[age] ? `Mit ${age} Jahren: etwa ${month[age]} pro Monat` : 'Ab 18: eigenes Budget absprechen';
 }
+
+/** Kind mit allen zugehörigen Daten entfernen. */
+export function removeChild(d: FamilyData, childId: string): FamilyData {
+  const money = { ...d.money }; delete money[childId];
+  const bonus = { ...d.birthdayBonus }; delete bonus[childId];
+  return {
+    ...d,
+    children: d.children.filter(c => c.id !== childId),
+    tasks: d.tasks.filter(t => t.childId !== childId),
+    completions: d.completions.filter(c => c.childId !== childId),
+    ledger: d.ledger.filter(l => l.childId !== childId),
+    rewards: d.rewards.filter(r => r.childId !== childId),
+    requests: (d.requests ?? []).filter(r => r.childId !== childId),
+    ideas: (d.ideas ?? []).filter(i => i.childId !== childId),
+    topics: (d.topics ?? []).filter(t => t.childId !== childId),
+    worksheets: (d.worksheets ?? []).filter(w => w.childId !== childId),
+    events: (d.events ?? []).filter(e => !(e.who.length && e.who.every(w => w === childId))).map(e => ({ ...e, who: e.who.filter(w => w !== childId) })),
+    money, birthdayBonus: bonus,
+  };
+}

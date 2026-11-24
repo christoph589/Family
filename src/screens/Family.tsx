@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import { loadHolidays, STATES } from '../data/holidays';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { parseGermanDate } from '../data/logic';
 import { ALL_COLORS, autoHolidayOn, CHILD_COLORS, manualHolidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
 import { TEMPLATES } from '../data/templates';
-import { ageOf, gradeLabel, schoolYearOf, toGermanDate } from '../data/logic';
+import { ageOf, gradeLabel, removeChild, schoolYearOf } from '../data/logic';
 import { Child } from '../data/types';
 import { KidDraft, KidFields } from '../ui/KidFields';
 import { FamilyData } from '../data/types';
@@ -16,6 +15,8 @@ import { C, s } from '../ui/theme';
 export function Family() {
   const { data, update } = useFamily();
   const [open, setOpen] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const [delKid, setDelKid] = useState<string | null>(null);
   if (!data) return null;
   const parents = parentsOf(data);
   const setParents = (fn: (p: ReturnType<typeof parentsOf>) => ReturnType<typeof parentsOf>) => update(d => ({ ...d, parents: fn(parentsOf(d)) }));
@@ -38,14 +39,28 @@ export function Family() {
           <View style={[s.row, { flexWrap: 'nowrap' }]}>
             <Pressable accessibilityLabel={`Farbe für ${r.name}`} onPress={() => setOpen(o => (o === r.id ? null : r.id))}
               style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: r.color, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>{r.name[0]?.toUpperCase()}</Text>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>{r.name[0]?.toUpperCase() ?? '?'}</Text>
             </Pressable>
-            <TextInput style={[s.input, { flex: 1, minWidth: 0 }]} value={r.name} onChangeText={t => rename(r.id, r.role, t.slice(0, 24))} accessibilityLabel="Name" />
+            <TextInput style={[s.input, { flex: 1, minWidth: 0 }]} value={r.name} onChangeText={t => rename(r.id, r.role, t.slice(0, 24))} accessibilityLabel="Name"
+              placeholder={r.role === 'kind' ? 'Name des Kindes' : 'z. B. Mama, Papa, Oma'} autoFocus={focusId === r.id} selectTextOnFocus />
             <Text style={[s.muted, { flexShrink: 0 }]}>{r.role === 'kind' ? 'Kind' : 'Eltern'}</Text>
             {r.role === 'eltern' && parents.length > 1 && (
               <Pressable onPress={() => setParents(ps => ps.filter(p => p.id !== r.id))}><Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text></Pressable>
             )}
+            {r.role === 'kind' && data.children.length > 1 && (
+              <Pressable onPress={() => setDelKid(r.id)}><Text style={{ color: C.danger, fontWeight: '700' }}>Löschen</Text></Pressable>
+            )}
           </View>
+          {delKid === r.id && (
+            <View style={{ marginLeft: 50, backgroundColor: '#fde8e6', borderRadius: 12, padding: 12, gap: 8 }}>
+              <Text style={[s.text, { fontWeight: '700' }]}>{r.name || 'Dieses Kind'} wirklich löschen?</Text>
+              <Text style={s.muted}>Dabei verschwinden auch Aufgaben, Punkte, Wünsche, Übungen, Taschengeld-Konto und Stundenplan. Das lässt sich nicht rückgängig machen.</Text>
+              <View style={s.row}>
+                <Button title="Ja, löschen" color={C.danger} onPress={() => { update(d => removeChild(d, r.id)); setDelKid(null); }} />
+                <Button ghost title="Abbrechen" onPress={() => setDelKid(null)} />
+              </View>
+            </View>
+          )}
           {r.role === 'kind' && <KidProfileEdit child={data.children.find(c => c.id === r.id)!} />}
           {open === r.id && (
             <View style={[s.row, { gap: 8, paddingLeft: 50 }]}>
@@ -58,12 +73,11 @@ export function Family() {
         </View>
       ))}
       <View style={s.row}>
-        <Button ghost title="+ Kind" onPress={() => update(d => {
-          const id = uid();
+        <Button ghost title="+ Kind" onPress={() => { const id = uid(); setFocusId(id); update(d => {
           const starter = TEMPLATES.filter(t => ['Zähne putzen', 'Zimmer aufräumen'].includes(t.title)).map(t => ({ ...t, id: uid(), childId: id, active: true }));
-          return { ...d, children: [...d.children, { id, name: 'Neues Kind', color: CHILD_COLORS[d.children.length % CHILD_COLORS.length] }], tasks: [...d.tasks, ...starter] };
-        })} />
-        <Button ghost title="+ Elternteil" onPress={() => setParents(ps => [...ps, { id: uid(), name: 'Neu', color: PARENT_COLORS[ps.length % PARENT_COLORS.length] }])} />
+          return { ...d, children: [...d.children, { id, name: '', color: CHILD_COLORS[d.children.length % CHILD_COLORS.length] }], tasks: [...d.tasks, ...starter] };
+        }); }} />
+        <Button ghost title="+ Elternteil" onPress={() => { const id = uid(); setFocusId(id); setParents(ps => [...ps, { id, name: '', color: PARENT_COLORS[ps.length % PARENT_COLORS.length] }]); }} />
       </View>
       <Text style={[s.muted, { fontSize: 13 }]}>Tipp auf den Kreis ändert die Farbe. Termine und Aufgaben tragen die Farbe der Person.</Text>
     </View>
@@ -159,7 +173,7 @@ export function Holiday() {
 
 function KidProfileEdit({ child }: { child: Child }) {
   const { update } = useFamily();
-  const [draft, setDraft] = useState<KidDraft>({ birthday: toGermanDate(child.birthday), gender: child.gender, grade: child.grade ?? '' });
+  const [draft, setDraft] = useState<KidDraft>({ birthday: child.birthday ?? '', gender: child.gender, grade: child.grade ?? '' });
   const save = (patch: Partial<Child>) => update(d => ({ ...d, children: d.children.map(c => (c.id === child.id ? { ...c, ...patch } : c)) }));
   const age = ageOf(child);
   const missing = !child.birthday || !child.gender || !child.grade;
@@ -170,7 +184,7 @@ function KidProfileEdit({ child }: { child: Child }) {
         setDraft(next);
         if (v.gender) save({ gender: v.gender });
         if (v.grade !== undefined) save({ grade: v.grade.trim() || undefined, gradeYear: schoolYearOf(today()) });
-        if (v.birthday !== undefined) { const iso = parseGermanDate(v.birthday); if (iso) save({ birthday: iso }); }
+        if (v.birthday !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(v.birthday)) save({ birthday: v.birthday });
       }} />
       <Text style={[s.muted, { fontSize: 13, color: missing ? C.warn : C.muted }]}>
         {missing ? 'Bitte Geburtstag, Geschlecht und Klasse ergänzen.' : `${age} Jahre · ${gradeLabel(child)} · Klasse zählt am 1. August hoch`}

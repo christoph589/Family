@@ -121,7 +121,7 @@ export function Board({ onExit }: { onExit: () => void }) {
       <View style={[s.card, { gap: 12 }]}>
         <CalNav mode={mode} anchor={anchor} onMode={m => { setMode(m); setAnchor(date); AsyncStorage.setItem('familienplaner:boardView', m).catch(() => {}); }} onAnchor={setAnchor}
           right={<Button title="+ Termin" onPress={() => { setAdding(true); setSel(null); }} />} />
-        {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); }} />}
+        {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
         {sel && (
           <View style={{ backgroundColor: C.bg, borderRadius: 12, padding: 12, gap: 8, borderLeftWidth: 6, borderLeftColor: sel.it.color }}>
             <Text style={s.h2}>{sel.it.title}</Text>

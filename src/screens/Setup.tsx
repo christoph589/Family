@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
-import { newFamily, parseGermanDate } from '../data/logic';
+import { newFamily } from '../data/logic';
 import { KidDraft, KidFields, kidDraftValid } from '../ui/KidFields';
 import { useFamily } from '../data/FamilyContext';
 import { FamilyData } from '../data/types';
@@ -34,7 +34,7 @@ export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promis
         <Text style={s.label}>Eltern</Text>
         <View style={s.row}>
           {parents.map((p, i) => (
-            <TextInput key={i} style={[s.input, { flex: 1, minWidth: 120 }]} value={p} placeholder="Name" accessibilityLabel={`Elternteil ${i + 1}`}
+            <TextInput key={i} style={[s.input, { flex: 1, minWidth: 120 }]} value={p} placeholder="Name" selectTextOnFocus accessibilityLabel={`Elternteil ${i + 1}`}
               onChangeText={t => setParents(ps => ps.map((x, j) => (j === i ? t : x)))} />
           ))}
         </View>
@@ -53,7 +53,7 @@ export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promis
       {named.length > 0 && !named.every(kidDraftValid) && <Text style={s.muted}>Für jedes Kind bitte Geburtstag, Geschlecht und Klasse angeben. Daraus richte ich Alter, Geburtstag und Geld-Tipps aus. Die Klasse zählt jedes Schuljahr automatisch hoch.</Text>}
       {!!err && <Text style={{ color: C.danger }}>{err}</Text>}
       <Button title={busy ? 'Moment …' : 'Loslegen'} disabled={!valid || busy} onPress={() => {
-        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined, birthday: parseGermanDate(k.birthday) ?? undefined, gender: k.gender })), parents);
+        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined, birthday: k.birthday || undefined, gender: k.gender })), parents);
         if (!onCreate) return replace(d);
         setBusy(true); setErr('');
         onCreate(d).catch(e => { setErr(e.message); setBusy(false); });

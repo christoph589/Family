@@ -1,21 +1,20 @@
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { parseGermanDate } from '../data/logic';
+import { today } from '../data/logic';
+import { DateField } from './DateField';
 import { Gender } from '../data/types';
 import { C, s } from './theme';
 
 export interface KidDraft { birthday: string; gender?: Gender; grade: string }
-export const kidDraftValid = (k: KidDraft) => !!parseGermanDate(k.birthday) && !!k.gender && !!k.grade.trim();
+export const kidDraftValid = (k: KidDraft) => /^\d{4}-\d{2}-\d{2}$/.test(k.birthday) && !!k.gender && !!k.grade.trim();
 const GENDERS: { value: Gender; label: string }[] = [{ value: 'maedchen', label: 'Mädchen' }, { value: 'junge', label: 'Junge' }, { value: 'divers', label: 'Divers' }];
 
-/** Geburtstag (TT.MM.JJJJ), Geschlecht, Klasse */
+/** Geburtstag (Datumsauswahl), Geschlecht, Klasse */
 export function KidFields({ value, onChange, name }: { value: KidDraft; onChange: (k: Partial<KidDraft>) => void; name?: string }) {
-  const bdBad = value.birthday.length >= 8 && !parseGermanDate(value.birthday);
   return (
     <View style={{ gap: 8 }}>
-      <View style={[s.row, { flexWrap: 'nowrap' }]}>
-        <TextInput style={[s.input, { flex: 1, minWidth: 0 }, bdBad && { borderColor: C.danger }]} value={value.birthday} placeholder="Geburtstag TT.MM.JJJJ"
-          accessibilityLabel={`Geburtstag${name ? ' von ' + name : ''}`} keyboardType="numbers-and-punctuation"
-          onChangeText={t => onChange({ birthday: t.replace(/[^\d.]/g, '').slice(0, 10) })} />
+      <View style={s.row}>
+        <Text style={[s.muted, { fontSize: 13 }]}>Geburtstag</Text>
+        <DateField value={value.birthday} onChange={v => onChange({ birthday: v })} label={`Geburtstag${name ? ' von ' + name : ''}`} min="1990-01-01" max={today()} />
         <TextInput style={[s.input, { width: 90 }]} value={value.grade} placeholder="Klasse" accessibilityLabel={`Klasse${name ? ' von ' + name : ''}`}
           onChangeText={t => onChange({ grade: t.slice(0, 6) })} />
       </View>
@@ -30,7 +29,6 @@ export function KidFields({ value, onChange, name }: { value: KidDraft; onChange
           );
         })}
       </View>
-      {bdBad && <Text style={{ color: C.danger, fontSize: 13 }}>Geburtstag bitte so: 14.03.2016</Text>}
     </View>
   );
 }
