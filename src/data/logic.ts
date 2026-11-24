@@ -90,7 +90,12 @@ export function addPoints(data: FamilyData, childId: string, points: number, rea
 
 export const CHILD_COLORS = ['#e2583e', '#4b55c4', '#2b8a4b', '#b26a00', '#a23b8c'];
 export const PARENT_COLORS = ['#c2477a', '#2f7fb5', '#6b5b45', '#5a6b2b'];
-export const ALL_COLORS = [...CHILD_COLORS, ...PARENT_COLORS, '#0f6e73', '#e0a100'];
+export const ALL_COLORS = [...CHILD_COLORS, ...PARENT_COLORS, '#0f6e73', '#e0a100', '#7a4fd1', '#d0457f', '#1d9bb5', '#8a8f2a', '#5b6b78'];
+/** Erste Farbe, die in der Familie noch niemand hat (bei 9+ Personen wichtig). */
+export function freeColor(d: FamilyData, prefer: string[] = ALL_COLORS) {
+  const used = new Set([...parentsOf(d).map(p => p.color), ...d.children.map(c => c.color)]);
+  return prefer.find(c => !used.has(c)) ?? ALL_COLORS.find(c => !used.has(c)) ?? prefer[0];
+}
 
 /** Eltern der Familie. Ältere Daten ohne Eltern bekommen Mama und Papa. */
 export function parentsOf(d: FamilyData): Parent[] {

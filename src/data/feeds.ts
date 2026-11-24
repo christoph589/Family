@@ -50,7 +50,7 @@ export const feedStatus = (url: string) => cache.get(url);
 export const reloadFeed = (url: string) => refresh(url, true);
 
 /** Liefert eine Funktion Datum -> Kalendereinträge aller eingebundenen Kalender. */
-export function useFeedItems(feeds: Feed[] | undefined, people: { id: string; name: string }[]) {
+export function useFeedItems(feeds: Feed[] | undefined, people: { id: string; name: string; color: string; photo?: string }[]) {
   const [, setTick] = useState(0);
   const key = (feeds ?? []).map(f => f.url).join('|');
   useEffect(() => {
@@ -65,7 +65,7 @@ export function useFeedItems(feeds: Feed[] | undefined, people: { id: string; na
     const person = people.find(p => p.id === f.who);
     return (cache.get(f.url)?.events ?? []).filter(e => e.date === date).map(e => ({
       key: 'x' + f.id + e.uid, time: e.time, end: e.end, title: f.icon ? `${f.icon} ${e.title}` : e.title, color: f.color,
-      tag: person ? `${person.name} · ${f.name}` : f.name, badge: person?.name.slice(0, 2) ?? f.icon, who: f.who ? [f.who] : [],
+      tag: person ? `${person.name} · ${f.name}` : f.name, badge: person ? undefined : f.icon, who: f.who ? [f.who] : [], people: person ? [{ id: person.id, name: person.name, color: person.color, photo: person.photo }] : undefined,
     }));
   });
 }

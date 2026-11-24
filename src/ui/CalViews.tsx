@@ -3,10 +3,11 @@ import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { birthdaysOn, eventsOn, isDueOn, peopleOf, schoolOn, today } from '../data/logic';
 import { FamilyData } from '../data/types';
 import { Button, Segmented } from './Button';
+import { Avatar } from './Avatar';
 import { C, s } from './theme';
 
 export type CalMode = 'tag' | '3tage' | 'woche' | 'monat';
-export type CalItem = { key: string; time?: string; end?: string; title: string; color: string; tag?: string; badge?: string; who?: string[] };
+export type CalItem = { key: string; time?: string; end?: string; title: string; color: string; tag?: string; badge?: string; who?: string[]; people?: { id: string; name: string; color: string; photo?: string }[] };
 /** Filter nach Personen: leer = alle. Familientermine (ohne Personen) bleiben immer sichtbar. */
 export const matchesPeople = (it: CalItem, ids: string[]) => !ids.length || !it.who?.length || it.who.some(w => ids.includes(w));
 export const CAL_MODES: { value: CalMode; label: string }[] = [
@@ -54,11 +55,11 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
   const bd: CalItem[] = birthdaysOn(data, date).map(b => ({ key: 'b' + b.child.id, title: `🎂 ${b.child.name}${b.age !== undefined ? ` wird ${b.age}` : ''}`, color: b.child.color, tag: 'Geburtstag', who: [b.child.id] }));
   const school = kids.flatMap(k => {
     const sd = schoolOn(data, k.id, date);
-    return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, end: sd.to, title: '🏫 Schule', color: k.color, tag: k.name, badge: ini(k.name), who: [k.id] }] : [];
+    return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, end: sd.to, title: `🏫 ${k.name}`, color: k.color, tag: 'Schule', who: [k.id], people: [{ id: k.id, name: k.name, color: k.color, photo: k.photo }] }] : [];
   });
   const ev = eventsOn(data, date, childIds).map(e => {
     const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
-    return { key: e.id, time: e.time, end: e.end, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, tag: ps.length ? ps.map(p => p.name).join(', ') : 'Alle', badge: ps.length ? ps.map(p => ini(p.name)).join(' ') : 'Alle', who: e.who };
+    return { key: e.id, time: e.time, end: e.end, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, tag: ps.length ? ps.map(p => p.name).join(', ') : 'Alle', who: e.who, people: ps };
   });
   const tasks = data.tasks
     .filter(t => t.repeat === 'einmal' && t.date === date && isDueOn(t, date, data) && (!childIds || childIds.includes(t.childId)))
@@ -189,6 +190,11 @@ function TimeGrid({ days, itemsFor, flat, onItemPress }: { days: string[]; items
   const t = today();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const GUTTER = 34;
+  // Schulzeiten als schmale Streifen am linken Rand, sobald mehr als ein Tag zu sehen ist.
+  // So bleibt auch bei vielen Kindern Platz für die eigentlichen Termine.
+  const stripes = days.length > 1;
+  let pad = 0;
+  const isSchool = (i: CalItem) => i.key.startsWith('s') && i.tag === 'Schule';
 
   const layout = (items: CalItem[]) => {
     const ev = items.filter(i => i.time).map(i => {
@@ -241,16 +247,39 @@ function TimeGrid({ days, itemsFor, flat, onItemPress }: { days: string[]; items
         {days.map((d, di) => (
           <View key={d} style={{ flex: 1, minWidth: 0, height: hours.length * H, borderLeftWidth: 1, borderLeftColor: C.line, backgroundColor: d === t ? C.accent + '08' : 'transparent' }}>
             {hours.map((h, i) => <View key={h} style={{ position: 'absolute', top: i * H, left: 0, right: 0, borderTopWidth: 1, borderTopColor: C.line }} />)}
-            {layout(all[di]).map(({ it, start, end, lane, lanes }) => {
+            {stripes && (() => {
+              const sch = all[di].filter(i => isSchool(i) && i.time);
+              return sch.map((it, k) => {
+                const st = toMin(it.time)!, en = toMin(it.end) ?? st + 360;
+                return (
+                  <Pressable key={it.key} disabled={!onItemPress} onPress={() => onItemPress?.(it, d)} accessibilityLabel={`Schule ${it.people?.[0]?.name ?? ''} ${it.time} bis ${it.end ?? ''}`}
+                    style={{ position: 'absolute', left: 2 + k * 6, width: 5, top: ((st - minH * 60) / 60) * H, height: ((en - st) / 60) * H, backgroundColor: it.color, borderRadius: 3, opacity: 0.85 }} />
+                );
+              });
+            })()}
+            {(() => { const n = stripes ? all[di].filter(i => isSchool(i) && i.time).length : 0; pad = n ? 4 + n * 6 : 0; return null; })()}
+            {layout(stripes ? all[di].filter(i => !isSchool(i)) : all[di]).map(({ it, start, end, lane, lanes }) => {
               const top = ((start - minH * 60) / 60) * H;
               const height = Math.max(22, ((end - start) / 60) * H - 2);
               return (
                 <Pressable key={it.key} disabled={!onItemPress} onPress={() => onItemPress?.(it, d)} accessibilityLabel={`${it.time}${it.end ? ' bis ' + it.end : ''} ${it.title}`}
-                  style={{ position: 'absolute', top, height, left: `${(lane / lanes) * 100}%`, width: `${100 / lanes}%`, padding: 1 }}>
+                  style={{ position: 'absolute', top, height, left: `calc(${pad}px + (100% - ${pad}px) * ${lane / lanes})` as any, width: `calc((100% - ${pad}px) / ${lanes})` as any, padding: 1 }}>
                   <View style={{ flex: 1, backgroundColor: it.color + '40', borderLeftWidth: 4, borderLeftColor: it.color, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, overflow: 'hidden' }}>
                     <Text numberOfLines={height > 40 ? 2 : 1} style={{ fontSize: 12, fontWeight: '800', color: C.fg }}>{it.title}</Text>
                     {height > 34 && <Text numberOfLines={1} style={{ fontSize: 10, color: C.muted }}>{it.time}{it.end ? ' – ' + it.end : ''}</Text>}
-                    {it.badge && height > 50 && (
+                    {!!it.people?.length && height > 54 && (
+                      <View style={{ position: 'absolute', left: 6, right: 3, bottom: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={{ flexDirection: 'row' }}>
+                          {it.people.slice(0, 4).map((p, i) => (
+                            <View key={p.id} style={{ marginLeft: i ? -6 : 0, borderRadius: 12, borderWidth: 1.5, borderColor: '#fff' }}>
+                              <Avatar name={p.name} color={p.color} photo={p.photo} size={20} />
+                            </View>
+                          ))}
+                        </View>
+                        {it.people.length === 1 && <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 11, fontWeight: '800', color: it.people[0].color }}>{it.people[0].name}</Text>}
+                      </View>
+                    )}
+                    {!it.people?.length && it.badge && height > 50 && (
                       <View style={{ position: 'absolute', right: 3, bottom: 3, backgroundColor: it.color, borderRadius: 4, paddingHorizontal: 4 }}>
                         <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{it.badge}</Text>
                       </View>
