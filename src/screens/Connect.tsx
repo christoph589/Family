@@ -6,6 +6,7 @@ import { FamilyData } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { Setup } from './Setup';
+import { Landing } from './Landing';
 
 type Step = 'start' | 'eltern' | 'neu' | 'kind' | 'kindWahl';
 
@@ -39,18 +40,7 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
   const error = !!err && <Text style={{ color: C.danger }}>{err}</Text>;
   const back = <Button ghost title="Zurück" onPress={() => { setStep('start'); setErr(''); }} />;
 
-  if (step === 'start') return box(<>
-    <Text style={s.h1}>Gerät einrichten</Text>
-    <Text style={s.muted}>Alle Geräte der Familie sehen denselben Stand.</Text>
-    <Pressable style={s.card} onPress={() => setStep('eltern')}>
-      <Text style={s.h2}>Familien-Pad oder Eltern-Handy</Text>
-      <Text style={s.muted}>Mit deiner E-Mail anmelden. Hier legst du die Familie an.</Text>
-    </Pressable>
-    <Pressable style={s.card} onPress={() => setStep('kind')}>
-      <Text style={s.h2}>Gerät eines Kindes</Text>
-      <Text style={s.muted}>Ohne Konto, nur mit dem Familiencode vom Pad.</Text>
-    </Pressable>
-  </>);
+  if (step === 'start') return <Landing onNew={() => { setMode('neu'); setStep('eltern'); }} onLogin={() => { setMode('login'); setStep('eltern'); }} onKid={() => setStep('kind')} />;
 
   if (step === 'eltern') return box(<>
     <Text style={s.h1}>Eltern-Anmeldung</Text>
