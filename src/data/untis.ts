@@ -87,11 +87,13 @@ export function applyUntis(d: FamilyData, childId: string, ls: UntisLesson[], fr
   return next;
 }
 
-let last = 0;
 const lessonCache = new Map<string, UntisLesson[]>();
 export const untisLessons = (childId: string, date: string) => (lessonCache.get(childId) ?? []).filter(l => l.date === date);
+const EVERY = 3 * 3600_000;
+let tried = 0;
 
-/** Läuft im Hintergrund: alle 30 Minuten die nächsten zwei Wochen holen und Ausfälle eintragen. */
+/** Läuft im Hintergrund: zwischen 6 und 20 Uhr alle 3 Stunden die nächsten zwei Wochen holen und Ausfälle eintragen.
+ *  Der Zeitpunkt der letzten Prüfung steht in den Familiendaten, damit nicht jedes Gerät einzeln fragt. */
 export function useUntisSync(data: FamilyData | null, update: (fn: (d: FamilyData) => FamilyData) => void) {
   const links = data?.settings?.untis?.links ?? [];
   const key = links.map(l => l.child + ':' + l.id).join('|');
@@ -101,17 +103,21 @@ export function useUntisSync(data: FamilyData | null, update: (fn: (d: FamilyDat
     if (!cloudEnabled || !links.length) return;
     let alive = true;
     const run = async () => {
-      if (Date.now() - last < 25 * 60_000) return;
-      last = Date.now();
+      const h = new Date().getHours();
+      const lastCheck = Date.parse(ref.current?.settings?.untis?.checkedAt ?? '') || 0;
+      if (h < 6 || h >= 20 || Date.now() - lastCheck < EVERY || Date.now() - tried < 15 * 60_000) return;
+      tried = Date.now();
       const from = today(), to = addDaysIso(from, 13);
       try {
         const weeks = await untisWeeks(links.map(l => l.id), from, to);
         if (!alive) return;
         links.forEach(l => lessonCache.set(l.child, weeks[l.id] ?? []));
-        const all = (d: FamilyData) => links.reduce((acc, l) => applyUntis(acc, l.child, weeks[l.id] ?? [], from, to), d);
-        // Nur speichern, wenn sich wirklich etwas ändert
-        if (ref.current && all(ref.current) !== ref.current) update(all);
-      } catch { last = Date.now() - 20 * 60_000; /* in 5 Minuten nochmal */ }
+        const stamp = new Date().toISOString();
+        update(d => {
+          const next = links.reduce((acc, l) => applyUntis(acc, l.child, weeks[l.id] ?? [], from, to), d);
+          return next.settings?.untis ? { ...next, settings: { ...next.settings, untis: { ...next.settings.untis, checkedAt: stamp } } } : next;
+        });
+      } catch { /* nächster Versuch in 15 Minuten */ }
     };
     run();
     const t = setInterval(run, 5 * 60_000);

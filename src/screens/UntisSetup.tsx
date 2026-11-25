@@ -18,7 +18,7 @@ export function UntisSetup() {
   if (!data) return null;
   const cfg = data.settings?.untis;
   const kids = data.children;
-  const setLinks = (links: NonNullable<typeof cfg>['links'], who?: string) => update(d => ({ ...d, settings: { ...d.settings, untis: { who: who ?? d.settings?.untis?.who, at: today(), links } } }));
+  const setLinks = (links: NonNullable<typeof cfg>['links'], who?: string) => update(d => ({ ...d, settings: { ...d.settings, untis: { who: who ?? d.settings?.untis?.who, at: today(), links, checkedAt: undefined } } }));
   const f = (k: keyof typeof form) => (v: string) => setForm(x => ({ ...x, [k]: v }));
 
   async function connect() {
@@ -57,7 +57,7 @@ export function UntisSetup() {
   return (
     <View style={s.card}>
       <Text style={s.h2}>🏫 WebUntis (Stundenplan und Ausfälle)</Text>
-      <Text style={s.muted}>Holt den Stundenplan und trägt ausfallende Stunden automatisch als „früher aus“ oder „frei“ ein. Eigene Einträge der Familie haben Vorrang.</Text>
+      <Text style={s.muted}>Holt den Stundenplan und trägt zwischen 6 und 20 Uhr alle 3 Stunden ausfallende Stunden automatisch als „früher aus“ oder „frei“ ein. Eigene Einträge der Familie haben Vorrang.</Text>
       {cfg ? (
         <>
           <Text style={s.text}>Verbunden{cfg.who ? ` als ${cfg.who}` : ''}.</Text>
