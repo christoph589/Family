@@ -56,6 +56,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
   const kids = data?.children.filter(c => childIds.includes(c.id)) ?? [];
   const [childId, setChildId] = useState(kids[0]?.id ?? '');
   const [edit, setEdit] = useState<TT | null>(null);
+  const [eb, setEb] = useState<string[]>([]);
   const [w, setW] = useState(0);
   const [reading, setReading] = useState(false);
   const [aiMsg, setAiMsg] = useState('');
@@ -64,13 +65,18 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
   const tt = edit ?? child.timetable ?? {};
   const todayWd = String(new Date().getDay());
   const setDay = (k: string, patch: Partial<SchoolDay>) => setEdit(e => ({ ...(e ?? {}), [k]: { ...(e ?? {})[k as '1'], ...patch } }));
+  // Schulende aus dem Stundenraster: Ende der letzten belegten Stunde
+  const endFor = (lessons: string[]) => { let n = lessons.length - 1; while (n >= 0 && !lessons[n]?.trim()) n--; return n >= 0 && timeOk(eb[n]) && eb[n] ? fixTime(eb[n]) : undefined; };
   const setLesson = (k: string, i: number, v: string) => setEdit(e => {
     const day = (e ?? {})[k as '1'] ?? {};
     const lessons = [...(day.lessons ?? [])];
     while (lessons.length < ROWS) lessons.push('');
     lessons[i] = v;
-    return { ...(e ?? {}), [k]: { ...day, lessons } };
+    const to = endFor(lessons);
+    return { ...(e ?? {}), [k]: { ...day, lessons, ...(to ? { to } : {}) } };
   });
+  const setBell = (i: number, v: string) => setEb(b => { const x = [...b]; while (x.length <= i) x.push(''); x[i] = v; return x; });
+  const startEdit = () => { setEb(child.bells ?? []); setEdit(child.timetable ?? {}); };
   const editRows = Math.max(ROWS, ...DAYS.map(([k]) => tt[k]?.lessons?.length ?? 0));
   async function upload() {
     setAiMsg('');
@@ -79,14 +85,15 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
     if (f.error || !f.src) { setAiMsg(f.error ?? 'Datei konnte nicht gelesen werden.'); return; }
     setReading(true);
     try {
-      const plan = await readTimetable(f.src, child.name, child.grade);
+      const { plan, bells } = await readTimetable(f.src, child.name, child.grade);
       setEdit(plan);
+      if (bells) setEb(bells);
       setAiMsg('✅ Eingelesen. Bitte kurz prüfen, Zeiten ergänzen und dann speichern.');
     } catch (e: any) {
       setAiMsg(AI_ERROR[e?.code] ?? 'Das Einlesen hat nicht geklappt. Bitte nochmal versuchen.');
     } finally { setReading(false); }
   }
-  const valid = DAYS.every(([k]) => timeOk(tt[k]?.from) && timeOk(tt[k]?.to));
+  const valid = DAYS.every(([k]) => timeOk(tt[k]?.from) && timeOk(tt[k]?.to)) && eb.every(b => timeOk(b));
   const save = () => {
     const clean: TT = {};
     DAYS.forEach(([k]) => {
@@ -96,7 +103,8 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
       while (lessons.length && !lessons[lessons.length - 1]) lessons.pop();
       clean[k] = { from: fixTime(d.from), to: fixTime(d.to), lessons: lessons.length ? lessons : undefined };
     });
-    update(d => ({ ...d, children: d.children.map((c: Child) => (c.id === child.id ? { ...c, timetable: clean } : c)) }));
+    const bells = eb.map(b => fixTime(b) ?? ''); while (bells.length && !bells[bells.length - 1]) bells.pop();
+    update(d => ({ ...d, children: d.children.map((c: Child) => (c.id === child.id ? { ...c, timetable: clean, bells: bells.length ? bells : undefined } : c)) }));
     setEdit(null);
   };
   const rows = Math.max(1, ...DAYS.map(([k]) => (tt[k]?.lessons ?? []).filter(Boolean).length ? (tt[k]?.lessons ?? []).length : 0));
@@ -108,7 +116,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
         <View style={[{ margin: -20, marginBottom: 2, padding: 14, paddingHorizontal: 20, gap: 10, borderTopLeftRadius: 24, borderTopRightRadius: 24 }, grad(child.color, child.color + 'c0')]}>
           <View style={[s.row, { justifyContent: 'space-between' }]}>
             <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>📚 Stundenplan</Text>
-            {parent && <Pressable onPress={() => setEdit(child.timetable ?? {})} style={{ backgroundColor: '#ffffff33', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 7 }}><Text style={{ color: '#fff', fontWeight: '800' }}>{empty ? 'Eintragen' : '✏️ Bearbeiten'}</Text></Pressable>}
+            {parent && <Pressable onPress={startEdit} style={{ backgroundColor: '#ffffff33', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 7 }}><Text style={{ color: '#fff', fontWeight: '800' }}>{empty ? 'Eintragen' : '✏️ Bearbeiten'}</Text></Pressable>}
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {kids.map(k => {
@@ -126,7 +134,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
       ) : (
         <>
           <PersonHead name={child.name} color={child.color} photo={child.photo} sub="Stundenplan" />
-          {parent && !edit && <View style={[s.row, { justifyContent: 'flex-end' }]}><Button ghost title={empty ? 'Eintragen' : 'Bearbeiten'} onPress={() => setEdit(child.timetable ?? {})} /></View>}
+          {parent && !edit && <View style={[s.row, { justifyContent: 'flex-end' }]}><Button ghost title={empty ? 'Eintragen' : 'Bearbeiten'} onPress={startEdit} /></View>}
         </>
       )}
       {parent && (edit || empty) && (
@@ -142,15 +150,20 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
         <Text style={s.muted}>{parent ? 'Noch leer. Trag Schulbeginn und Schulende ein, dann zeigt „Heute“ und der Kalender, wann Schule ist. Fächer sind optional.' : 'Noch kein Stundenplan eingetragen.'}</Text>
       ) : (
         <ScrollView horizontal onLayout={e => setW(e.nativeEvent.layout.width)} contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
-          <View style={{ gap: 6, paddingTop: 30, width: 30 }}>
-            <Text style={[s.muted, { height: edit ? 84 : 40, fontSize: 12 }]}>Zeit</Text>
-            {Array.from({ length: edit ? editRows : rows }, (_, i) => <Text key={i} style={[s.muted, { height: edit ? 40 : 30, fontSize: 12 }]}>{i + 1}.</Text>)}
+          <View style={{ gap: 6, paddingTop: 30, width: edit ? 70 : 30 }}>
+            <Text style={[s.muted, { height: edit ? 84 : 40, fontSize: 12 }]}>{edit ? 'Stunde\nendet um' : 'Zeit'}</Text>
+            {Array.from({ length: edit ? editRows : rows }, (_, i) => edit ? (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height: 40 }}>
+                <Text style={[s.muted, { fontSize: 12, width: 16 }]}>{i + 1}.</Text>
+                <TextInput style={[s.input, { width: 52, minWidth: 0, paddingHorizontal: 4, paddingVertical: 0, fontSize: 12, height: 40 }, !timeOk(eb[i]) && { borderColor: C.danger }]} value={eb[i] ?? ''} placeholder="8:40" accessibilityLabel={`Ende ${i + 1}. Stunde`} onChangeText={t => setBell(i, t)} />
+              </View>
+            ) : <Text key={i} style={[s.muted, { height: 30, fontSize: 12 }]}>{i + 1}.</Text>)}
           </View>
           {DAYS.map(([k, label]) => {
             const d = tt[k] ?? {};
             const isToday = k === todayWd;
             return (
-              <View key={k} style={{ width: Math.max(COL, Math.floor((w - 30 - 6 * 5 - 2) / 5)), gap: 6 }}>
+              <View key={k} style={{ width: Math.max(COL, Math.floor((w - (edit ? 70 : 30) - 6 * 5 - 2) / 5)), gap: 6 }}>
                 <Text style={{ fontWeight: '800', textAlign: 'center', color: isToday ? child.color : C.fg, height: 24 }}>{label}</Text>
                 {edit ? (
                   <>
@@ -180,6 +193,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
       {edit && (
         <>
           {!valid && <Text style={{ color: C.danger }}>Zeiten bitte so: 7:55</Text>}
+          <Text style={[s.muted, { fontSize: 13 }]}>Tipp: Links das Ende jeder Stunde eintragen. Dann passt sich das Schulende von selbst an, wenn du ein Fach einträgst oder rausnimmst.</Text>
           <View style={s.row}>
             <Button title="Speichern" disabled={!valid} onPress={save} />
             <Button ghost title="Abbrechen" onPress={() => setEdit(null)} />

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { examScore, finishCheck, selfBonus, EXAM_PREP_POINTS, setSheet, today, uid, understandingOf, UNDERSTANDING_LABEL } from '../data/logic';
 import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
@@ -97,27 +97,58 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
   const setAnswers = (fn: (a: string[]) => string[]) => setAnswersState(a => (drafts[sheet.id] = fn(a)));
   const done = sheet.questions.filter((q, i) => isAnswered(q, answers[i] ?? '')).length;
   const complete = done === sheet.questions.length;
+  // Am Handy eine Aufgabe pro Bildschirm, am Tablet alle untereinander
+  const { width } = useWindowDimensions();
+  const step = width < 700;
+  const [cur, setCur] = useState(0);
+  const n = sheet.questions.length;
+  const scroller = useRef<any>(null);
+  const go = (i: number) => { setCur(Math.max(0, Math.min(n - 1, i))); scroller.current?.scrollTo({ y: 0, animated: false }); };
+  const card = (q: Question, i: number) => (
+    <View key={i} style={[s.card, { gap: 8 }, step && { padding: 16 }]}>
+      <Text style={s.label}>{sheet.exam ? `Aufgabe ${i + 1} · ${sheet.exam.points[i] ?? 1} ${(sheet.exam.points[i] ?? 1) === 1 ? 'Punkt' : 'Punkte'}` : `Frage ${i + 1}`}</Text>
+      <QuestionInput q={q} value={answers[i] ?? ''} onChange={t => setAnswers(a => a.map((x, j) => (j === i ? t : x)))} />
+    </View>
+  );
+  const submit = <Button title="Abgeben" disabled={!complete} onPress={() => {
+    update(d => setSheet(d, { ...sheet, answers: answers.map(a => a.trim()), status: 'abgegeben' }));
+    delete drafts[sheet.id]; onDone();
+  }} />;
   return (
     <View style={{ flex: 1 }}>
       <View style={[s.row, { flexWrap: 'nowrap', padding: 16, gap: 12, backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.line }]}>
-        <Button ghost title="‹ Zurück" onPress={onDone} style={{ paddingVertical: 8, paddingHorizontal: 12 }} />
-        <View style={{ flex: 1 }}>
+        <Button ghost title={step ? "✕" : "‹ Zurück"} accessibilityLabel="Später weitermachen" onPress={onDone} style={{ paddingVertical: 8, paddingHorizontal: 12 }} />
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[s.text, { fontWeight: '800' }]} numberOfLines={1}>{sheet.title}</Text>
-          <Text style={[s.muted, { fontSize: 13 }]}>{done} von {sheet.questions.length} beantwortet{sheet.exam ? ` · ⏱ ${clock(sheet)} von ${sheet.exam.minutes} Min` : ''}</Text>
+          <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={1}>{done}/{n} beantwortet{sheet.exam ? ` · ⏱ ${clock(sheet)}/${sheet.exam.minutes} Min` : ''}</Text>
         </View>
       </View>
-      <ScrollView contentContainerStyle={[s.pad, { maxWidth: 700 }]} keyboardShouldPersistTaps="handled">
-        {sheet.questions.map((q, i) => (
-          <View key={i} style={[s.card, { gap: 8 }]}>
-            <Text style={s.label}>{sheet.exam ? `Aufgabe ${i + 1} · ${sheet.exam.points[i] ?? 1} ${(sheet.exam.points[i] ?? 1) === 1 ? 'Punkt' : 'Punkte'}` : `Frage ${i + 1}`}</Text>
-            <QuestionInput q={q} value={answers[i] ?? ''} onChange={t => setAnswers(a => a.map((x, j) => (j === i ? t : x)))} />
+      {step && n > 1 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.line }}>
+          {sheet.questions.map((q, i) => {
+            const ok = isAnswered(q, answers[i] ?? ''), on = i === cur;
+            return (
+              <Pressable key={i} onPress={() => go(i)} accessibilityLabel={`Aufgabe ${i + 1}${ok ? ', beantwortet' : ''}`}
+                style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: on ? C.accent : ok ? C.ok : C.line, backgroundColor: ok ? (on ? C.accent : C.okSoft) : on ? C.accentSoft : C.surface }}>
+                <Text style={{ fontWeight: '800', fontSize: 13, color: on && ok ? '#fff' : ok ? C.ok : on ? C.accent : C.muted }}>{i + 1}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+      <ScrollView ref={scroller} contentContainerStyle={[s.pad, { maxWidth: 700 }, step && { padding: 12, gap: 12 }]} keyboardShouldPersistTaps="handled">
+        {step ? (<>
+          {card(sheet.questions[cur], cur)}
+          <View style={[s.row, { flexWrap: 'nowrap' }]}>
+            <Button ghost title="‹ Zurück" disabled={cur === 0} onPress={() => go(cur - 1)} style={{ flex: 1 }} />
+            {cur < n - 1 ? <Button title="Weiter ›" onPress={() => go(cur + 1)} style={{ flex: 1 }} /> : <View style={{ flex: 1 }}>{submit}</View>}
           </View>
-        ))}
-        <Button title="Abgeben" disabled={!complete} onPress={() => {
-          update(d => setSheet(d, { ...sheet, answers: answers.map(a => a.trim()), status: 'abgegeben' }));
-          delete drafts[sheet.id]; onDone();
-        }} />
-        {!complete && <Text style={[s.muted, { textAlign: 'center' }]}>Beantworte alle Fragen, dann kannst du abgeben. Du kannst auch zurück und später weitermachen.</Text>}
+          {cur === n - 1 && !complete && <Text style={[s.muted, { textAlign: 'center' }]}>Noch {n - done} offen. Tippe oben auf die Nummern ohne Haken.</Text>}
+        </>) : (<>
+          {sheet.questions.map(card)}
+          {submit}
+          {!complete && <Text style={[s.muted, { textAlign: 'center' }]}>Beantworte alle Fragen, dann kannst du abgeben. Du kannst auch zurück und später weitermachen.</Text>}
+        </>)}
       </ScrollView>
     </View>
   );

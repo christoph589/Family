@@ -18,6 +18,8 @@ export interface Child {
   birthday?: string; // YYYY-MM-DD
   gender?: Gender;
   timetable?: Timetable;
+  /** Stundenraster: Ende jeder Stunde (HH:MM), Index 0 = 1. Stunde. Damit passt sich das Schulende an. */
+  bells?: string[];
   /** Abweichung vom Stundenplan an einem Tag (YYYY-MM-DD): früher aus oder ganz frei */
   schoolChange?: Record<string, { to?: string; off?: boolean; by?: string }>;
   /** Notfall-Karte: nur das Nötigste, sieht jeder Erwachsene der Familie */

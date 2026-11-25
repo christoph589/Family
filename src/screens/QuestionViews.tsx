@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { Question } from '../data/types';
 import { Figure, MathText } from '../ui/Math';
 import { C, s } from '../ui/theme';
@@ -41,10 +41,10 @@ export function QuestionInput({ q, value, onChange }: { q: Question; value: stri
       <Figure svg={q.figure} />
       {q.paper && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 14 }}>✏️ Zeichne das auf Papier mit Geodreieck und Zirkel. Hier trägst du nur dein Messergebnis ein.</Text>}
       {q.type === 'choice' && q.options?.length ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 8, flexDirection: 'row', flexWrap: 'wrap' }}>
           {q.options.map((o, i) => (
             <Pressable key={i} accessibilityRole="radio" accessibilityState={{ checked: value === o }} onPress={() => onChange(o)}
-              style={{ padding: 12, borderRadius: 10, borderWidth: 2, borderColor: value === o ? C.accent : C.line, backgroundColor: value === o ? C.surface2 : C.surface }}>
+              style={{ flexBasis: q.options!.every(x => x.length <= 12) ? '47%' : '100%', flexGrow: 1, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: value === o ? C.accent : C.line, backgroundColor: value === o ? C.accentSoft : C.surface }}>
               <MathText text={o} style={{ ...s.text, fontWeight: '600' }} />
             </Pressable>
           ))}
@@ -56,7 +56,9 @@ export function QuestionInput({ q, value, onChange }: { q: Question; value: stri
         </>
       ) : (
         <>
-          <TextInput style={s.input} value={value} onChangeText={onChange} placeholder="Deine Antwort" autoCapitalize="none" />
+          {/erkl|begründ|beschreib|warum|wie bist du|satz/i.test(q.q)
+            ? <TextInput style={[s.input, { minHeight: 90, textAlignVertical: 'top' }]} multiline value={value} onChangeText={onChange} placeholder="Deine Antwort" autoCapitalize="sentences" />
+            : <TextInput style={s.input} value={value} onChangeText={onChange} placeholder="Deine Antwort" autoCapitalize="none" />}
           {/\//.test(q.solution) && <Text style={[s.muted, { fontSize: 12 }]}>Brüche so schreiben: 3/4</Text>}
         </>
       )}
@@ -73,7 +75,11 @@ export function splitAnswer(q: Question, value: string) {
 /** Tabelle: "?" ist ein Eingabefeld. Mit solution/values wird sie zur Abgleich-Ansicht. */
 export function TableGrid({ q, values, onCell, solution }: { q: Question; values: string[]; onCell?: (k: number, v: string) => void; solution?: string[] }) {
   let k = -1;
-  const cell = { width: 84, padding: 6, borderWidth: 1, borderColor: C.line, justifyContent: 'center' as const };
+  // Spalten passen sich der Breite an, damit am Handy nichts abgeschnitten wird
+  const { width } = useWindowDimensions();
+  const cols = Math.max(1, q.table!.header.length || q.table!.rows[0]?.length || 1);
+  const cw = Math.max(56, Math.min(84, Math.floor((Math.min(width, 700) - 72) / cols)));
+  const cell = { width: cw, padding: 6, borderWidth: 1, borderColor: C.line, justifyContent: 'center' as const };
   return (
     <ScrollView horizontal>
       <View>
@@ -104,7 +110,7 @@ export function TableGrid({ q, values, onCell, solution }: { q: Question; values
               if (onCell) return (
                 <View key={ci} style={[cell, { padding: 2 }]}>
                   <TextInput value={values[idx]} onChangeText={v => onCell(idx, v)} placeholder="?" autoCapitalize="none"
-                    style={{ width: 76, paddingVertical: 6, paddingHorizontal: 6, fontSize: 15, color: C.fg, backgroundColor: C.bg, borderRadius: 6, textAlign: 'center' }} />
+                    style={{ width: cw - 8, paddingVertical: 6, paddingHorizontal: 6, fontSize: 15, color: C.fg, backgroundColor: C.bg, borderRadius: 6, textAlign: 'center' }} />
                 </View>
               );
               const ok = solution ? norm(values[idx] ?? '') === norm(solution[idx] ?? '') : true;

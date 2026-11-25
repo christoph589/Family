@@ -352,7 +352,7 @@ Antworte nur mit JSON: {"summary":"...","events":[{"title":"...","date":"YYYY-MM
 }
 
 /** Stundenplan aus Foto oder PDF lesen. Ergebnis landet im Bearbeiten-Modus, die Eltern prüfen vor dem Speichern. */
-export async function readTimetable(file: string, childName: string, grade?: string): Promise<import('../data/types').Timetable> {
+export async function readTimetable(file: string, childName: string, grade?: string): Promise<{ plan: import('../data/types').Timetable; bells?: string[] }> {
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const blob = dataUrlToBlob(file);
@@ -366,12 +366,13 @@ Regeln:
 - Stehen in einer Zelle mehrere Fächer (Gruppen, A/B-Woche), schreib sie mit "/" zusammen, z. B. "Reli/Ethik".
 - from = Beginn der ersten Stunde, to = Ende der letzten Stunde an diesem Tag, im Format HH:MM. Wenn keine Uhrzeiten zu sehen sind, lass from und to weg.
 - Tage ohne Unterricht weglassen. Nichts erfinden, was nicht im Plan steht.
+- "bells": Wenn der Plan Uhrzeiten je Stunde zeigt, das ENDE jeder Stunde der Reihe nach (1. Stunde zuerst), z. B. ["08:40","09:25"]. Sonst weglassen.
 - Ist es erkennbar kein Stundenplan, antworte {"error":"kein_stundenplan"}.
 
 Antwortformat:
-{"days":{"1":{"from":"07:55","to":"13:10","lessons":["Mathe","Mathe","Deutsch","","Sport"]},"2":{...}}}
+{"days":{"1":{"from":"07:55","to":"13:10","lessons":["Mathe","Mathe","Deutsch","","Sport"]},"2":{...}},"bells":["08:40","09:25"]}
 Schlüssel: 1 = Montag bis 5 = Freitag.`;
-  const res = await sample.json<{ days?: Record<string, { from?: string; to?: string; lessons?: string[] }>; error?: string }>(prompt, { images: [blob], cache: false });
+  const res = await sample.json<{ days?: Record<string, { from?: string; to?: string; lessons?: string[] }>; bells?: string[]; error?: string }>(prompt, { images: [blob], cache: false });
   if (res?.error || !res?.days) throw { code: 'no_timetable' };
   const time = (t?: string) => (t && /^\d{1,2}:\d{2}$/.test(t.trim()) ? t.trim().padStart(5, '0') : undefined);
   const out: import('../data/types').Timetable = {};
@@ -384,5 +385,6 @@ Schlüssel: 1 = Montag bis 5 = Freitag.`;
     out[k] = { from: time(d.from), to: time(d.to), lessons: lessons.length ? lessons : undefined };
   }
   if (!Object.keys(out).length) throw { code: 'no_timetable' };
-  return out;
+  const bells = (Array.isArray(res.bells) ? res.bells : []).map(b => time(String(b ?? ''))).slice(0, 12);
+  return { plan: out, bells: bells.length && bells.every(Boolean) ? (bells as string[]) : undefined };
 }
