@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { DeleteButton } from '../ui/DeleteButton';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
@@ -189,7 +190,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
         {ai && !open && !waiting && !busy && <Button title={sheets.length ? 'Neue Probe-Arbeit' : 'Probe-Arbeit erstellen'} disabled={!prep.photos.length && prep.title.length < 10} onPress={make} />}
         {busy && <Button ghost title="Abbrechen" onPress={() => ctl.current?.abort()} />}
         {prep.photos.length < MAX && !busy && <Button ghost title="+ Fotos" onPress={addPhotos} />}
-        {!busy && (ask ? <Button title="Ja, löschen" color={C.danger} onPress={remove} /> : <Button ghost title="Löschen" onPress={() => setAsk(true)} />)}
+        {!busy && <DeleteButton parent={parent} onDelete={remove} />}
       </View>
       {paperSheet && !busy && (
         <View style={{ gap: 8, backgroundColor: C.bg, borderRadius: 14, padding: 10 }}>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { DeleteButton } from '../ui/DeleteButton';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { today, uid } from '../data/logic';
@@ -14,7 +15,7 @@ const BATCH = 6;
 const norm = (v: string) => v.trim().toLowerCase();
 
 /** Ganze Vokabelverzeichnisse: zu Schuljahresbeginn in Etappen importieren, dann Bereich (von Unit bis Unit) zum Lernen wählen. */
-export function VocabBooks({ childId, meId, onStarted }: { childId: string; meId?: string; onStarted: (deckId: string) => void }) {
+export function VocabBooks({ childId, meId, parent = false, onStarted }: { childId: string; meId?: string; parent?: boolean; onStarted: (deckId: string) => void }) {
   const { data } = useFamily();
   const [adding, setAdding] = useState(false);
   const books = (data?.vocabBooks ?? []).filter(b => b.childId === childId);
@@ -26,7 +27,7 @@ export function VocabBooks({ childId, meId, onStarted }: { childId: string; meId
       </View>
       {!books.length && !adding && <Text style={s.muted}>Zum Schuljahresbeginn einmal das ganze Vokabelverzeichnis hinten im Buch fotografieren. Danach wählst du jede Woche, von welcher bis zu welcher Unit gelernt wird.</Text>}
       {adding && <NewBook childId={childId} meId={meId} onDone={() => setAdding(false)} />}
-      {books.map(b => <BookCard key={b.id} book={b} onStarted={onStarted} />)}
+      {books.map(b => <BookCard key={b.id} book={b} parent={parent} onStarted={onStarted} />)}
     </View>
   );
 }
@@ -56,14 +57,13 @@ function NewBook({ childId, meId, onDone }: { childId: string; meId?: string; on
   );
 }
 
-function BookCard({ book, onStarted }: { book: VocabBook; onStarted: (deckId: string) => void }) {
+function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolean; onStarted: (deckId: string) => void }) {
   const { data, update } = useFamily();
   const [ai, setAi] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [from, setFrom] = useState<number | null>(null);
   const [to, setTo] = useState<number | null>(null);
-  const [del, setDel] = useState(false);
   const ctl = useRef<AbortController | null>(null);
   useEffect(() => { let on = true; getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, []);
   const count = (u: string) => book.entries.filter(e => e.unit === u).length;
@@ -136,9 +136,7 @@ function BookCard({ book, onStarted }: { book: VocabBook; onStarted: (deckId: st
       <View style={s.row}>
         {ai && !busy && <Button ghost title={book.entries.length ? `+ Weitere Seiten (bis ${BATCH})` : `Seiten fotografieren (bis ${BATCH})`} onPress={importPages} />}
         {busy && <Button ghost title="Abbrechen" onPress={() => ctl.current?.abort()} />}
-        {!busy && (del
-          ? <Button color={C.danger} title="Buch wirklich löschen" onPress={() => update(d => ({ ...d, vocabBooks: (d.vocabBooks ?? []).filter(b => b.id !== book.id) }))} />
-          : <Button ghost title="Löschen" onPress={() => setDel(true)} />)}
+        {!busy && <DeleteButton parent={parent} confirm="Buch wirklich löschen" onDelete={() => update(d => ({ ...d, vocabBooks: (d.vocabBooks ?? []).filter(b => b.id !== book.id) }))} />}
       </View>
       {!ai && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>Das Einlesen macht die KI. Dafür muss das Gerät mit dem Familienserver verbunden sein.</Text>}
     </View>

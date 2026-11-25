@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DeleteButton } from '../ui/DeleteButton';
 import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { potBalance, potShares, birthdaysOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today } from '../data/logic';
@@ -174,9 +175,7 @@ export function Board({ onExit }: { onExit: () => void }) {
             {sel.it.drive ? <Text style={[s.text, { fontWeight: '700' }]}>{sel.it.drive}</Text> : null}
             {sel.it.note ? <Text style={s.text}>📝 {sel.it.note}</Text> : null}
             <View style={s.row}>
-              {(data.events ?? []).some(e => e.id === sel.it.key) && (confirmDel
-                ? <><Text style={s.text}>Wirklich löschen?</Text><Button title="Ja, löschen" color={C.danger} onPress={() => { update(d => ({ ...d, events: (d.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); setConfirmDel(false); }} /></>
-                : <Button ghost title="Termin löschen" onPress={() => setConfirmDel(true)} />)}
+              {(data.events ?? []).some(e => e.id === sel.it.key) && <DeleteButton parent={false} title="Termin löschen" onDelete={() => { update(d => ({ ...d, events: (d.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
               <Button ghost title="Schließen" onPress={() => { setSel(null); setConfirmDel(false); }} />
             </View>
           </View>

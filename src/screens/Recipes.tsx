@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DeleteButton } from '../ui/DeleteButton';
 import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
@@ -210,7 +211,7 @@ function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: bo
       {dup && <Text style={[s.muted, { fontSize: 13 }]}>Das gibt es schon in der Sammlung. Speichern zählt es als dein Lieblingsessen.</Text>}
       <View style={s.row}>
         <Button title={recipe ? 'Speichern' : parent ? 'Hinzufügen' : 'Vorschlagen'} disabled={!title.trim()} onPress={save} />
-        {recipe && (parent || recipe.by === meId) && <Button ghost title="Löschen" onPress={() => { update(d => ({ ...d, recipes: (d.recipes ?? []).filter(x => x.id !== recipe.id) })); onDone(); }} />}
+        {recipe && <DeleteButton parent={parent} onDelete={() => { update(d => ({ ...d, recipes: (d.recipes ?? []).filter(x => x.id !== recipe.id) })); onDone(); }} />}
         <Button ghost title="Abbrechen" onPress={onDone} />
       </View>
     </View>

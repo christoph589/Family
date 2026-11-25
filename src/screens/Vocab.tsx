@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { DeleteButton } from '../ui/DeleteButton';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
@@ -82,9 +83,9 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
         {parent && <Text style={{ color: '#fff', opacity: 0.85, fontSize: 13 }}>Wenn du übst, gibt es keine Punkte. Punkte bekommt {kid.name} nur selbst.</Text>}
       </View>
 
-      <VocabBooks childId={kid.id} meId={meId} onStarted={id => setPlaying(id)} />
+      <VocabBooks childId={kid.id} meId={meId} parent={parent} onStarted={id => setPlaying(id)} />
 
-      {editing && <DeckEditor deck={editing === 'new' ? undefined : editing} childId={kid.id} meId={meId} onDone={() => setEditing(null)} />}
+      {editing && <DeckEditor deck={editing === 'new' ? undefined : editing} childId={kid.id} meId={meId} parent={parent} onDone={() => setEditing(null)} />}
 
       <View style={s.card}>
         <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
@@ -106,9 +107,7 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
               <View style={s.row}>
                 <Button title={n ? 'Üben' : 'Freie Runde'} style={{ paddingVertical: 7, paddingHorizontal: 14 }} onPress={() => setPlaying(d.id)} />
                 <Button ghost title="Bearbeiten" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => setEditing(d)} />
-                {confirmDel === d.id
-                  ? <Button color={C.danger} title="Wirklich löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => { update(x => ({ ...x, vocab: (x.vocab ?? []).filter(v => v.id !== d.id) })); setConfirmDel(null); }} />
-                  : <Button ghost title="Löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => setConfirmDel(d.id)} />}
+                <DeleteButton parent={parent} style={{ paddingVertical: 7, paddingHorizontal: 12 }} onDelete={() => update(x => ({ ...x, vocab: (x.vocab ?? []).filter(v => v.id !== d.id) }))} />
               </View>
             </View>
           );
@@ -132,7 +131,7 @@ function BoxBar({ deck }: { deck: VocabDeck }) {
   );
 }
 
-function DeckEditor({ deck, childId, meId, onDone }: { deck?: VocabDeck; childId: string; meId?: string; onDone: () => void }) {
+function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: VocabDeck; childId: string; meId?: string; parent: boolean; onDone: () => void }) {
   const { update } = useFamily();
   const [title, setTitle] = useState(deck?.title ?? '');
   const [lang, setLang] = useState(deck?.lang ?? 'Englisch');
@@ -233,9 +232,9 @@ function DeckEditor({ deck, childId, meId, onDone }: { deck?: VocabDeck; childId
               <View key={c.id} style={[s.row, { flexWrap: 'nowrap', alignItems: 'center', backgroundColor: C.bg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }]}>
                 <Text style={[s.text, { flex: 1 }]} numberOfLines={1}><Text style={{ fontWeight: '700' }}>{c.front}</Text>  {c.back}</Text>
                 <Text style={[s.muted, { fontSize: 11 }]}>{c.box >= MASTERED ? '✓ sitzt' : `Fach ${c.box}`}</Text>
-                <Pressable accessibilityLabel={`${c.front} entfernen`} onPress={() => setCards(cs => cs.filter(x => x.id !== c.id))} style={{ padding: 6 }}>
+                {parent && <Pressable accessibilityLabel={`${c.front} entfernen`} onPress={() => setCards(cs => cs.filter(x => x.id !== c.id))} style={{ padding: 6 }}>
                   <Text style={{ color: C.muted, fontWeight: '800' }}>✕</Text>
-                </Pressable>
+                </Pressable>}
               </View>
             ))}
           </ScrollView>
