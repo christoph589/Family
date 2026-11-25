@@ -29,6 +29,7 @@ import { Points } from './src/screens/Points';
 import { Setup } from './src/screens/Setup';
 import { Today } from './src/screens/Today';
 import { Button } from './src/ui/Button';
+import { LogoMark } from './src/ui/Logo';
 import { C, grad, installWebStyles, s, SHADOW } from './src/ui/theme';
 
 installWebStyles();
@@ -108,6 +109,7 @@ function Root() {
   const scroller = useRef<any>(null);
   const [board, setBoardState] = useState(wantsWall());
   const [section, setSection] = useState<Section>('familie');
+  const [askOut, setAskOut] = useState(false);
   const { width: winW } = useWindowDimensions();
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
   useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
@@ -220,6 +222,7 @@ function Root() {
     <SafeAreaView style={s.screen}>
       <View style={[{ backgroundColor: C.bg + 'e6', zIndex: 5 }, Platform.OS === 'web' ? ({ backdropFilter: 'blur(14px)', position: 'sticky', top: 0 } as any) : null]}>
         <View style={[s.row, { flexWrap: 'nowrap', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10, maxWidth: 1100, width: '100%', alignSelf: 'center' }]}>
+          <LogoMark size={wide ? 44 : 38} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[s.muted, { fontSize: 13, fontWeight: '700' }]} numberOfLines={1}>{dateStr} · {data.family.name}</Text>
             <Text style={[s.h1, { fontSize: wide ? 28 : 24 }]} numberOfLines={1}>{tab === 'aufgaben' ? 'Einstellungen' : wide ? `${greet}, ${me.name}` : `Hallo ${me.name} 👋`}</Text>
@@ -268,6 +271,19 @@ function Root() {
         {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <UntisSetup />}
         {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
         {tab === 'aufgaben' && admin && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
+        {tab === 'aufgaben' && admin && cloud && (
+          <View style={{ marginTop: 18, alignItems: 'center', gap: 8 }}>
+            {!askOut ? <Pressable accessibilityRole="button" onPress={() => setAskOut(true)} style={{ paddingVertical: 10, paddingHorizontal: 18 }}>
+              <Text style={{ color: C.danger, fontWeight: '700' }}>Abmelden</Text>
+            </Pressable> : <>
+              <Text style={s.muted}>Dieses Gerät abmelden? Eure Daten bleiben gespeichert.</Text>
+              <View style={[s.row, { gap: 10 }]}>
+                <Button ghost title="Abbrechen" onPress={() => setAskOut(false)} />
+                <Button title="Ja, abmelden" color={C.danger} onPress={cloud.unlink} />
+              </View>
+            </>}
+          </View>
+        )}
       </ScrollView>
       <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 14, alignItems: 'center', paddingHorizontal: 12 }}>
         <View style={[{ flexDirection: 'row', maxWidth: 640, width: '100%', padding: 6, borderRadius: 28, backgroundColor: '#ffffffeb', ...SHADOW.lg, borderWidth: 1, borderColor: '#ffffff' }, Platform.OS === 'web' ? ({ backdropFilter: 'blur(18px)' } as any) : null]}>

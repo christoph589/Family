@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { OpFamily, opDelete, opEnter, opFamilies, opRename } from '../data/cloud';
+import { OpFamily, signOut, opDelete, opEnter, opFamilies, opRename } from '../data/cloud';
 import { Popup } from '../ui/Popup';
 import { BRAND } from '../brand';
 import { Button } from '../ui/Button';
@@ -73,10 +73,15 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
         <View style={{ maxWidth: 1200, width: '100%', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
           <View style={[s.row, { gap: 10 }]}>
             <LogoMark size={34} />
-            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 20 }}>{BRAND.name}</Text>
+            {width >= 420 && <Text style={{ color: '#fff', fontWeight: '800', fontSize: 20 }}>{BRAND.name}</Text>}
             <View style={{ backgroundColor: '#5b4cf0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 1.2 }}>OPERATOR</Text></View>
           </View>
-          <Pressable onPress={onClose}><Text style={{ color: '#ffffffb0', fontWeight: '700' }}>Zur eigenen Familie</Text></Pressable>
+          <View style={[s.row, { gap: 16 }]}>
+            <Pressable onPress={onClose}><Text style={{ color: '#ffffffb0', fontWeight: '700' }}>{width < 520 ? 'Familie' : 'Zur eigenen Familie'}</Text></Pressable>
+            <Pressable accessibilityLabel="Abmelden" onPress={() => { signOut().finally(() => { if (typeof window !== 'undefined') window.location.replace(window.location.pathname); }); }}>
+              <Text style={{ color: '#ffffffb0', fontWeight: '700' }}>Abmelden</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
       <ScrollView contentContainerStyle={[s.pad, { maxWidth: 1200 }]}>
