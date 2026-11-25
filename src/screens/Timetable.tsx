@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { PersonHead } from '../ui/Avatar';
+import { Avatar, PersonHead } from '../ui/Avatar';
 import { Child, SchoolDay, Timetable as TT } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
-import { C, s } from '../ui/theme';
+import { C, grad, s } from '../ui/theme';
 
 const DAYS = [['1', 'Mo'], ['2', 'Di'], ['3', 'Mi'], ['4', 'Do'], ['5', 'Fr']] as const;
 const ROWS = 8;
@@ -48,11 +48,31 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
 
   return (
     <View style={s.card}>
-      <PersonHead name={child.name} color={child.color} photo={child.photo} sub="Stundenplan" />
-      <View style={[s.row, { justifyContent: 'flex-end' }]}>
-        {parent && !edit && <Button ghost title={empty ? 'Eintragen' : 'Bearbeiten'} onPress={() => setEdit(child.timetable ?? {})} />}
-      </View>
-      {kids.length > 1 && !edit && <Segmented value={child.id} onChange={setChildId} options={kids.map(k => ({ value: k.id, label: k.name }))} />}
+      {kids.length > 1 && !edit ? (
+        <View style={[{ margin: -20, marginBottom: 2, padding: 14, paddingHorizontal: 20, gap: 10, borderTopLeftRadius: 24, borderTopRightRadius: 24 }, grad(child.color, child.color + 'c0')]}>
+          <View style={[s.row, { justifyContent: 'space-between' }]}>
+            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>📚 Stundenplan</Text>
+            {parent && <Pressable onPress={() => setEdit(child.timetable ?? {})} style={{ backgroundColor: '#ffffff33', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 7 }}><Text style={{ color: '#fff', fontWeight: '800' }}>{empty ? 'Eintragen' : '✏️ Bearbeiten'}</Text></Pressable>}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {kids.map(k => {
+              const on = k.id === child.id;
+              return (
+                <Pressable key={k.id} onPress={() => setChildId(k.id)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={`Stundenplan ${k.name}`}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4, paddingRight: 14, paddingVertical: 4, borderRadius: 99, backgroundColor: on ? '#fff' : '#ffffff2e' }}>
+                  <Avatar name={k.name} color={k.color} photo={k.photo} size={34} />
+                  <Text style={{ fontWeight: '800', fontSize: 15, color: on ? k.color : '#fff' }}>{k.name}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : (
+        <>
+          <PersonHead name={child.name} color={child.color} photo={child.photo} sub="Stundenplan" />
+          {parent && !edit && <View style={[s.row, { justifyContent: 'flex-end' }]}><Button ghost title={empty ? 'Eintragen' : 'Bearbeiten'} onPress={() => setEdit(child.timetable ?? {})} /></View>}
+        </>
+      )}
       {empty && !edit ? (
         <Text style={s.muted}>{parent ? 'Noch leer. Trag Schulbeginn und Schulende ein, dann zeigt „Heute“ und der Kalender, wann Schule ist. Fächer sind optional.' : 'Noch kein Stundenplan eingetragen.'}</Text>
       ) : (

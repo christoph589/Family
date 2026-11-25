@@ -81,6 +81,10 @@ export function Board({ onExit }: { onExit: () => void }) {
             style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 3, borderColor: filter.length ? 'transparent' : C.accent, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 22 }}>👨‍👩‍👧‍👦</Text>
           </Pressable>
+          <Pressable onPress={() => setKids(!kids)} accessibilityRole="switch" accessibilityState={{ checked: kids }} accessibilityLabel="Aufgaben und Punkte der Kinder anzeigen"
+            style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 3, borderColor: kids ? '#f5b301' : 'transparent', backgroundColor: kids ? '#fff6d6' : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 22, opacity: kids ? 1 : 0.35 }}>⭐</Text>
+          </Pressable>
           {people.map(p => {
             const on = filter.includes(p.id);
             return (
@@ -111,8 +115,8 @@ export function Board({ onExit }: { onExit: () => void }) {
           <Text style={{ color: '#fff', fontSize: wide ? 30 : 22, fontWeight: '800', flex: 1 }}>Alles Gute zum Geburtstag, {child.name}!{age !== undefined ? ` Heute ${age} Jahre.` : ''}</Text>
         </View>
       ))}
-      {kids && <View style={{ flexDirection: wide ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
-        <View style={[s.card, { width: wide ? 300 : '100%' }]}>
+      <View style={{ flexDirection: wide ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
+        <View style={[s.card, { width: wide && kids ? 300 : '100%' }]}>
           <Text style={s.label}>Heute</Text>
           <DayEvents data={data} date={date} big filter={filter} />
           {mealsOn(data, date).length > 0 && (
@@ -123,10 +127,10 @@ export function Board({ onExit }: { onExit: () => void }) {
           )}
           {(data.shopping ?? []).some(i => !i.done) && <Text style={s.muted}>🛒 {(data.shopping ?? []).filter(i => !i.done).length} Sachen auf der Einkaufsliste</Text>}
         </View>
-        <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 16, width: wide ? undefined : '100%' }}>
+        {kids && <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 16, width: wide ? undefined : '100%' }}>
           {data.children.filter(c => !filter.length || filter.includes(c.id)).map(c => <KidColumn key={c.id} data={data} child={c} date={date} />)}
-        </View>
-      </View>}
+        </View>}
+      </View>
 
       {kids && (data.pots ?? []).filter(p => !p.doneAt).map(p => {
         const bal = potBalance(data, p.id);
@@ -153,13 +157,6 @@ export function Board({ onExit }: { onExit: () => void }) {
             {x.value === 'einkauf' && open > 0 && <View style={{ backgroundColor: C.accent2, borderRadius: 10, minWidth: 20, paddingHorizontal: 5, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{open}</Text></View>}
           </Pressable>
         ))}
-        <Pressable onPress={() => setKids(!kids)} accessibilityRole="switch" accessibilityState={{ checked: kids }} accessibilityLabel="Aufgaben und Punkte der Kinder anzeigen"
-          style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 18, backgroundColor: C.surface, marginLeft: 'auto' as any }, SHADOW.sm]}>
-          <View style={{ width: 36, height: 22, borderRadius: 11, backgroundColor: kids ? C.ok : C.line, padding: 2, alignItems: kids ? 'flex-end' : 'flex-start' }}>
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff' }} />
-          </View>
-          <Text style={{ fontSize: 15, fontWeight: '700', color: C.fg }}>⭐ Kinder & Punkte</Text>
-        </Pressable>
       </View>
       {pane === 'stundenplan' && <WallTimetable data={data} kids={data.children.filter(c => !filter.length || filter.includes(c.id))} date={date} />}
       {pane === 'essen' && <MealPlan who="Wandansicht" />}
