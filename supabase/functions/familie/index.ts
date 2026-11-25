@@ -394,7 +394,9 @@ async function icloudEvents(cal: string, from: string, to: string) {
     const href = tag(x, 'href'), data = tag(x, 'calendar-data');
     if (!href || !data) continue;
     const ics = unxml(data);
-    const recurring = /\nRRULE:/i.test(ics) || /\nRECURRENCE-ID/i.test(ics);
+    // Nur im VEVENT suchen: Die Zeitzone (VTIMEZONE) enthält immer eine RRULE für die Sommerzeit
+    const vevents = (ics.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) ?? []).join('\n');
+    const recurring = /(^|\n)(RRULE|RDATE|RECURRENCE-ID)[;:]/i.test(vevents);
     let notes = '';
     try { notes = String(new ICAL.Event(new ICAL.Component(ICAL.parse(ics)).getFirstSubcomponent('vevent')).description ?? ''); } catch { /* egal */ }
     for (const e of parseIcs(ics, from, to)) {
