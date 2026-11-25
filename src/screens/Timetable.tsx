@@ -18,6 +18,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
   const kids = data?.children.filter(c => childIds.includes(c.id)) ?? [];
   const [childId, setChildId] = useState(kids[0]?.id ?? '');
   const [edit, setEdit] = useState<TT | null>(null);
+  const [w, setW] = useState(0);
   if (!data || !kids.length) return null;
   const child = kids.find(k => k.id === childId) ?? kids[0];
   const tt = edit ?? child.timetable ?? {};
@@ -76,8 +77,8 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
       {empty && !edit ? (
         <Text style={s.muted}>{parent ? 'Noch leer. Trag Schulbeginn und Schulende ein, dann zeigt „Heute“ und der Kalender, wann Schule ist. Fächer sind optional.' : 'Noch kein Stundenplan eingetragen.'}</Text>
       ) : (
-        <ScrollView horizontal contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
-          <View style={{ gap: 6, paddingTop: 30 }}>
+        <ScrollView horizontal onLayout={e => setW(e.nativeEvent.layout.width)} contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
+          <View style={{ gap: 6, paddingTop: 30, width: 30 }}>
             <Text style={[s.muted, { height: edit ? 84 : 40, fontSize: 12 }]}>Zeit</Text>
             {Array.from({ length: edit ? ROWS : rows }, (_, i) => <Text key={i} style={[s.muted, { height: edit ? 40 : 30, fontSize: 12 }]}>{i + 1}.</Text>)}
           </View>
@@ -85,7 +86,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
             const d = tt[k] ?? {};
             const isToday = k === todayWd;
             return (
-              <View key={k} style={{ width: COL, gap: 6 }}>
+              <View key={k} style={{ width: Math.max(COL, Math.floor((w - 30 - 6 * 5 - 2) / 5)), gap: 6 }}>
                 <Text style={{ fontWeight: '800', textAlign: 'center', color: isToday ? child.color : C.fg, height: 24 }}>{label}</Text>
                 {edit ? (
                   <>

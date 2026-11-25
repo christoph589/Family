@@ -4,7 +4,9 @@ import { addDaysIso, setSchoolChange, today } from './logic';
 import { FamilyData, Timetable } from './types';
 
 /** WebUntis über die Server-Funktion. Zugang = App-Schlüssel aus „Freigaben › Zugriff über Untis Mobile“. */
-export interface UntisLesson { date: string; from: string; to: string; subject: string; long: string; cancelled: boolean; changed: boolean; info: string }
+export interface UntisLesson { date: string; from: string; to: string; subject: string; long: string; cancelled: boolean; changed: boolean; info: string; event?: boolean }
+/** Kein Fach, sondern Veranstaltung (z. B. „Beleuchtungsaktion“, Ausflug) */
+const isEvent = (l: UntisLesson) => l.event ?? (!l.long && l.subject.length > 6);
 
 const ERR: Record<string, string> = {
   untis_bad_input: 'Bitte Adresse (…webuntis.com), Schule, Benutzer und Schlüssel genau so eintragen, wie WebUntis sie anzeigt.',
@@ -54,8 +56,10 @@ export function timetableFrom(ls: UntisLesson[]): Timetable {
   for (const k of ['1', '2', '3', '4', '5'] as const) {
     const dates = [...new Set(ls.filter(l => String(wd(l.date)) === k).map(l => l.date))].sort();
     if (!dates.length) continue;
-    // Tag mit den meisten Stunden nehmen (Feiertage und Ausfalltage überspringen)
-    const best = dates.map(d => ls.filter(l => l.date === d)).sort((a, b) => b.length - a.length)[0];
+    // Normalen Tag nehmen: ohne Veranstaltungen, mit den meisten Fächern (Feiertage und Ausfalltage überspringen)
+    const days = dates.map(d => ls.filter(l => l.date === d));
+    const best = days.sort((a, b) => (+a.some(isEvent) - +b.some(isEvent)) || b.filter(l => !isEvent(l)).length - a.filter(l => !isEvent(l)).length)[0].filter(l => !isEvent(l));
+    if (!best.length) continue;
     const byTime = new Map<string, UntisLesson>();
     best.sort((a, b) => a.from.localeCompare(b.from)).forEach(l => { if (!byTime.has(l.from)) byTime.set(l.from, l); });
     const day = [...byTime.values()];

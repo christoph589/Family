@@ -590,7 +590,7 @@ async function untisWeek(c: UntisCred, id: number, from: string, to: string) {
     const sm = subj ? subjects.get(Number(subj.id)) : null;
     return {
       date: String(p.startDateTime ?? '').slice(0, 10), from: hmOf(String(p.startDateTime ?? '')), to: hmOf(String(p.endDateTime ?? '')),
-      subject: String(sm?.name ?? p.text?.lesson ?? ''), long: String(sm?.longName ?? ''),
+      subject: String(sm?.name ?? p.text?.lesson ?? ''), long: String(sm?.longName ?? ''), event: !sm,
       cancelled: flags.some(f => /cancel/i.test(f)), changed: flags.some(f => /irregular|substit|additional|shift/i.test(f)),
       info: [p.text?.substitution, p.text?.info].filter(Boolean).join(' · ').slice(0, 200),
     };
