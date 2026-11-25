@@ -18,6 +18,8 @@ export interface Child {
   birthday?: string; // YYYY-MM-DD
   gender?: Gender;
   timetable?: Timetable;
+  /** Abweichung vom Stundenplan an einem Tag (YYYY-MM-DD): früher aus oder ganz frei */
+  schoolChange?: Record<string, { to?: string; off?: boolean; by?: string }>;
   /** Notfall-Karte: nur das Nötigste, sieht jeder Erwachsene der Familie */
   emergency?: Emergency;
   /** Begleiter-Tier, das mit Punkten wächst */

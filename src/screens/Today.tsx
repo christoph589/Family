@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
+import { Button } from '../ui/Button';
 import { useFamily } from '../data/FamilyContext';
-import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn, gradeLabel, ageOf, birthdaysOn, giveBirthdayBonus, BIRTHDAY_BONUS } from '../data/logic';
+import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn, schoolOff, setSchoolChange, gradeLabel, ageOf, birthdaysOn, giveBirthdayBonus, BIRTHDAY_BONUS } from '../data/logic';
 import { Child, TaskKind } from '../data/types';
 import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar } from '../ui/Avatar';
@@ -79,6 +80,7 @@ export function Today({ childIds, parent }: { childIds: string[]; parent: boolea
 function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
   const { data, update } = useFamily();
   const [sos, setSos] = useState(false);
+  const [chg, setChg] = useState(false);
   const date = today();
   const items = tasksFor(data!, child.id, date);
   const done = items.filter(i => i.completion?.status === 'bestaetigt').length;
@@ -142,8 +144,18 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
         <View style={{ gap: 6 }}>
           <View style={[s.row, { justifyContent: 'space-between' }]}>
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{items.length ? (done === items.length ? 'Alles geschafft! 🎉' : `${done} von ${items.length} erledigt`) : 'Heute frei'}</Text>
-            {(() => { const sd = schoolOn(data!, child.id, date); return sd ? <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>🏫 {sd.from ?? '?'}–{sd.to ?? '?'}</Text> : null; })()}
+            {(() => {
+              const sd = schoolOn(data!, child.id, date) as (ReturnType<typeof schoolOn> & { changed?: boolean }) | null, off = schoolOff(data!, child.id, date);
+              if (!sd && !off) return null;
+              return (
+                <Pressable onPress={() => setChg(x => !x)} accessibilityRole="button" accessibilityLabel="Schulzeit heute ändern"
+                  style={{ backgroundColor: sd?.changed || off ? '#fff' : '#ffffff33', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ color: sd?.changed || off ? child.color : '#fff', fontWeight: '800', fontSize: 13 }}>{off ? '🏫 Heute frei ✎' : `🏫 ${sd!.from ?? '?'}–${sd!.to ?? '?'}${sd!.changed ? ' (früher aus)' : ''} ✎`}</Text>
+                </Pressable>
+              );
+            })()}
           </View>
+          {chg && <SchoolChange child={child} date={date} by={parent ? 'eltern' : child.id} onDone={() => setChg(false)} />}
           <View style={{ height: 8, backgroundColor: '#ffffff40', borderRadius: 99, overflow: 'hidden' }}>
             <View style={{ height: '100%', width: `${pct}%`, backgroundColor: '#fff', borderRadius: 99 }} />
           </View>
@@ -186,6 +198,29 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
       {group('pflicht', 'Haushalt')}
       {items.length === 0 && <Text style={[s.muted, { textAlign: 'center', paddingVertical: 8 }]}>Heute steht nichts an. 🌤️</Text>}
       </View>
+    </View>
+  );
+}
+
+/** Heute anders als im Stundenplan: früher aus oder ganz frei. Kinder dürfen das selbst eintragen. */
+function SchoolChange({ child, date, by, onDone }: { child: Child; date: string; by: string; onDone: () => void }) {
+  const { data, update } = useFamily();
+  const cur = child.schoolChange?.[date];
+  const [to, setTo] = useState(cur?.to ?? '');
+  const ok = /^([01]?\d|2[0-3])[:.]?[0-5]\d$/.test(to.trim());
+  const fix = (v: string) => { const m = v.trim().replace('.', ':'); return m.includes(':') ? m.padStart(5, '0') : `${m.slice(0, -2).padStart(2, '0')}:${m.slice(-2)}`; };
+  const set = (ch: { to?: string; off?: boolean } | null) => { update(d => setSchoolChange(d, child.id, date, ch ? { ...ch, by } : null)); onDone(); };
+  if (!data) return null;
+  return (
+    <View style={{ backgroundColor: '#ffffff', borderRadius: 14, padding: 12, gap: 8 }}>
+      <Text style={{ fontWeight: '800', color: C.fg }}>Schule heute anders?</Text>
+      <View style={[s.row, { gap: 8 }]}>
+        <TextInput style={[s.input, { width: 96, paddingVertical: 8, textAlign: 'center' }]} value={to} onChangeText={setTo} placeholder="11:30" keyboardType="numbers-and-punctuation" accessibilityLabel="Schule aus um" />
+        <Button title="Früher aus" disabled={!ok} onPress={() => set({ to: fix(to) })} style={{ paddingVertical: 8, minHeight: 40 }} />
+        <Button ghost title="Ganz frei" onPress={() => set({ off: true })} style={{ paddingVertical: 8, minHeight: 40 }} />
+        {cur && <Button ghost title="Wie im Plan" onPress={() => set(null)} style={{ paddingVertical: 8, minHeight: 40 }} />}
+      </View>
+      <Text style={[s.muted, { fontSize: 12 }]}>Gilt nur für heute. Kalender und Wandansicht zeigen es gleich.</Text>
     </View>
   );
 }

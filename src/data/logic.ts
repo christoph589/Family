@@ -261,10 +261,26 @@ export function eventsOn(d: FamilyData, date: string, childIds: string[] | null,
 /** Schulzeit eines Kindes an dem Tag, falls Schultag und eingetragen. */
 export function schoolOn(d: FamilyData, childId: string, date: string) {
   if (!schoolDay(d, date)) return null;
-  const day = d.children.find(c => c.id === childId)?.timetable?.[String(weekday(date)) as '1'];
+  const child = d.children.find(c => c.id === childId);
+  const day = child?.timetable?.[String(weekday(date)) as '1'];
   if (!day || (!day.from && !day.to && !day.lessons?.some(Boolean))) return null;
-  return day;
+  const ch = child?.schoolChange?.[date];
+  if (ch?.off) return null;
+  return ch?.to ? { ...day, to: ch.to, changed: true } : day;
 }
+
+/** Abweichung für einen Tag setzen (null = wie im Stundenplan). Alte Einträge fliegen nach einer Woche raus. */
+export function setSchoolChange(d: FamilyData, childId: string, date: string, ch: { to?: string; off?: boolean; by?: string } | null): FamilyData {
+  const cut = addDaysIso(today(), -7);
+  return { ...d, children: d.children.map(c => {
+    if (c.id !== childId) return c;
+    const next = Object.fromEntries(Object.entries(c.schoolChange ?? {}).filter(([k]) => k >= cut && k !== date));
+    if (ch) next[date] = ch;
+    return { ...c, schoolChange: next };
+  }) };
+}
+/** Fällt die Schule an dem Tag laut Abweichung ganz aus? */
+export const schoolOff = (d: FamilyData, childId: string, date: string) => !!d.children.find(c => c.id === childId)?.schoolChange?.[date]?.off;
 
 /** Text fürs Ferien-Banner, z. B. "Weihnachtsferien bis Fr., 9. Januar" */
 export function holidayLabel(d: FamilyData, date: string): string | null {
