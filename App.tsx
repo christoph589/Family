@@ -13,6 +13,7 @@ import { Devices } from './src/screens/Devices';
 import { Family, Holiday, ParentPin } from './src/screens/Family';
 import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
+import { Kiosk, wantsWall } from './src/ui/Kiosk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { birthdaysOn, isAdmin, parentsOf, payAllowances, peopleOf, today } from './src/data/logic';
 import { MoneyTab } from './src/screens/Gifts';
@@ -81,7 +82,7 @@ function Root() {
   const [tab, setTab] = useState<Tab>('heute');
   const [askPin, setAskPin] = useState<string | null>(null);
   const scroller = useRef<any>(null);
-  const [board, setBoardState] = useState(false);
+  const [board, setBoardState] = useState(wantsWall());
   const [section, setSection] = useState<Section>('familie');
   const { width: winW } = useWindowDimensions();
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
@@ -101,7 +102,7 @@ function Root() {
     </View>
   ) : <Setup />}</SafeAreaView>;
 
-  if (board) return <SafeAreaView style={s.screen}><Board onExit={() => { setBoard(false); setProfile(null); }} /></SafeAreaView>;
+  if (board) return <SafeAreaView style={s.screen}><Kiosk><Board onExit={() => { setBoard(false); setProfile(null); if (wantsWall() && typeof history !== 'undefined') history.replaceState(null, '', location.pathname); }} /></Kiosk></SafeAreaView>;
 
   const people = peopleOf(data).filter(p => p.role === 'eltern' || !ownChild || p.id === ownChild);
   const parent = profile?.kind === 'eltern';
