@@ -23,12 +23,24 @@
         height: 100%;
         flex: 1;
       }
+      /* iPhone als Home-Screen-App: Höhe an den echten Bildschirm koppeln, nicht an 100 % (das bleibt nach der Tastatur manchmal zu klein) */
+      @supports (height: 100dvh) { html, body { height: 100dvh; } }
+      #root { position: fixed; top: 0; left: 0; right: 0; bottom: 0; height: auto; }
     </style>
     <link rel="manifest" href="/Family/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/Family/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Famelio" />
     <meta name="theme-color" content="#5b4cf0" />
+    <script>
+      // iOS: Nach dem Schließen der Tastatur bleibt die Seite in der Home-Screen-App sonst verschoben oder zu kurz.
+      (function () {
+        var fix = function () { setTimeout(function () { window.scrollTo(0, 0); }, 50); };
+        document.addEventListener('focusout', fix);
+        window.addEventListener('orientationchange', fix);
+        window.addEventListener('pageshow', fix);
+      })();
+    </script>
   </head>
 
   <body>
