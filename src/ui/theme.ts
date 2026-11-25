@@ -24,7 +24,7 @@ export const s = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '800', color: C.muted, textTransform: 'uppercase', letterSpacing: 1.2 },
   muted: { color: C.muted, fontSize: 14, lineHeight: 20 },
   text: { color: C.fg, fontSize: 16, lineHeight: 22 },
-  input: { borderWidth: 1.5, borderColor: 'transparent', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: C.fg, backgroundColor: C.surface2 },
+  input: { minWidth: 0, borderWidth: 1.5, borderColor: 'transparent', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: C.fg, backgroundColor: C.surface2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   btn: { backgroundColor: C.accent, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
   btnText: { color: '#fff', fontWeight: '800', fontSize: 16, letterSpacing: -0.1 },
