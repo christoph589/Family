@@ -25,20 +25,31 @@ const plusDays = (date: string, n: number) => { const x = new Date(date + 'T12:0
 export const isSchoolTask = (t: Task) => !!t.school || t.kind === 'hausaufgabe';
 
 /** Ferien an diesem Tag? Ferienmodus an und (kein Enddatum oder Tag liegt davor). */
-export function holidayOn(d: FamilyData | undefined, date: string) {
-  return manualHolidayOn(d, date) || !!autoHolidayOn(d, date);
+export function holidayOn(d: FamilyData | undefined, date: string, childId?: string) {
+  return manualHolidayOn(d, date) || !!autoHolidayOn(d, date, childId);
 }
 export function manualHolidayOn(d: FamilyData | undefined, date: string) {
   const h = d?.settings?.holiday;
   return !!h?.on && (!h.until || date <= h.until);
 }
 /** Ferien oder Feiertag laut Bundesland an diesem Tag (oder null). */
-export function autoHolidayOn(d: FamilyData | undefined, date: string) {
+export function autoHolidayOn(d: FamilyData | undefined, date: string, childId?: string) {
   const a = d?.settings?.autoHoliday;
   if (!a?.on) return null;
-  return a.ranges.find(r => r.from <= date && date <= r.to) ?? null;
+  return holidayRanges(d, childId).find(r => r.from <= date && date <= r.to) ?? null;
 }
-const schoolDay = (d: FamilyData | undefined, date: string) => { const wd = weekday(date); return wd >= 1 && wd <= 5 && !holidayOn(d, date); };
+/** Bundesland eines Kindes: eigenes, sonst das der Familie. */
+export const stateOf = (d: FamilyData | undefined, childId?: string) => (childId && d?.children.find(c => c.id === childId)?.state) || d?.settings?.autoHoliday?.state || d?.settings?.region;
+/** Ferien und Feiertage für ein Kind (eigenes Bundesland) oder die Familie. */
+export function holidayRanges(d: FamilyData | undefined, childId?: string) {
+  const a = d?.settings?.autoHoliday;
+  if (!a) return [];
+  const st = childId ? d?.children.find(c => c.id === childId)?.state : undefined;
+  return st && st !== a.state ? a.extra?.[st]?.ranges ?? a.ranges : a.ranges;
+}
+/** Bundesländer, die zusätzlich zum Familien-Bundesland gebraucht werden. */
+export const extraStates = (d: FamilyData) => [...new Set(d.children.map(c => c.state).filter((x): x is string => !!x && x !== d.settings?.autoHoliday?.state))];
+const schoolDay = (d: FamilyData | undefined, date: string, childId?: string) => { const wd = weekday(date); return wd >= 1 && wd <= 5 && !holidayOn(d, date, childId); };
 
 /**
  * Steht die Aufgabe an dem Tag an?
@@ -49,8 +60,8 @@ const schoolDay = (d: FamilyData | undefined, date: string) => { const wd = week
 export function isDueOn(t: Task, date: string, d?: FamilyData): boolean {
   if (!t.active) return false;
   if (t.repeat === 'einmal') return t.date === date;
-  if (t.repeat === 'vorSchultag') return schoolDay(d, plusDays(date, 1));
-  if (isSchoolTask(t)) return schoolDay(d, date);
+  if (t.repeat === 'vorSchultag') return schoolDay(d, plusDays(date, 1), t.childId);
+  if (isSchoolTask(t)) return schoolDay(d, date, t.childId);
   if (t.repeat === 'taeglich') return true;
   const wd = weekday(date);
   return wd >= 1 && wd <= 5;
@@ -272,7 +283,7 @@ export function eventsOn(d: FamilyData, date: string, childIds: string[] | null,
 
 /** Schulzeit eines Kindes an dem Tag, falls Schultag und eingetragen. */
 export function schoolOn(d: FamilyData, childId: string, date: string) {
-  if (!schoolDay(d, date)) return null;
+  if (!schoolDay(d, date, childId)) return null;
   const child = d.children.find(c => c.id === childId);
   const day = child?.timetable?.[String(weekday(date)) as '1'];
   if (!day || (!day.from && !day.to && !day.lessons?.some(Boolean))) return null;
@@ -295,12 +306,18 @@ export function setSchoolChange(d: FamilyData, childId: string, date: string, ch
 export const schoolOff = (d: FamilyData, childId: string, date: string) => !!d.children.find(c => c.id === childId)?.schoolChange?.[date]?.off;
 
 /** Text fürs Ferien-Banner, z. B. "Weihnachtsferien bis Fr., 9. Januar" */
-export function holidayLabel(d: FamilyData, date: string): string | null {
+export function holidayLabel(d: FamilyData, date: string, childId?: string): string | null {
   const fmt = (x: string) => new Date(x + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
-  const a = autoHolidayOn(d, date);
-  if (a) return a.kind === 'feiertag' ? `Feiertag: ${a.name}` : `${a.name} bis ${fmt(a.to)}`;
   if (manualHolidayOn(d, date)) { const u = d.settings?.holiday?.until; return `Ferien${u ? ' bis ' + fmt(u) : ''}`; }
-  return null;
+  const lab = (a: { kind: string; name: string; to: string }) => (a.kind === 'feiertag' ? `Feiertag: ${a.name}` : `${a.name} bis ${fmt(a.to)}`);
+  const a = autoHolidayOn(d, date, childId);
+  if (childId || !extraStates(d).length) return a ? lab(a) : null;
+  // Familienansicht mit Kindern in anderen Bundesländern: pro Kind, wenn es abweicht
+  const own = d.children.filter(c => c.state && c.state !== d.settings?.autoHoliday?.state);
+  const rest = d.children.filter(c => !own.includes(c));
+  const parts = [a && rest.length ? (own.length ? `${rest.map(c => c.name).join(', ')}: ` : '') + lab(a) : null,
+    ...own.map(c => { const x = autoHolidayOn(d, date, c.id); return x ? `${c.name}: ${lab(x)}` : null; })].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
 }
 
 export function proposeIdea(d: FamilyData, childId: string, title: string): FamilyData {

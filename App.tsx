@@ -19,7 +19,8 @@ import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import { Kiosk, wantsWall } from './src/ui/Kiosk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { birthdaysOn, isAdmin, parentsOf, payAllowances, peopleOf, today } from './src/data/logic';
+import { birthdaysOn, extraStates, isAdmin, parentsOf, payAllowances, peopleOf, today } from './src/data/logic';
+import { loadHolidays } from './src/data/holidays';
 import { MoneyTab } from './src/screens/Gifts';
 import { Food } from './src/screens/Food';
 import { Calendar } from './src/screens/Calendar';
@@ -114,6 +115,12 @@ function Root() {
   const { width: winW } = useWindowDimensions();
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
   useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
+  // Ferien für Kinder mit eigenem Bundesland nachladen
+  const needStates = data ? extraStates(data).filter(st => { const x = data.settings?.autoHoliday?.extra?.[st]; const soon = new Date(); soon.setDate(soon.getDate() + 200); return data.settings?.autoHoliday?.on && (!x || x.validTo < today(soon)); }).join(',') : '';
+  useEffect(() => {
+    if (!needStates) return;
+    needStates.split(',').forEach(st => loadHolidays(st).then(r => update(d => d.settings?.autoHoliday ? ({ ...d, settings: { ...d.settings, autoHoliday: { ...d.settings.autoHoliday, extra: { ...(d.settings.autoHoliday.extra ?? {}), [st]: r } } } }) : d), () => {}));
+  }, [needStates]);
   useEffect(() => { AsyncStorage.getItem('familienplaner:board').then(v => v === '1' && setBoardState(true), () => {}); }, []);
   const setBoard = (on: boolean) => { setBoardState(on); AsyncStorage.setItem('familienplaner:board', on ? '1' : '0').catch(() => {}); };
   useEffect(() => { scroller.current?.scrollTo({ y: 0, animated: false }); }, [tab]);

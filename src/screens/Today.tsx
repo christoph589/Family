@@ -19,7 +19,7 @@ export function Today({ childIds, parent, meId }: { childIds: string[]; parent: 
   const kids = data.children.filter(c => childIds.includes(c.id));
   const people = peopleOf(data);
   const events = eventsOn(data, today(), parent ? null : childIds, true, meId);
-  const holiday = holidayLabel(data, today());
+  const holiday = holidayLabel(data, today(), kids.length === 1 ? kids[0].id : undefined);
   const bdays = birthdaysOn(data, today()).filter(b => parent || childIds.includes(b.child.id));
   const year = Number(today().slice(0, 4));
   return (

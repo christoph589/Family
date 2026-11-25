@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Pressable, Text, useWindowDimensions, View } from 'react-native';
-import { birthdaysOn, eventsOn, isDueOn, peopleOf, schoolOn, today } from '../data/logic';
+import { birthdaysOn, eventsOn, extraStates, isDueOn, peopleOf, schoolOn, today } from '../data/logic';
 import { FamilyData } from '../data/types';
 import { Button, Segmented } from './Button';
 import { Avatar } from './Avatar';
@@ -75,7 +75,21 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
     if (date === r.to) return [{ key: 'h' + r.to + r.name + 'e', title: `🏖️ Letzter Tag ${r.name}`, color: '#0f6e73', tag: 'Ferien' }];
     return [];
   });
-  return [...hol, ...bd, ...school, ...ev].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99')).concat(tasks);
+  // Kinder mit eigenem Bundesland: deren Ferien und abweichende Feiertage mit Namen
+  const a = data.settings?.autoHoliday;
+  const famKeys = new Set((a?.ranges ?? []).map(r => r.from + r.to + r.name));
+  const extra: CalItem[] = a?.on === false ? [] : extraStates(data).flatMap(st => {
+    const ks = kids.filter(k => k.state === st);
+    if (!ks.length) return [];
+    const nm = ks.map(k => k.name).join(', ');
+    return (a?.extra?.[st]?.ranges ?? []).filter(r => !famKeys.has(r.from + r.to + r.name)).flatMap(r => {
+      if (r.kind === 'feiertag') return r.from <= date && date <= r.to ? [{ key: 'h' + st + r.from + r.name, title: `🎉 ${r.name} (${nm})`, color: '#b26a00', tag: 'Feiertag', who: ks.map(k => k.id) }] : [];
+      if (date === r.from) return [{ key: 'h' + st + r.from + r.name, title: `🏖️ ${nm}: ${r.name}${r.to !== r.from ? ` bis ${fmt(r.to)}` : ''}`, color: '#0f6e73', tag: 'Ferien', who: ks.map(k => k.id) }];
+      if (date === r.to) return [{ key: 'h' + st + r.to + r.name + 'e', title: `🏖️ ${nm}: Letzter Tag ${r.name}`, color: '#0f6e73', tag: 'Ferien', who: ks.map(k => k.id) }];
+      return [];
+    });
+  });
+  return [...hol, ...extra, ...bd, ...school, ...ev].sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99')).concat(tasks);
 }
 
 export function CalNav({ mode, anchor, onMode, onAnchor, right }: { mode: CalMode; anchor: string; onMode: (m: CalMode) => void; onAnchor: (a: string) => void; right?: ReactNode }) {

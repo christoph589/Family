@@ -146,7 +146,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   const open = sheets.find(w => w.status === 'offen');
   const waiting = sheets.find(w => w.status === 'abgegeben');
   const n = prep.date ? daysTo(prep.date) : null;
-  const region = regionOf(d);
+  const region = (child?.state) || regionOf(d);
   const deck = (d.vocab ?? []).find(v => v.id === prep.deckId);
   const share = deck ? learnedShare(deck) : 0;
   const learned = deck ? deck.cards.filter(c => c.box >= 1).length : 0;

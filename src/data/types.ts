@@ -30,6 +30,8 @@ export interface Child {
   surpriseWeek?: string;
   /** Schulform, z. B. Gymnasium. Für Probe-Klassenarbeiten auf dem richtigen Niveau. */
   schoolType?: string;
+  /** Bundesland der Schule, falls anders als das der Familie (z. B. BW). Bestimmt Ferien und Lehrplan. */
+  state?: string;
 }
 
 export interface Emergency { doctor?: string; doctorPhone?: string; allergies?: string; meds?: string; blood?: string; insurance?: string; school?: string; schoolPhone?: string; contacts?: string; notes?: string }
@@ -178,7 +180,9 @@ export interface FamilyData {
     money?: { spar: number; invest: number; rate: number };
     /** WebUntis: welcher Untis-Schüler zu welchem Kind gehört. Der Schlüssel liegt nur auf dem Server. */
     untis?: { who?: string; at?: string; checkedAt?: string; links: { child: string; id: number; name: string }[] };
-    autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string } };
+    autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string;
+      /** Ferien weiterer Bundesländer für Kinder mit eigenem Bundesland */
+      extra?: Record<string, { ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string }> } };
 }
 
 // Punkte pro Note (1 bis 6). Keine Minuspunkte.

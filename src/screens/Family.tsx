@@ -242,9 +242,38 @@ function KidProfileEdit({ child }: { child: Child }) {
         if (v.grade !== undefined) save({ grade: v.grade.trim() || undefined, gradeYear: schoolYearOf(today()) });
         if (v.birthday !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(v.birthday)) save({ birthday: v.birthday });
       }} />
+      <KidState child={child} onSave={st => save({ state: st })} />
       <Text style={[s.muted, { fontSize: 13, color: missing ? C.warn : C.muted }]}>
         {missing ? 'Bitte Geburtstag, Geschlecht und Klasse ergänzen.' : `${age} Jahre · ${gradeLabel(child)} · Klasse zählt am 1. August hoch`}
       </Text>
+    </View>
+  );
+}
+
+/** Bundesland der Schule, nur nötig, wenn es vom Familien-Bundesland abweicht. */
+function KidState({ child, onSave }: { child: Child; onSave: (st: string | undefined) => void }) {
+  const { data } = useFamily();
+  const [open, setOpen] = useState(false);
+  const fam = data?.settings?.autoHoliday?.state ?? data?.settings?.region;
+  const name = (c?: string) => STATES.find(x => x.code === c)?.name;
+  const cur = child.state ?? fam;
+  return (
+    <View style={{ gap: 6 }}>
+      <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button">
+        <Text style={[s.muted, { fontSize: 13 }]}>🏫 Schule in: <Text style={{ fontWeight: '700', color: C.fg }}>{name(cur) ?? 'noch offen'}</Text>{child.state ? '' : fam ? ' (wie Familie)' : ''} · <Text style={{ color: C.accent, fontWeight: '700' }}>{open ? 'fertig' : 'ändern'}</Text></Text>
+      </Pressable>
+      {open && (
+        <View style={[s.row, { gap: 6 }]}>
+          {fam && <Pressable onPress={() => { onSave(undefined); setOpen(false); }} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: C.accent, backgroundColor: !child.state ? C.accent : C.surface }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: !child.state ? '#fff' : C.fg }}>Wie Familie</Text>
+          </Pressable>}
+          {STATES.filter(x => x.code !== fam).map(x => (
+            <Pressable key={x.code} onPress={() => { onSave(x.code); setOpen(false); }} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: C.accent, backgroundColor: child.state === x.code ? C.accent : C.surface }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: child.state === x.code ? '#fff' : C.fg }}>{x.name}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
