@@ -247,7 +247,7 @@ function berlinNowMin() {
 }
 const dayMin = (date: string) => Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10)) / 60000;
 const hm = (t?: string) => (t ? +t.slice(0, 2) * 60 + +t.slice(3, 5) : null);
-const isoOf = (min: number) => new Date(min * 60000).toISOString().slice(0, 10);
+const minIso = (min: number) => new Date(min * 60000).toISOString().slice(0, 10);
 
 type RemEv = Ev & { remind?: number; bring?: string; pick?: string; note?: string };
 /** Fällige Erinnerungen: remind = Minuten vorher, -1 = Vorabend 19 Uhr. Ganztägige Termine gelten ab 8 Uhr. */
@@ -261,7 +261,7 @@ function dueReminders(events: RemEv[], now: number) {
       if (d < base || (d !== base && !(e.weekly && (d - base) % (7 * 1440) === 0))) continue;
       const start = d + (hm(e.time) ?? 8 * 60);
       const fire = e.remind === -1 ? d - 1440 + 19 * 60 : start - e.remind;
-      if (fire <= now && fire > now - 30) out.push({ ev: e, date: isoOf(d) });
+      if (fire <= now && fire > now - 30) out.push({ ev: e, date: minIso(d) });
     }
   }
   return out;
@@ -416,10 +416,8 @@ function berlinUtc(date: string, time: string) {
   }
   return new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
 }
-/** Lange Zeilen nach iCal-Regel umbrechen (75 Zeichen, Fortsetzung mit Leerzeichen) */
-const fold = (l: string) => (l.length <= 74 ? l : l.match(/.{1,73}/g)!.join('\r\n '));
 const icsText = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
-const nextDay = (iso: string) => { const x = new Date(iso + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10).replace(/-/g, ''); };
+const icNextDay = (iso: string) => { const x = new Date(iso + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10).replace(/-/g, ''); };
 
 function eventLines(ev: { title: string; date: string; time?: string; end?: string; note?: string }) {
   const lines = [`SUMMARY:${icsText(ev.title)}`];
@@ -428,7 +426,7 @@ function eventLines(ev: { title: string; date: string; time?: string; end?: stri
     const end = ev.end && ev.end > ev.time ? ev.end : `${String(Math.min(23, +ev.time.slice(0, 2) + 1)).padStart(2, '0')}:${ev.time.slice(3)}`;
     lines.push(`DTEND:${berlinUtc(ev.date, end)}`);
   } else {
-    lines.push(`DTSTART;VALUE=DATE:${ev.date.replace(/-/g, '')}`, `DTEND;VALUE=DATE:${nextDay(ev.date)}`);
+    lines.push(`DTSTART;VALUE=DATE:${ev.date.replace(/-/g, '')}`, `DTEND;VALUE=DATE:${icNextDay(ev.date)}`);
   }
   if (ev.note) lines.push(`DESCRIPTION:${icsText(ev.note)}`);
   return lines;
