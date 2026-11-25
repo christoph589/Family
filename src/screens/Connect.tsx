@@ -84,6 +84,17 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
 
   if (step === 'neu') return (
     <View style={{ flex: 1 }}>
+      <View style={[s.pad, { maxWidth: 560, paddingBottom: 0 }]}>
+        <View style={s.card}>
+          <Text style={s.h2}>👫 Dein Partner nutzt Famelio schon?</Text>
+          <Text style={s.muted}>Dann gib den Familiencode ein. Er steht bei ihm unter ⚙️ › Geräte. Du bekommst dein eigenes Konto in derselben Familie.</Text>
+          <TextInput style={[s.input, { fontSize: 22, letterSpacing: 4 }]} value={code} autoCapitalize="characters" autoCorrect={false}
+            onChangeText={t => setCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} placeholder="ABCD2345" />
+          <Button title={busy ? 'Moment …' : 'Familie beitreten'} disabled={busy || code.length !== 8}
+            onPress={() => run(async () => { const fid = await joinFamily(code, 'eltern'); await link({ familyId: fid, role: 'eltern' }); })} />
+        </View>
+        <Text style={[s.muted, { textAlign: 'center' }]}>oder eine neue Familie anlegen:</Text>
+      </View>
       {local && (
         <View style={[s.pad, { maxWidth: 560 }]}>
           <View style={s.card}>
