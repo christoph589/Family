@@ -74,7 +74,7 @@ export interface Topic { id: string; childId: string; subject: string; text: str
 
 /** Vokabeltrainer: Karteikasten nach Leitner. box 0 = neu, 5 = sitzt. */
 export interface VocabCard { id: string; front: string; back: string; box: number; due: string; right: number; wrong: number }
-export interface VocabDeck { id: string; childId: string; title: string; lang: string; cards: VocabCard[]; createdAt: string; by?: string }
+export interface VocabDeck { id: string; childId: string; title: string; lang: string; cards: VocabCard[]; createdAt: string; by?: string; /** Lernkarten zu einer Klassenarbeit, nicht im Vokabeltrainer */ prepId?: string }
 /** Ganzes Vokabelverzeichnis eines Schulbuchs, zu Schuljahresbeginn importiert. Kinder wählen daraus einen Bereich zum Lernen. */
 export interface VocabBook { id: string; childId: string; title: string; lang: string; units: string[]; entries: { front: string; back: string; unit: string }[]; createdAt: string; by?: string }
 export interface VocabStats { streak: number; last?: string; best: number; total: number }
@@ -110,7 +110,8 @@ export interface Worksheet {
 }
 
 /** Klassenarbeit-Vorbereitung: alle Inhalte zum Thema, daraus macht die KI eine Probe-Arbeit. */
-export interface ExamPrep { id: string; childId: string; subject: string; title: string; date?: string; photos: string[]; createdAt: string; by?: string; eventId?: string }
+export interface ExamPrep { id: string; childId: string; subject: string; title: string; date?: string; photos: string[]; createdAt: string; by?: string; eventId?: string;
+  /** Lernkarten-Stapel (VocabDeck mit prepId) */ deckId?: string; /** Eltern geben die Probe-Arbeit vor dem Lernen frei */ unlocked?: boolean; /** echte Note aus der Schule */ grade?: number }
 export const SCHOOL_TYPES = ['Grundschule', 'Gymnasium', 'Realschule', 'Gesamtschule', 'Mittelschule', 'Oberschule', 'Förderschule', 'Andere'] as const;
 
 export interface CalEvent {

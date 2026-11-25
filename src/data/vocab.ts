@@ -45,7 +45,7 @@ export const newCards = (items: { front: string; back: string }[], date = today(
 export const dueCards = (deck: VocabDeck, date = today()) => deck.cards.filter(c => c.due <= date);
 export const masteredCount = (deck: VocabDeck) => deck.cards.filter(c => c.box >= MASTERED).length;
 export const dueCount = (d: FamilyData, childId: string, date = today()) =>
-  (d.vocab ?? []).filter(x => x.childId === childId).reduce((n, x) => n + dueCards(x, date).length, 0);
+  (d.vocab ?? []).filter(x => x.childId === childId && !x.prepId).reduce((n, x) => n + dueCards(x, date).length, 0);
 
 function shuffle<T>(a: T[]): T[] {
   const x = [...a];
@@ -67,6 +67,8 @@ export type Mode = 'choice' | 'flip' | 'type';
  * reverse = Deutsch steht da, Fremdsprache ist gefragt.
  */
 export function modeFor(card: VocabCard, deck: VocabDeck, repeat = false, r = Math.random(), d = Math.random()): { mode: Mode; reverse: boolean } {
+  // Lernkarten: Frage vorn, Antwort hinten. Anfangs Auswahl, später selbst erinnern und umdrehen.
+  if (deck.prepId) return { mode: !repeat && deck.cards.length >= 4 && card.box <= 1 && r < 0.6 && card.back.length <= 70 ? 'choice' : 'flip', reverse: false };
   const canChoice = deck.cards.length >= 4;
   if (repeat) return { mode: 'type', reverse: d < 0.6 };
   const pick = (choice: number): Mode => (r < choice && canChoice ? 'choice' : 'type');
@@ -78,7 +80,7 @@ export function modeFor(card: VocabCard, deck: VocabDeck, repeat = false, r = Ma
 
 export function choicesFor(card: VocabCard, deck: VocabDeck, reverse: boolean): string[] {
   const pick = (c: VocabCard) => (reverse ? c.front : c.back);
-  const others = shuffle(deck.cards.filter(c => c.id !== card.id && pick(c) !== pick(card))).slice(0, 3).map(pick);
+  const others = [...new Set(shuffle(deck.cards.filter(c => c.id !== card.id && pick(c) !== pick(card))).map(pick))].slice(0, 3);
   return shuffle([pick(card), ...others]);
 }
 
@@ -159,3 +161,8 @@ export function liveStreak(d: FamilyData, childId: string, date = today()) {
   if (!st?.last) return 0;
   return st.last === date || st.last === addDays(date, -1) ? st.streak : 0;
 }
+
+/** Anteil der Lernkarten, die mindestens einmal in einer fälligen Runde richtig waren. */
+export const learnedShare = (deck: VocabDeck) => (deck.cards.length ? deck.cards.filter(c => c.box >= 1).length / deck.cards.length : 0);
+/** Ab diesem Anteil gibt es die Probe-Arbeit. */
+export const LEARN_GOAL = 0.8;

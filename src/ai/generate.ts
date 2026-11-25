@@ -154,6 +154,32 @@ Antworte nur mit JSON in genau dieser Form:
   return { title: String(res.title || topic.text).slice(0, 80), questions };
 }
 
+/** Lernkarten zur Klassenarbeit: Frage vorn, kurze Antwort hinten. */
+export async function generateCards(e: { subject: string; title: string }, photos: string[], who: { name: string; grade?: string; schoolType?: string }, signal?: AbortSignal): Promise<{ front: string; back: string }[]> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const prompt = `Du bist eine geduldige Lehrkraft. Erstelle LERNKARTEN zur Vorbereitung auf eine Klassenarbeit für ${who.name}${who.grade ? `, Klasse ${who.grade}` : ''}${who.schoolType ? `, ${who.schoolType}` : ''}.
+Fach: ${e.subject}. Thema: ${e.title}.
+${images.length ? `Dazu ${images.length} Foto(s) mit den Unterlagen. Die Karten decken genau diesen Stoff ab, verteilt über alle Seiten.` : ''}
+
+Regeln:
+- 15 bis 25 Karten, vom Grundwissen zum Anwenden.
+- Vorderseite "front": eine klare Frage oder kleine Aufgabe, höchstens 120 Zeichen. Mischung aus Begriffen, Regeln, Merksätzen und kurzen Rechen- oder Beispielaufgaben mit neuen Zahlen.
+- Rückseite "back": die Antwort, kurz und eindeutig, höchstens 80 Zeichen. Bei Rechenaufgaben nur das Ergebnis, Brüche als 3/4.
+- Kindgerechte Sprache passend zur Klassenstufe. Keine Namen echter Personen aus den Fotos.
+- Keine zwei Karten mit derselben Antwort.
+
+Antworte nur mit JSON: {"cards":[{"front":"...","back":"..."}]}`;
+  const res = await sample.json<any>(prompt, { images: images.length ? images : undefined, signal, cache: false });
+  const cards = (Array.isArray(res?.cards) ? res.cards : [])
+    .map((c: any) => ({ front: str(c?.front, 160), back: str(c?.back, 100) }))
+    .filter((c: { front: string; back: string }) => c.front && c.back).slice(0, 30);
+  if (cards.length < 5) throw { code: 'invalid_json' };
+  return cards;
+}
+
 export interface GeneratedExam { title: string; minutes: number; questions: Question[]; points: number[]; skills: string[] }
 /** Probe-Klassenarbeit aus allen Unterlagen, passend zu Klasse, Schulform und Bundesland. */
 export async function generateExam(e: { subject: string; title: string }, photos: string[], who: { name: string; grade?: string; schoolType?: string; state?: string }, signal?: AbortSignal): Promise<GeneratedExam> {

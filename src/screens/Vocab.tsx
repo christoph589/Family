@@ -38,7 +38,7 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
   const kids = data.children.filter(c => childIds.includes(c.id));
   const kid = kids.find(k => k.id === childId) ?? kids[0];
   if (!kid) return null;
-  const decks = (data.vocab ?? []).filter(d => d.childId === kid.id);
+  const decks = (data.vocab ?? []).filter(d => d.childId === kid.id && !d.prepId);
   const due = decks.reduce((n, d) => n + dueCards(d).length, 0);
   const streak = liveStreak(data, kid.id);
   const stats = data.vocabStats?.[kid.id];
@@ -266,7 +266,7 @@ export function Confetti() {
   );
 }
 
-function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; givePoints: boolean; onClose: () => void }) {
+export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; givePoints: boolean; onClose: () => void }) {
   const { data, update } = useFamily();
   const [round, setRound] = useState(() => buildRound(deck));
   const [queue, setQueue] = useState<VocabCard[]>(round.cards);
@@ -354,16 +354,16 @@ function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; givePoints: 
               <Animated.View style={[{ borderRadius: 28, padding: 28, minHeight: 200, alignItems: 'center', justifyContent: 'center', gap: 10, transform: [{ scale: pop }, { translateX: shake }] },
                 answered ? { backgroundColor: answered.ok ? C.ok : C.danger } : grad('#5b4cf0', '#8a6cff'), SHADOW.lg]}>
                 <Text style={{ color: '#fff', opacity: 0.85, fontWeight: '700' }}>
-                  {plan.mode === 'type' ? (plan.reverse ? `Schreib es auf ${deck.lang === 'Andere' ? 'in der Fremdsprache' : deck.lang} ✍️` : 'Schreib es auf Deutsch ✍️') : plan.reverse ? `Wie heißt das auf ${deck.lang === 'Andere' ? 'der Fremdsprache' : deck.lang}?` : 'Was heißt das auf Deutsch?'}
+                  {deck.prepId ? (plan.mode === 'choice' ? 'Was stimmt?' : 'Weißt du es? Erst überlegen, dann umdrehen.') : plan.mode === 'type' ? (plan.reverse ? `Schreib es auf ${deck.lang === 'Andere' ? 'in der Fremdsprache' : deck.lang} ✍️` : 'Schreib es auf Deutsch ✍️') : plan.reverse ? `Wie heißt das auf ${deck.lang === 'Andere' ? 'der Fremdsprache' : deck.lang}?` : 'Was heißt das auf Deutsch?'}
                 </Text>
-                <Text style={{ color: '#fff', fontSize: 34, fontWeight: '800', textAlign: 'center' }}>{ask}</Text>
+                <Text style={{ color: '#fff', fontSize: deck.prepId ? (ask.length > 60 ? 20 : 24) : 34, fontWeight: '800', textAlign: 'center' }}>{ask}</Text>
                 {askForeign && L.speech && canSpeak() && (
                   <Pressable accessibilityLabel="Vorlesen" onPress={() => speak(card.front, L.speech)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)' }}>
                     <Text style={{ color: '#fff', fontWeight: '700' }}>🔊 Anhören</Text>
                   </Pressable>
                 )}
                 {(flipped || (answered && !answered.ok) || answered?.typo) && (
-                  <Text style={{ color: '#fff', fontSize: 24, fontWeight: '700', textAlign: 'center' }}>{answered?.typo ? `Fast! Richtig: ${solution}` : solution}</Text>
+                  <Text style={{ color: '#fff', fontSize: deck.prepId ? 19 : 24, fontWeight: '700', textAlign: 'center' }}>{answered?.typo ? `Fast! Richtig: ${solution}` : solution}</Text>
                 )}
                 {answered && !answered.ok && typed.trim() ? <Text style={{ color: '#fff', opacity: 0.85, textDecorationLine: 'line-through' }}>{typed.trim()}</Text> : null}
                 {answered?.ok && !answered.typo && <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>{combo >= 5 ? 'Unaufhaltsam! 🚀' : combo >= 3 ? 'Läuft! 🔥' : 'Richtig! ✓'}</Text>}

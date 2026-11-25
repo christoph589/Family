@@ -3,11 +3,13 @@ import { DeleteButton } from '../ui/DeleteButton';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { currentGrade, examScore, finishCheck, regionOf, setSheet, today, uid, EXAM_PREP_POINTS } from '../data/logic';
+import { addPoints, currentGrade, examScore, finishCheck, regionOf, setSheet, today, uid, EXAM_PREP_POINTS } from '../data/logic';
+import { learnedShare, LEARN_GOAL, newCards } from '../data/vocab';
+import { Practice } from './Vocab';
 import { STATES } from '../data/holidays';
-import { AI_ERROR, generateExam, getSample } from '../ai/generate';
+import { AI_ERROR, generateCards, generateExam, getSample } from '../ai/generate';
 import { printHtml, sheetHtml } from '../ui/Print';
-import { CalEvent, ExamPrep, SCHOOL_TYPES, Worksheet } from '../data/types';
+import { CalEvent, EXAM_POINTS, ExamPrep, SCHOOL_TYPES, Worksheet } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { DateField } from '../ui/DateField';
 import { C, s } from '../ui/theme';
@@ -46,7 +48,7 @@ export function ExamPrepScreen({ childIds, parent, meId, onSolve }: { childIds: 
     <View style={{ gap: 16 }}>
       <View style={[s.card, { gap: 8 }]}>
         <Text style={s.h2}>📝 Klassenarbeit üben</Text>
-        <Text style={s.muted}>Alles hochladen, was drankommt: Heft, Arbeitsblätter, Buchseiten. Auch über mehrere Tage, bis zu {MAX} Fotos. Die KI macht daraus eine Probe-Klassenarbeit auf dem Niveau der Klasse, Schulform und des Bundeslands, mit Punkten und Zeit. Danach seht ihr, wo es noch hakt.</Text>
+        <Text style={s.muted}>Alles hochladen, was drankommt: Heft, Arbeitsblätter, Buchseiten. Auch über mehrere Tage, bis zu {MAX} Fotos. So geht es: 1. Lernkarten aus den Unterlagen üben. 2. Wenn die meisten sitzen, gibt es eine Probe-Klassenarbeit auf dem Niveau von Klasse, Schulform und Bundesland. 3. Nach der echten Arbeit die Note eintragen.</Text>
         {!adding && <Button title="+ Klassenarbeit anlegen" onPress={() => setAdding(true)} />}
       </View>
       {adding && <PrepForm childIds={childIds} meId={meId} onDone={() => setAdding(false)} />}
@@ -134,6 +136,8 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   const [msg, setMsg] = useState('');
   const [ask, setAsk] = useState(false);
   const [scoring, setScoring] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [cardBusy, setCardBusy] = useState(false);
   const ctl = useRef<AbortController | null>(null);
   useEffect(() => { let on = true; getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, []);
   const d = data!;
@@ -143,6 +147,27 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   const waiting = sheets.find(w => w.status === 'abgegeben');
   const n = prep.date ? daysTo(prep.date) : null;
   const region = regionOf(d);
+  const deck = (d.vocab ?? []).find(v => v.id === prep.deckId);
+  const share = deck ? learnedShare(deck) : 0;
+  const learned = deck ? deck.cards.filter(c => c.box >= 1).length : 0;
+  // Erst lernen, dann Probe-Arbeit. Ältere Vorbereitungen mit Probe-Arbeit bleiben offen.
+  const locked = !prep.unlocked && !sheets.length && share < LEARN_GOAL;
+  const setPrep = (f: (e: ExamPrep) => ExamPrep) => update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? f(e) : e)) }));
+  async function makeCards() {
+    setCardBusy(true); setMsg('');
+    ctl.current = new AbortController();
+    try {
+      const cards = await generateCards(prep, prep.photos, { name: child?.name ?? '', grade: child ? currentGrade(child) : undefined, schoolType: child?.schoolType }, ctl.current.signal);
+      const id = uid();
+      update(x => ({ ...x,
+        vocab: [{ id, childId: prep.childId, title: `${prep.subject}: ${prep.title}`.slice(0, 80), lang: 'Andere', cards: newCards(cards), createdAt: new Date().toISOString(), prepId: prep.id }, ...(x.vocab ?? []).filter(v => v.id !== prep.deckId)],
+        exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, deckId: id } : e)) }));
+    } catch (e: any) { if (e?.code !== 'cancelled') setMsg(AI_ERROR[e?.code] ?? 'Die KI ist gerade nicht erreichbar. Bitte nochmal versuchen.'); }
+    setCardBusy(false);
+  }
+  function setGrade(g: number) {
+    update(x => addPoints({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, grade: g } : e)) }, prep.childId, EXAM_POINTS[g], `${prep.subject}: Note ${g}`));
+  }
 
   async function addPhotos() {
     const p = await pickPhotos(MAX - prep.photos.length).catch(() => []);
@@ -167,7 +192,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
     setMsg('');
     printHtml(html).catch(() => setMsg('Drucken geht hier gerade nicht. Bitte im normalen Browser versuchen.'));
   }
-  const remove = () => update(x => ({ ...x, exams: (x.exams ?? []).filter(e => e.id !== prep.id), events: (x.events ?? []).filter(e => e.id !== prep.eventId) }));
+  const remove = () => update(x => ({ ...x, exams: (x.exams ?? []).filter(e => e.id !== prep.id), events: (x.events ?? []).filter(e => e.id !== prep.eventId), vocab: (x.vocab ?? []).filter(v => v.prepId !== prep.id) }));
   const last = sheets.find(w => w.status === 'geprueft');
 
   return (
@@ -184,6 +209,28 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
           </View>
         )}
       </View>
+      {/* Schritt 1: Lernkarten */}
+      {!sheets.length && !(n !== null && n < 0 && !deck) && (
+        <View style={{ gap: 8, backgroundColor: C.bg, borderRadius: 14, padding: 10 }}>
+          <Text style={s.label}>1. Lernen</Text>
+          {deck ? (<>
+            <View style={{ height: 10, borderRadius: 5, backgroundColor: C.line, overflow: 'hidden' }}>
+              <View style={{ height: '100%', width: `${Math.round(share * 100)}%`, backgroundColor: share >= LEARN_GOAL ? C.ok : C.accent }} />
+            </View>
+            <Text style={[s.muted, { fontSize: 13 }]}>{learned} von {deck.cards.length} Lernkarten sitzen{share >= LEARN_GOAL ? ' · Probe-Arbeit ist frei 🎉' : ` · ab ${Math.ceil(deck.cards.length * LEARN_GOAL)} gibt es die Probe-Arbeit`}</Text>
+            <View style={s.row}>
+              <Button title="📚 Lernkarten üben" onPress={() => setPlaying(true)} style={{ paddingVertical: 8, minHeight: 40 }} />
+              {parent && !cardBusy && ai && <Button ghost title="Neu erstellen" onPress={makeCards} style={{ paddingVertical: 8, minHeight: 40 }} />}
+            </View>
+          </>) : (<>
+            <Text style={[s.muted, { fontSize: 13 }]}>Die KI macht aus den Unterlagen Lernkarten. Wer die meisten kann, bekommt die Probe-Arbeit.</Text>
+            {ai && !cardBusy && <Button title="📚 Lernkarten erstellen" disabled={!prep.photos.length && prep.title.length < 10} onPress={makeCards} style={{ paddingVertical: 8, minHeight: 40 }} />}
+          </>)}
+          {cardBusy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI schreibt Lernkarten. Das dauert etwa eine Minute.</Text><Button ghost title="Abbrechen" onPress={() => ctl.current?.abort()} /></View>}
+          {locked && parent && <Pressable onPress={() => setPrep(e => ({ ...e, unlocked: true }))}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Probe-Arbeit jetzt schon freigeben</Text></Pressable>}
+        </View>
+      )}
+      {playing && deck && <Practice deck={deck} givePoints={!parent} onClose={() => setPlaying(false)} />}
       {last?.exam && last.results && <ResultLine sheet={last} />}
       {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI liest alle Unterlagen und schreibt die Probe-Arbeit. Das dauert 1 bis 2 Minuten.</Text></View>}
       {open && !busy && <Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>{parent ? `Probe-Arbeit liegt bei ${child?.name}, noch nicht gelöst` : `Probe-Arbeit bereit · ${open.exam?.minutes} Minuten`}</Text>}
@@ -191,7 +238,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
       {!ai && !sheets.length && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>Die Probe-Arbeit erstellt die KI. Dafür muss das Gerät mit dem Familienserver verbunden sein.</Text>}
       <View style={s.row}>
         {open && onSolve && !busy && <Button title="Probe-Arbeit schreiben" onPress={() => onSolve(open.id)} />}
-        {ai && !open && !waiting && !busy && <Button title={sheets.length ? 'Neue Probe-Arbeit' : 'Probe-Arbeit erstellen'} disabled={!prep.photos.length && prep.title.length < 10} onPress={make} />}
+        {ai && !locked && !open && !waiting && !busy && !cardBusy && <Button title={sheets.length ? 'Neue Probe-Arbeit' : 'Probe-Arbeit erstellen'} disabled={!prep.photos.length && prep.title.length < 10} onPress={make} />}
         {busy && <Button ghost title="Abbrechen" onPress={() => ctl.current?.abort()} />}
         {prep.photos.length < MAX && !busy && <Button ghost title="+ Fotos" onPress={addPhotos} />}
         {!busy && <DeleteButton parent={parent} onDelete={remove} />}
@@ -208,6 +255,16 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
         </View>
       )}
       {scoring && open && <PaperScore sheet={open} onDone={() => setScoring(false)} />}
+      {prep.date && n !== null && n <= 0 && (
+        prep.grade ? (
+          <Text style={[s.text, { fontWeight: '800' }]}>🏫 Geschrieben: Note {prep.grade}{last?.exam && last.results ? ` · Probe war ungefähr ${examScore(last, last.results).note}` : ''}</Text>
+        ) : parent ? (
+          <View style={{ gap: 6, backgroundColor: C.accentSoft, borderRadius: 14, padding: 10 }}>
+            <Text style={[s.text, { fontWeight: '800' }]}>Welche Note gab es in der echten Arbeit?</Text>
+            <View style={[s.row, { gap: 6 }]}>{[1, 2, 3, 4, 5, 6].map(g => <Chip key={g} on={false} label={`${g}${EXAM_POINTS[g] ? ` · +${EXAM_POINTS[g]} P` : ''}`} onPress={() => setGrade(g)} />)}</View>
+          </View>
+        ) : <Text style={[s.muted, { fontSize: 13 }]}>Wenn die Arbeit zurück ist, tragen Mama oder Papa die Note ein.</Text>
+      )}
       {!!msg && <Text style={{ color: /^(Probe|Eingetragen)/.test(msg) ? C.ok : C.danger, fontWeight: '700', fontSize: 13 }}>{msg}</Text>}
       {!sheets.length && <Text style={[s.muted, { fontSize: 12 }]}>Gibt nach dem Prüfen {EXAM_PREP_POINTS} Punkte. Am besten 3 bis 5 Tage vorher schreiben, dann bleibt Zeit für die Schwachstellen.</Text>}
     </View>
