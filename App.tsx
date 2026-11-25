@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { IcloudSetup } from './src/screens/IcloudSetup';
 import { UntisSetup } from './src/screens/UntisSetup';
+import { MoneySettings } from './src/screens/MoneySettings';
 import { useUntisSync } from './src/data/untis';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
@@ -68,9 +69,9 @@ function CloudApp() {
 
 const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', essen: '🍽️', aufgaben: '⚙️' };
 
-type Section = 'familie' | 'aufgaben' | 'ferien' | 'kalender' | 'geraete';
+type Section = 'familie' | 'aufgaben' | 'geld' | 'ferien' | 'kalender' | 'geraete';
 const SETTINGS: { value: Section; label: string; cloud?: boolean }[] = [
-  { value: 'familie', label: '👪 Familie' }, { value: 'aufgaben', label: '✅ Aufgaben' }, { value: 'ferien', label: '🏖️ Ferien' },
+  { value: 'familie', label: '👪 Familie' }, { value: 'aufgaben', label: '✅ Aufgaben' }, { value: 'geld', label: '💶 Geld' }, { value: 'ferien', label: '🏖️ Ferien' },
   { value: 'kalender', label: '📅 Kalender', cloud: true }, { value: 'geraete', label: '📱 Geräte', cloud: true },
 ];
 
@@ -237,6 +238,7 @@ function Root() {
         {tab === 'aufgaben' && admin && section === 'familie' && <Family />}
         {tab === 'aufgaben' && admin && section === 'familie' && <ParentPin />}
         {tab === 'aufgaben' && admin && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
+        {tab === 'aufgaben' && admin && section === 'geld' && <MoneySettings />}
         {tab === 'aufgaben' && admin && section === 'ferien' && <Holiday />}
         {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <IcloudSetup />}
         {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <UntisSetup />}

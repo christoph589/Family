@@ -35,11 +35,17 @@ export interface Child {
 export interface Emergency { doctor?: string; doctorPhone?: string; allergies?: string; meds?: string; blood?: string; insurance?: string; school?: string; schoolPhone?: string; contacts?: string; notes?: string }
 
 /** Taschengeld, bewusst getrennt von Punkten. Beträge in Cent. */
-export interface MoneyTx { id: string; date: string; cents: number; note: string; kind: 'taschengeld' | 'geschenk' | 'verdient' | 'ausgabe' | 'korrektur' }
+/** Drei Töpfe: aus = Ausgeben (Bargeld), spar = Sparen, invest = Investieren. Alte Buchungen ohne Topf zählen als Ausgeben. */
+export type MoneyPot = 'aus' | 'spar' | 'invest';
+export interface MoneyTx { id: string; date: string; cents: number; note: string; kind: 'taschengeld' | 'geschenk' | 'verdient' | 'ausgabe' | 'korrektur' | 'umbuchung' | 'zins'; pot?: MoneyPot }
 export interface MoneyAccount {
   allowance?: { cents: number; every: 'woche' | 'monat'; since: string; lastPaid?: string };
   goal?: { title: string; cents: number };
   tx: MoneyTx[];
+  /** Letzter Monat (YYYY-MM), für den Eltern-Zins gutgeschrieben wurde */
+  lastInterest?: string;
+  /** Wunsch des Kindes, Geld aus Sparen/Investieren zurückzuholen. Eltern bestätigen. */
+  requests?: { id: string; cents: number; from: MoneyPot; to: MoneyPot; note: string; at: string }[];
 }
 /** Elternteil, z. B. Mama oder Papa. Für Kalender und Anzeige, wer gerade am Pad ist. */
 /** Erwachsene in der Familie. admin=false: z. B. Oma/Opa, eigene PIN, keine Einstellungen, kein Geld, keine Punkte-Freigabe. */
@@ -165,6 +171,8 @@ export interface FamilyData {
     icloud?: { href: string; name: string; color: string; who?: string }[];
     /** Wohin neue Termine gehen: nur Familienplaner, nur iCloud oder beides zur Auswahl */
     newEvents?: 'app' | 'icloud' | 'both';
+    /** Aufteilung des Taschengelds in Prozent (Rest = Ausgeben) und Eltern-Zins pro Monat */
+    money?: { spar: number; invest: number; rate: number };
     /** WebUntis: welcher Untis-Schüler zu welchem Kind gehört. Der Schlüssel liegt nur auf dem Server. */
     untis?: { who?: string; at?: string; checkedAt?: string; links: { child: string; id: number; name: string }[] };
     autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string } };

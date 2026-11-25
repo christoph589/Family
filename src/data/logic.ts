@@ -354,11 +354,28 @@ export const toGermanDate = (iso?: string) => (iso ? iso.split('-').reverse().jo
 export const euro = (cents: number) => (cents / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 export const accountOf = (d: FamilyData, childId: string): MoneyAccount => d.money?.[childId] ?? { tx: [] };
 export const balanceOf = (d: FamilyData, childId: string) => accountOf(d, childId).tx.reduce((s, t) => s + t.cents, 0);
+export const txPot = (t: { pot?: import('./types').MoneyPot }) => t.pot ?? 'aus';
+export const moneyPot = (d: FamilyData, childId: string, pot: import('./types').MoneyPot, until?: string) =>
+  accountOf(d, childId).tx.filter(t => txPot(t) === pot && (!until || t.date <= until)).reduce((s, t) => s + t.cents, 0);
+export const moneyRules = (d: FamilyData) => ({ spar: 30, invest: 20, rate: 1, ...d.settings?.money });
+/** Betrag nach dem Schlüssel aufteilen. Rundungsrest landet bei Ausgeben. */
+export function splitCents(d: FamilyData, cents: number): [import('./types').MoneyPot, number][] {
+  const r = moneyRules(d);
+  const spar = Math.floor((cents * r.spar) / 100), invest = Math.floor((cents * r.invest) / 100);
+  return ([['aus', cents - spar - invest], ['spar', spar], ['invest', invest]] as [import('./types').MoneyPot, number][]).filter(([, c]) => c !== 0);
+}
+export function addSplitTx(d: FamilyData, childId: string, cents: number, note: string, kind: import('./types').MoneyTx['kind'], date = today()): FamilyData {
+  const parts = splitCents(d, cents);
+  return setAccount(d, childId, a => ({ ...a, tx: [...parts.map(([pot, c]) => ({ id: uid(), date, cents: c, note, kind, pot })), ...a.tx] }));
+}
+export function movePot(d: FamilyData, childId: string, cents: number, from: import('./types').MoneyPot, to: import('./types').MoneyPot, note = 'Umbuchung', date = today()): FamilyData {
+  return setAccount(d, childId, a => ({ ...a, tx: [{ id: uid(), date, cents, note, kind: 'umbuchung', pot: to }, { id: uid(), date, cents: -cents, note, kind: 'umbuchung', pot: from }, ...a.tx] }));
+}
 export function setAccount(d: FamilyData, childId: string, fn: (a: MoneyAccount) => MoneyAccount): FamilyData {
   return { ...d, money: { ...d.money, [childId]: fn(accountOf(d, childId)) } };
 }
-export function addTx(d: FamilyData, childId: string, cents: number, note: string, kind: import('./types').MoneyTx['kind'], date = today()): FamilyData {
-  return setAccount(d, childId, a => ({ ...a, tx: [{ id: uid(), date, cents, note, kind }, ...a.tx] }));
+export function addTx(d: FamilyData, childId: string, cents: number, note: string, kind: import('./types').MoneyTx['kind'], date = today(), pot: import('./types').MoneyPot = 'aus'): FamilyData {
+  return setAccount(d, childId, a => ({ ...a, tx: [{ id: uid(), date, cents, note, kind, pot }, ...a.tx] }));
 }
 
 export const addDaysIso = (date: string, n: number) => { const x = new Date(date + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
@@ -378,11 +395,41 @@ export function payAllowances(d: FamilyData, date = today()): FamilyData {
     const tx: import('./types').MoneyTx[] = [];
     let guard = 0;
     while (next <= date && guard++ < 60) {
-      tx.unshift({ id: uid(), date: next, cents: a.cents, note: a.every === 'woche' ? 'Taschengeld (Woche)' : 'Taschengeld (Monat)', kind: 'taschengeld' });
+      const note = a.every === 'woche' ? 'Taschengeld (Woche)' : 'Taschengeld (Monat)';
+      for (const [pot, cents] of splitCents(d, a.cents)) tx.unshift({ id: uid(), date: next, cents, note, kind: 'taschengeld', pot });
       last = next;
       next = a.every === 'woche' ? addDaysIso(next, 7) : addMonthIso(next);
     }
     if (tx.length) out = setAccount(out, c.id, acc => ({ ...acc, allowance: { ...a, lastPaid: last }, tx: [...tx, ...acc.tx] }));
+  }
+  return payInterest(out, date);
+}
+
+/** Eltern-Zins: am 1. jedes Monats auf den Stand von Investieren am Monatsende. Idempotent über lastInterest. */
+export function payInterest(d: FamilyData, date = today()): FamilyData {
+  const rate = moneyRules(d).rate;
+  if (!(rate > 0)) return d;
+  const month = date.slice(0, 7);
+  let out = d;
+  for (const c of d.children) {
+    const acc = accountOf(out, c.id);
+    const inv = acc.tx.filter(t => txPot(t) === 'invest');
+    if (!inv.length) continue;
+    // Erster Monat mit Geld im Topf zählt noch nicht (angebrochener Monat)
+    let last = acc.lastInterest ?? inv.reduce((m, t) => (t.date < m ? t.date : m), inv[0].date).slice(0, 7);
+    if (last >= month) { if (!acc.lastInterest) out = setAccount(out, c.id, a => ({ ...a, lastInterest: last })); continue; }
+    const tx: import('./types').MoneyTx[] = [];
+    let guard = 0;
+    while (last < month && guard++ < 36) {
+      const [y, m] = last.split('-').map(Number);
+      const nextMonth = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`;
+      const endOfLast = addDaysIso(nextMonth + '-01', -1);
+      const bal = acc.tx.filter(t => txPot(t) === 'invest' && t.date <= endOfLast).reduce((s, t) => s + t.cents, 0) + tx.reduce((s, t) => s + t.cents, 0);
+      const cents = Math.round((bal * rate) / 100);
+      if (cents > 0) tx.unshift({ id: uid(), date: nextMonth + '-01', cents, note: `Eltern-Zins ${String(rate).replace('.', ',')} %`, kind: 'zins', pot: 'invest' });
+      last = nextMonth;
+    }
+    out = setAccount(out, c.id, a => ({ ...a, lastInterest: last, tx: [...tx, ...a.tx] }));
   }
   return out;
 }
