@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { icloudCalendars, icloudStatus, IcloudCal, reloadIcloud } from '../data/icloud';
+import { eventTarget, icloudCalendars, icloudStatus, IcloudCal, reloadIcloud } from '../data/icloud';
 import { peopleOf } from '../data/logic';
-import { Button } from '../ui/Button';
+import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 
 /** Einstellungen › Kalender: iCloud-Kalender auswählen, die in der App lesbar und bearbeitbar sind. */
@@ -53,6 +53,18 @@ export function IcloudSetup() {
           </View>
         );
       })}
+      {chosen.length > 0 && (
+        <View style={{ gap: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.line }}>
+          <Text style={[s.text, { fontWeight: '800' }]}>Neue Termine eintragen in</Text>
+          <Segmented value={eventTarget(data.settings)} onChange={v => update(d => ({ ...d, settings: { ...d.settings, newEvents: v } }))}
+            options={[{ value: 'icloud', label: '🍎 iCloud' }, { value: 'app', label: '🏠 Familienplaner' }, { value: 'both', label: 'Beides zur Wahl' }]} />
+          <Text style={[s.muted, { fontSize: 13 }]}>
+            {eventTarget(data.settings) === 'icloud' ? 'Alle neuen Termine landen in eurem Apple-Kalender und damit auf allen iPhones. Am einfachsten, wenn ihr sowieso mit dem iPhone-Kalender plant.'
+              : eventTarget(data.settings) === 'app' ? 'Neue Termine bleiben im Familienplaner. Auf dem iPhone erscheinen sie nur über das Familienkalender-Abo (nur lesen).'
+              : 'Beim Anlegen gibt es zwei Knöpfe: „+ Termin“ für den Familienplaner und „🍎 + iCloud“ für den Apple-Kalender.'}
+          </Text>
+        </View>
+      )}
       {!!err && <Text style={{ color: C.danger, fontWeight: '700' }}>{err}</Text>}
       <View style={s.row}>
         <Button title={busy ? 'Verbinde …' : list ? 'Liste neu laden' : chosen.length ? 'Weitere Kalender wählen' : 'iCloud verbinden'} disabled={busy} onPress={load} />

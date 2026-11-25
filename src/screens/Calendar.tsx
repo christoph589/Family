@@ -11,7 +11,7 @@ import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/Cal
 import { Popup } from '../ui/Popup';
 import { C, s } from '../ui/theme';
 import { useFeedItems } from '../data/feeds';
-import { icloudDelete, icloudEvent, icloudSave, IcloudEvent, useIcloudItems } from '../data/icloud';
+import { eventTarget, icloudDelete, icloudEvent, icloudSave, IcloudEvent, useIcloudItems } from '../data/icloud';
 import { DeleteButton } from '../ui/DeleteButton';
 import { LetterImport } from './Letter';
 import { PushSetup } from '../ui/Push';
@@ -54,6 +54,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
   if (!data) return null;
   const icCals = data.settings?.icloud ?? [];
   const icHrefs = icCals.map(c => c.href);
+  const target = eventTarget(data.settings);
   const people = peopleOf(data);
   const personInTitle = (t: string) => people.find(k => t.toLowerCase().split(/[^\p{L}]+/u).includes(k.name.toLowerCase()));
 
@@ -77,7 +78,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
 
   return (
     <View style={{ gap: 16 }}>
-      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} />{icCals.length > 0 && <Button ghost title="🍎 + iCloud" onPress={() => setIcEdit({ date: anchor })} />}<Button title="+ Termin" onPress={() => setAdding(true)} /></View> : undefined} />
+      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} />{target === 'both' && <Button ghost title="🍎 + iCloud" onPress={() => setIcEdit({ date: anchor })} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
 
       {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
 
@@ -320,7 +321,7 @@ function IcloudDeleteButton({ onDelete, title = '🗑️ Auch am iPhone löschen
 type IcCfg = { href: string; name: string; color: string; who?: string };
 type IcSave = { href?: string; etag?: string; cal?: string; title: string; date: string; time?: string; end?: string; note?: string; rid?: string; scope?: 'one' | 'all' };
 /** Termin direkt im iCloud-Kalender anlegen oder ändern. Erscheint danach auch auf dem iPhone. */
-function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Partial<IcloudEvent> & { scope?: 'one' | 'all' }; cals: IcCfg[]; onSave: (e: IcSave) => Promise<void>; onCancel: () => void }) {
+export function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Partial<IcloudEvent> & { scope?: 'one' | 'all' }; cals: IcCfg[]; onSave: (e: IcSave) => Promise<void>; onCancel: () => void }) {
   const editing = !!initial.href;
   const [title, setTitle] = useState(initial.title ?? '');
   const [date, setDate] = useState(initial.date ?? today());

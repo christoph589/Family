@@ -163,6 +163,8 @@ export interface FamilyData {
     hiddenFeed?: string[];
     /** Verbundene iCloud-Kalender (lesen und schreiben über den Server) */
     icloud?: { href: string; name: string; color: string; who?: string }[];
+    /** Wohin neue Termine gehen: nur Familienplaner, nur iCloud oder beides zur Auswahl */
+    newEvents?: 'app' | 'icloud' | 'both';
     /** WebUntis: welcher Untis-Schüler zu welchem Kind gehört. Der Schlüssel liegt nur auf dem Server. */
     untis?: { who?: string; at?: string; checkedAt?: string; links: { child: string; id: number; name: string }[] };
     autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string } };

@@ -8,7 +8,8 @@ const TIME_ICON: Record<string, string> = { morgens: ' 🌅', mittags: ' ☀️'
 import { Child, FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf, matchesPeople } from '../ui/CalViews';
-import { EventForm } from './Calendar';
+import { EventForm, IcloudForm } from './Calendar';
+import { eventTarget, icloudSave } from '../data/icloud';
 import { MealPlan, mealsOn, Shopping, shoppingFor, untilLabel } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Popup } from '../ui/Popup';
@@ -32,6 +33,7 @@ export function Board({ onExit }: { onExit: () => void }) {
   const [filter, setFilter] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const [sel, setSel] = useState<{ it: CalItem; date: string } | null>(null);
+  const [icAdd, setIcAdd] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [pane, setPaneState] = useState<Pane>('kalender');
   const setPane = (p: Pane) => { setPaneState(p); AsyncStorage.setItem('familienplaner:boardPane', p).catch(() => {}); };
@@ -187,7 +189,11 @@ export function Board({ onExit }: { onExit: () => void }) {
       {pane === 'einkauf' && <Shopping who="Wandansicht" />}
       {pane === 'kalender' && <View style={[s.card, { gap: 12 }]}>
         <CalNav mode={mode} anchor={anchor} onMode={m => { setMode(m); setAnchor(date); AsyncStorage.setItem('familienplaner:boardView', m).catch(() => {}); }} onAnchor={setAnchor}
-          right={<Button title="+ Termin" onPress={() => { setAdding(true); setSel(null); }} />} />
+          right={<View style={[s.row, { gap: 8 }]}>
+            {eventTarget(data.settings) === 'both' && <Button ghost title="🍎 + iCloud" onPress={() => { setIcAdd(true); setSel(null); }} />}
+            <Button title="+ Termin" onPress={() => { if (eventTarget(data.settings) === 'icloud') setIcAdd(true); else setAdding(true); setSel(null); }} />
+          </View>} />
+        {icAdd && <Popup onClose={() => setIcAdd(false)}><IcloudForm initial={{ date: anchor }} cals={data.settings?.icloud ?? []} onCancel={() => setIcAdd(false)} onSave={async ev => { await icloudSave(ev, (data.settings?.icloud ?? []).map(c => c.href)); setIcAdd(false); setAnchor(ev.date); }} /></Popup>}
         {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
         {sel && (
           <Popup accent={sel.it.color} onClose={() => { setSel(null); setConfirmDel(false); }}>

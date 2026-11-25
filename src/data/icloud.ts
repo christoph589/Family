@@ -87,3 +87,9 @@ export async function icloudDelete(href: string, etag: string, cals: string[], s
   await call({ action: 'icloud_delete', href, etag, ...(series?.rid ? series : {}) });
   await refresh(cals, true);
 }
+
+/** Wohin neue Termine gehen. Ohne gewählte iCloud-Kalender immer in den Familienplaner. */
+export function eventTarget(settings: { icloud?: unknown[]; newEvents?: 'app' | 'icloud' | 'both' } | undefined): 'app' | 'icloud' | 'both' {
+  if (!settings?.icloud?.length) return 'app';
+  return settings.newEvents ?? 'both';
+}
