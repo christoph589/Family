@@ -12,6 +12,7 @@ import { AI_ERROR, extractVocab, getSample } from '../ai/generate';
 import { Button, Segmented } from '../ui/Button';
 import { C, SHADOW, grad, s } from '../ui/theme';
 import { shrink } from './Learn';
+import { VocabBooks } from './VocabBook';
 
 const MAX_PHOTOS = 4;
 
@@ -80,6 +81,8 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
         )}
         {parent && <Text style={{ color: '#fff', opacity: 0.85, fontSize: 13 }}>Wenn du übst, gibt es keine Punkte. Punkte bekommt {kid.name} nur selbst.</Text>}
       </View>
+
+      <VocabBooks childId={kid.id} meId={meId} onStarted={id => setPlaying(id)} />
 
       {editing && <DeckEditor deck={editing === 'new' ? undefined : editing} childId={kid.id} meId={meId} onDone={() => setEditing(null)} />}
 

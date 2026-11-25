@@ -212,6 +212,29 @@ function cleanQuestion(x: any): Question | null {
 export interface ExtractedVocab { title: string; lang: string; cards: { front: string; back: string }[] }
 
 /** Liest Vokabeln von Fotos einer Buchseite oder eines Vokabelhefts. Nur wo die KI verfügbar ist. */
+/** Vokabelverzeichnis eines Schulbuchs abschreiben, mit Unit-Zuordnung. lastUnit hilft, wenn eine Seite mitten in einer Unit beginnt. */
+export async function extractVocabBook(photos: string[], langHint: string, lastUnit: string | undefined, signal?: AbortSignal): Promise<{ unit: string; front: string; back: string }[]> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  if (!images.length) throw { code: 'image_rejected' };
+  const prompt = `Die Fotos zeigen Seiten aus dem Vokabelverzeichnis eines Schulbuchs (${langHint || 'Englisch'}), in der Reihenfolge der Seiten.
+Lies ALLE Vokabeln vollständig ab und ordne jede ihrer Unit, Lektion oder ihrem Kapitel zu.
+- "unit": die Überschrift so kurz wie möglich, z. B. "Unit 1", "Lektion 3", "Welcome". Beginnt eine Seite ohne Überschrift, gehört sie zur vorigen Unit${lastUnit ? ` (zuletzt war das "${lastUnit}")` : ''}.
+- "front": Wort oder Wendung in der Fremdsprache, wie es dasteht, inklusive "to" bei Verben oder Artikel.
+- "back": die deutsche Bedeutung, mehrere mit ", " getrennt.
+- Lautschrift, Seitenzahlen und Beispielsätze weglassen. Nichts erfinden, Unleserliches weglassen.
+Antworte nur mit JSON: {"cards":[{"unit":"Unit 1","front":"...","back":"..."}]}`;
+  const res = await sample.json<{ cards: { unit: string; front: string; back: string }[] }>(prompt, { images, signal, cache: false });
+  const cards = (Array.isArray(res?.cards) ? res.cards : [])
+    .map(c => ({ unit: str(c?.unit, 40) || lastUnit || 'Ohne Unit', front: str(c?.front, 120), back: str(c?.back, 120) }))
+    .filter(c => c.front && c.back)
+    .slice(0, 800);
+  if (!cards.length) throw { code: 'invalid_json' };
+  return cards;
+}
+
 export async function extractVocab(photos: string[], langHint: string, signal?: AbortSignal): Promise<ExtractedVocab> {
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };

@@ -22,7 +22,7 @@ const Chip = ({ on, label, onPress, color = C.accent }: { on: boolean; label: st
   </Pressable>
 );
 
-async function pickPhotos(room: number): Promise<string[]> {
+export async function pickPhotos(room: number): Promise<string[]> {
   const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: true, selectionLimit: room });
   if (res.canceled || !res.assets.length) return [];
   return Promise.all(res.assets.slice(0, room).map(shrink));

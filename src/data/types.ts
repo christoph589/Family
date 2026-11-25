@@ -67,6 +67,8 @@ export interface Topic { id: string; childId: string; subject: string; text: str
 /** Vokabeltrainer: Karteikasten nach Leitner. box 0 = neu, 5 = sitzt. */
 export interface VocabCard { id: string; front: string; back: string; box: number; due: string; right: number; wrong: number }
 export interface VocabDeck { id: string; childId: string; title: string; lang: string; cards: VocabCard[]; createdAt: string; by?: string }
+/** Ganzes Vokabelverzeichnis eines Schulbuchs, zu Schuljahresbeginn importiert. Kinder wählen daraus einen Bereich zum Lernen. */
+export interface VocabBook { id: string; childId: string; title: string; lang: string; units: string[]; entries: { front: string; back: string; unit: string }[]; createdAt: string; by?: string }
 export interface VocabStats { streak: number; last?: string; best: number; total: number }
 
 export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
@@ -138,6 +140,7 @@ export interface FamilyData {
   birthdayBonus?: Record<string, number>;
   topics?: Topic[];
   vocab?: VocabDeck[];
+  vocabBooks?: VocabBook[];
   vocabStats?: Record<string, VocabStats>;
   worksheets?: Worksheet[];
   exams?: ExamPrep[];
