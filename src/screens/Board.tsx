@@ -11,6 +11,7 @@ import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf, matchesPeople } 
 import { EventForm } from './Calendar';
 import { MealPlan, mealsOn, Shopping, shoppingFor, untilLabel } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Popup } from '../ui/Popup';
 import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar, PersonHead } from '../ui/Avatar';
 import { useFeedItems } from '../data/feeds';
@@ -189,7 +190,7 @@ export function Board({ onExit }: { onExit: () => void }) {
           right={<Button title="+ Termin" onPress={() => { setAdding(true); setSel(null); }} />} />
         {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
         {sel && (
-          <View style={{ backgroundColor: C.bg, borderRadius: 12, padding: 12, gap: 8, borderLeftWidth: 6, borderLeftColor: sel.it.color }}>
+          <Popup accent={sel.it.color} onClose={() => { setSel(null); setConfirmDel(false); }}>
             <Text style={s.h2}>{sel.it.title}</Text>
             <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
             {sel.it.drive ? <Text style={[s.text, { fontWeight: '700' }]}>{sel.it.drive}</Text> : null}
@@ -198,7 +199,7 @@ export function Board({ onExit }: { onExit: () => void }) {
               {(data.events ?? []).some(e => e.id === sel.it.key) && <DeleteButton parent={false} title="Termin löschen" onDelete={() => { update(d => ({ ...d, events: (d.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
               <Button ghost title="Schließen" onPress={() => { setSel(null); setConfirmDel(false); }} />
             </View>
-          </View>
+          </Popup>
         )}
         <CalViews flat mode={mode} anchor={anchor} itemsFor={d => [...baseItems(data, d, null), ...feedItems(d), ...icItems(d)].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).filter(i => matchesPeople(i, filter))}
           onItemPress={(it, d) => { setSel({ it, date: d }); setConfirmDel(false); setAdding(false); }} onPickDay={d => { setAnchor(d); setMode('tag'); }} />

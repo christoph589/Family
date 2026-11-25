@@ -4,7 +4,7 @@ import { CalItem } from '../ui/CalViews';
 
 /** iCloud-Kalender über die Server-Funktion (CalDAV). Lesen für alle, Schreiben nur Eltern. */
 export interface IcloudCal { href: string; name: string; color: string; readOnly?: boolean }
-export interface IcloudEvent { uid: string; title: string; date: string; time?: string; end?: string; allDay: boolean; href: string; etag: string; cal: string; recurring: boolean; editable: boolean; note?: string }
+export interface IcloudEvent { uid: string; title: string; date: string; time?: string; end?: string; allDay: boolean; href: string; etag: string; cal: string; recurring: boolean; editable: boolean; note?: string; rid?: string }
 
 const ERR: Record<string, string> = {
   icloud_not_set: 'Auf dem Server fehlen noch Apple-ID und app-spezifisches Passwort (Supabase › Edge Functions › Secrets).',
@@ -79,11 +79,11 @@ export function useIcloudItems(cals: Cfg, people: { id: string; name: string; co
   });
 }
 
-export async function icloudSave(ev: { href?: string; etag?: string; cal?: string; title: string; date: string; time?: string; end?: string; note?: string }, cals: string[]) {
+export async function icloudSave(ev: { href?: string; etag?: string; cal?: string; title: string; date: string; time?: string; end?: string; note?: string; rid?: string; scope?: 'one' | 'all' }, cals: string[]) {
   await call({ action: 'icloud_save', ...ev });
   await refresh(cals, true);
 }
-export async function icloudDelete(href: string, etag: string, cals: string[]) {
-  await call({ action: 'icloud_delete', href, etag });
+export async function icloudDelete(href: string, etag: string, cals: string[], series?: { rid?: string; scope: 'one' | 'all' }) {
+  await call({ action: 'icloud_delete', href, etag, ...(series?.rid ? series : {}) });
   await refresh(cals, true);
 }

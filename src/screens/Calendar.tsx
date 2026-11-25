@@ -8,6 +8,7 @@ import { Button, Segmented } from '../ui/Button';
 import { DateField } from '../ui/DateField';
 import { guessIcon, IconPicker } from '../ui/IconPicker';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/CalViews';
+import { Popup } from '../ui/Popup';
 import { C, s } from '../ui/theme';
 import { useFeedItems } from '../data/feeds';
 import { icloudDelete, icloudEvent, icloudSave, IcloudEvent, useIcloudItems } from '../data/icloud';
@@ -49,7 +50,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
 
   const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : [], data?.settings?.hiddenFeed);
   const icItems = useIcloudItems(data?.settings?.icloud, data ? peopleOf(data) : []);
-  const [icEdit, setIcEdit] = useState<Partial<IcloudEvent> | null>(null);
+  const [icEdit, setIcEdit] = useState<(Partial<IcloudEvent> & { scope?: 'one' | 'all' }) | null>(null);
   if (!data) return null;
   const icCals = data.settings?.icloud ?? [];
   const icHrefs = icCals.map(c => c.href);
@@ -80,12 +81,12 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
 
       {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
 
-      {editing && <EventForm key={editing.id} initial={editing} people={people} days={daysOf('woche', anchor)} onCancel={() => setEditing(null)} onSave={ev => { update(d => ({ ...d, events: (d.events ?? []).map(e => (e.id === ev.id ? ev : e)) })); setEditing(null); }} />}
-      {icEdit && <IcloudForm key={icEdit.href ?? 'neu'} initial={icEdit} cals={icCals} onCancel={() => setIcEdit(null)} onSave={async ev => { await icloudSave(ev, icHrefs); setIcEdit(null); setAnchor(ev.date); }} />}
+      {editing && <Popup onClose={() => setEditing(null)}><EventForm key={editing.id} initial={editing} people={people} days={daysOf('woche', anchor)} onCancel={() => setEditing(null)} onSave={ev => { update(d => ({ ...d, events: (d.events ?? []).map(e => (e.id === ev.id ? ev : e)) })); setEditing(null); }} /></Popup>}
+      {icEdit && <Popup onClose={() => setIcEdit(null)}><IcloudForm key={icEdit.href ?? 'neu'} initial={icEdit} cals={icCals} onCancel={() => setIcEdit(null)} onSave={async ev => { await icloudSave(ev, icHrefs); setIcEdit(null); setAnchor(ev.date); }} /></Popup>}
       {letter && <LetterImport onDone={n => { setLetter(false); }} />}
 
       {sel && (
-        <View style={[s.card, { borderLeftWidth: 6, borderLeftColor: sel.it.color }]}>
+        <Popup accent={sel.it.color} onClose={() => setSel(null)}>
           <Text style={s.h2}>{sel.it.title}</Text>
           <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
           {(() => { const ev = (data.events ?? []).find(e => e.id === sel.it.key); if (!ev) return null; const dt = driveText(ev, people); return (<>
@@ -95,13 +96,25 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
           </>); })()}
           {sel.it.key.startsWith('i') && (() => { const ev = icloudEvent(sel.it.key); if (!ev) return null; return (<>
             {ev.note ? <Text style={s.text}>📝 {ev.note}</Text> : null}
-            {ev.recurring ? <Text style={s.muted}>🔁 Serientermin, bitte am iPhone ändern.</Text> : !ev.editable ? <Text style={s.muted}>Dieser Kalender ist nur zum Lesen freigegeben.</Text> : null}
+            {!ev.editable ? <Text style={s.muted}>Mehrtägige Termine bitte am iPhone ändern.</Text> : null}
             {parent && ev.editable && !ev.recurring && (
               <View style={s.row}>
                 <Button ghost title="✏️ Bearbeiten" onPress={() => { setIcEdit(ev); setSel(null); }} />
                 <IcloudDeleteButton onDelete={async () => { await icloudDelete(ev.href, ev.etag, icHrefs); setSel(null); }} />
               </View>
             )}
+            {parent && ev.editable && ev.recurring && ev.rid && (<>
+              <Text style={s.muted}>🔁 Serientermin</Text>
+              <View style={s.row}>
+                <Button ghost title="✏️ Nur diesen Termin" onPress={() => { setIcEdit({ ...ev, scope: 'one' }); setSel(null); }} />
+                <Button ghost title="✏️ Alle Termine der Serie" onPress={() => { setIcEdit({ ...ev, scope: 'all' }); setSel(null); }} />
+              </View>
+              <View style={s.row}>
+                <IcloudDeleteButton title="🗑️ Nur diesen löschen" onDelete={async () => { await icloudDelete(ev.href, ev.etag, icHrefs, { rid: ev.rid, scope: 'one' }); setSel(null); }} />
+                <IcloudDeleteButton title="🗑️ Ganze Serie löschen" onDelete={async () => { await icloudDelete(ev.href, ev.etag, icHrefs, { rid: ev.rid, scope: 'all' }); setSel(null); }} />
+              </View>
+            </>)}
+            {!parent && ev.recurring ? <Text style={s.muted}>🔁 Serientermin</Text> : null}
           </>); })()}
           <View style={s.row}>
             {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button ghost title="✏️ Bearbeiten" onPress={() => { setEditing((data.events ?? []).find(e => e.id === sel.it.key) ?? null); setSel(null); }} />}
@@ -113,7 +126,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
             }} />}
             <Button ghost title="Schließen" onPress={() => setSel(null)} />
           </View>
-        </View>
+        </Popup>
       )}
       {!parent && (
         <Segmented value={all ? 'alle' : 'meine'} onChange={v => setAll(v === 'alle')} options={[{ value: 'meine', label: '👤 Meine Termine' }, { value: 'alle', label: '👨‍👩‍👧 Ganze Familie' }]} />
@@ -294,20 +307,20 @@ export function driveText(e: { bring?: string; pick?: string }, people: { id: st
   return [b && `🚗 ${b} bringt`, p && `🏠 ${p} holt ab`].filter(Boolean).join(' · ');
 }
 
-function IcloudDeleteButton({ onDelete }: { onDelete: () => Promise<void> }) {
+function IcloudDeleteButton({ onDelete, title = '🗑️ Auch am iPhone löschen' }: { onDelete: () => Promise<void>; title?: string }) {
   const [err, setErr] = useState('');
   return (
     <View style={{ gap: 4 }}>
-      <DeleteButton parent title="🗑️ Auch am iPhone löschen" confirm="Wirklich löschen (auch am iPhone)" onDelete={() => { setErr(''); onDelete().catch(e => setErr(e?.message ?? 'Löschen hat nicht geklappt.')); }} />
+      <DeleteButton parent title={title} confirm="Wirklich löschen (auch am iPhone)" onDelete={() => { setErr(''); onDelete().catch(e => setErr(e?.message ?? 'Löschen hat nicht geklappt.')); }} />
       {err ? <Text style={{ color: C.danger }}>{err}</Text> : null}
     </View>
   );
 }
 
 type IcCfg = { href: string; name: string; color: string; who?: string };
-type IcSave = { href?: string; etag?: string; cal?: string; title: string; date: string; time?: string; end?: string; note?: string };
+type IcSave = { href?: string; etag?: string; cal?: string; title: string; date: string; time?: string; end?: string; note?: string; rid?: string; scope?: 'one' | 'all' };
 /** Termin direkt im iCloud-Kalender anlegen oder ändern. Erscheint danach auch auf dem iPhone. */
-function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Partial<IcloudEvent>; cals: IcCfg[]; onSave: (e: IcSave) => Promise<void>; onCancel: () => void }) {
+function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Partial<IcloudEvent> & { scope?: 'one' | 'all' }; cals: IcCfg[]; onSave: (e: IcSave) => Promise<void>; onCancel: () => void }) {
   const editing = !!initial.href;
   const [title, setTitle] = useState(initial.title ?? '');
   const [date, setDate] = useState(initial.date ?? today());
@@ -324,17 +337,19 @@ function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Partial<Iclo
   async function save() {
     setBusy(true); setErr('');
     try {
-      await onSave({ href: initial.href, etag: initial.etag, cal: editing ? undefined : cal, title: title.trim(), date, time: allDay ? undefined : pad(time), end: allDay ? undefined : pad(end), note: note.trim() || undefined });
+      await onSave({ href: initial.href, etag: initial.etag, rid: initial.recurring ? initial.rid : undefined, scope: initial.recurring ? initial.scope : undefined, cal: editing ? undefined : cal, title: title.trim(), date, time: allDay ? undefined : pad(time), end: allDay ? undefined : pad(end), note: note.trim() || undefined });
     } catch (e: any) { setErr(e?.message ?? 'Speichern hat nicht geklappt.'); setBusy(false); }
   }
   return (
     <View style={[s.card, { gap: 10 }]}>
-      <Text style={s.h2}>🍎 {editing ? 'iCloud-Termin ändern' : 'Neuer iCloud-Termin'}</Text>
+      <Text style={s.h2}>🍎 {!editing ? 'Neuer iCloud-Termin' : initial.scope === 'all' ? 'Ganze Serie ändern' : initial.recurring ? 'Nur diesen Termin ändern' : 'iCloud-Termin ändern'}</Text>
       <Text style={s.muted}>Wird direkt in deinem Apple-Kalender gespeichert und erscheint auch auf dem iPhone.</Text>
       <Text style={s.label}>Was</Text>
       <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="z. B. Zahnarzt" accessibilityLabel="Titel" />
       <Text style={s.label}>Wann</Text>
-      <DateField value={date} onChange={setDate} label="Datum" />
+      {initial.scope === 'all'
+        ? <Text style={s.muted}>Der Wochentag der Serie bleibt gleich. Ändern kannst du Titel, Uhrzeit und Notiz für alle Termine.</Text>
+        : <DateField value={date} onChange={setDate} label="Datum" />}
       <Pressable onPress={() => setAllDay(v => !v)} style={s.row} accessibilityRole="checkbox" accessibilityState={{ checked: allDay }}>
         <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: C.accent, backgroundColor: allDay ? C.accent : C.surface, alignItems: 'center', justifyContent: 'center' }}>
           {allDay && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}

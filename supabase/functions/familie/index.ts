@@ -107,7 +107,7 @@ export function buildIcs(name: string, events: Ev[], people: Person[], children:
 
 // ---------- Import: fremden iCal-Kalender lesen ----------
 
-export type Out = { uid: string; title: string; date: string; time?: string; end?: string; allDay: boolean };
+export type Out = { uid: string; title: string; date: string; time?: string; end?: string; allDay: boolean; rid?: string };
 
 const fmt = new Intl.DateTimeFormat('de-DE', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 function local(d: Date) {
@@ -121,15 +121,15 @@ export function parseIcs(text: string, fromIso: string, toIso: string): Out[] {
   for (const tz of comp.getAllSubcomponents('vtimezone')) { try { ICAL.TimezoneService.register(tz); } catch { /* schon bekannt */ } }
   const from = new Date(fromIso + 'T00:00:00Z'), to = new Date(toIso + 'T23:59:59Z');
   const out: Out[] = [];
-  const push = (uid: string, title: string, s: any, e: any) => {
+  const push = (uid: string, title: string, s: any, e: any, rid?: string) => {
     if (s.isDate) {
       const last = e ? (() => { const x = e.clone(); x.adjust(-1, 0, 0, 0); return x; })() : s;
       // mehrtägig: für jeden Tag ein Eintrag (max. 31)
       const cur = s.clone();
-      for (let i = 0; i < 31 && cur.compare(last) <= 0; i++) { out.push({ uid: uid + ':' + isoOf(cur), title, date: isoOf(cur), allDay: true }); cur.adjust(1, 0, 0, 0); }
+      for (let i = 0; i < 31 && cur.compare(last) <= 0; i++) { out.push({ uid: uid + ':' + isoOf(cur), title, date: isoOf(cur), allDay: true, rid }); cur.adjust(1, 0, 0, 0); }
     } else {
       const a = local(s.toJSDate()), b = e ? local(e.toJSDate()) : undefined;
-      out.push({ uid, title, date: a.date, time: a.time, end: b && b.date === a.date ? b.time : undefined, allDay: false });
+      out.push({ uid, title, date: a.date, time: a.time, end: b && b.date === a.date ? b.time : undefined, allDay: false, rid });
     }
   };
   // Ausnahmen wiederkehrender Termine (RECURRENCE-ID) werden von ical.js über relateException verknüpft
@@ -164,7 +164,7 @@ export function parseIcs(text: string, fromIso: string, toIso: string): Out[] {
       if (det.endDate.toJSDate() < from) continue;
       const st = (det.item.component.getFirstPropertyValue('status') ?? '').toUpperCase();
       if (st === 'CANCELLED') continue;
-      push(ev.uid + ':' + n.toString(), String(det.item.summary ?? title), det.startDate, det.endDate);
+      push(ev.uid + ':' + n.toString(), String(det.item.summary ?? title), det.startDate, det.endDate, n.toString());
     }
   }
   return out.sort((a, b) => (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')));
@@ -401,7 +401,7 @@ async function icloudEvents(cal: string, from: string, to: string) {
     try { notes = String(new ICAL.Event(new ICAL.Component(ICAL.parse(ics)).getFirstSubcomponent('vevent')).description ?? ''); } catch { /* egal */ }
     for (const e of parseIcs(ics, from, to)) {
       const multi = e.uid.includes(':') && !recurring; // mehrtägiger Ganztagstermin
-      out.push({ ...e, href: abs(cal, href), etag: unxml(tag(x, 'getetag') ?? ''), cal, recurring, editable: !recurring && !multi, note: notes.slice(0, 500) || undefined });
+      out.push({ ...e, href: abs(cal, href), etag: unxml(tag(x, 'getetag') ?? ''), cal, recurring, editable: !multi, note: notes.slice(0, 500) || undefined });
     }
   }
   return out;
@@ -445,7 +445,7 @@ async function icloudSave(b: any) {
     const g = await dav(href, 'GET', undefined, { 'Content-Type': 'text/calendar' });
     if (!g.ok) return json({ error: 'not_found' }, 404);
     const text = await g.text();
-    if (/\nRRULE:/i.test(text)) return json({ error: 'recurring' }, 400);
+    if (/(^|\n)(RRULE|RDATE|RECURRENCE-ID)[;:]/i.test((text.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) ?? []).join('\n'))) return json({ error: 'recurring' }, 400);
     const keep = (l: string) => !/^(SUMMARY|DTSTART|DTEND|DURATION|DESCRIPTION|DTSTAMP|LAST-MODIFIED)[;:]/i.test(l);
     const unfolded = text.replace(/\r?\n[ \t]/g, '');
     // Nur Eigenschaften direkt im VEVENT ersetzen, Unterteile wie VALARM bleiben unangetastet
@@ -475,6 +475,106 @@ async function icloudSave(b: any) {
   return json({ ok: true, href });
 }
 
+/** Serientermine: einen einzelnen Termin oder die ganze Serie ändern bzw. löschen (wie am iPhone).
+ *  rid = ursprünglicher Beginn dieses Termins in der Serie (RECURRENCE-ID). */
+async function icloudSeries(b: any, op: 'save' | 'delete') {
+  const href = String(b.href ?? ''), rid = String(b.rid ?? ''), scope = b.scope === 'all' ? 'all' : 'one';
+  if (!href.startsWith('https://') || !new URL(href).hostname.endsWith('icloud.com') || !rid) return json({ error: 'bad_request' }, 400);
+  const etag = b.etag ? { 'If-Match': String(b.etag) } : {};
+  if (op === 'delete' && scope === 'all') {
+    const r = await dav(href, 'DELETE', undefined, etag);
+    if (r.status === 412) return json({ error: 'changed' }, 409);
+    if (!r.ok && r.status !== 404) return json({ error: 'delete_failed', status: r.status }, 502);
+    return json({ ok: true });
+  }
+  const g = await dav(href, 'GET', undefined, { 'Content-Type': 'text/calendar' });
+  if (!g.ok) return json({ error: 'not_found' }, 404);
+  const comp = new ICAL.Component(ICAL.parse(await g.text()));
+  for (const tz of comp.getAllSubcomponents('vtimezone')) { try { ICAL.TimezoneService.register(tz); } catch { /* schon bekannt */ } }
+  const vevents = comp.getAllSubcomponents('vevent');
+  const master = vevents.find((v: any) => !v.hasProperty('recurrence-id'));
+  if (!master) return json({ error: 'not_found' }, 404);
+  const mStart = master.getFirstProperty('dtstart');
+  const tzid: string | null = mStart.getParameter('tzid') ?? null;
+  const zone = tzid ? ICAL.TimezoneService.get(tzid) : null;
+  const allDayMaster = mStart.getFirstValue().isDate;
+  // Ursprünglichen Beginn als Zeit in derselben Zeitzone wie die Serie
+  const ridTime = ICAL.Time.fromString(rid);
+  if (zone && !ridTime.isDate && !/Z$/.test(rid)) ridTime.zone = zone;
+  const sameRid = (v: any) => { const x = v.getFirstPropertyValue('recurrence-id'); return x && x.toString() === ridTime.toString(); };
+  const setTimeProp = (comp_: any, name: string, value: any) => {
+    comp_.removeAllProperties(name);
+    const p = new ICAL.Property(name);
+    p.setValue(value);
+    if (tzid && !value.isDate && value.zone !== ICAL.Timezone.utcTimezone) p.setParameter('tzid', tzid);
+    comp_.addProperty(p);
+  };
+  const timeFor = (date: string, hm?: string) => {
+    const [y, mo, d] = date.split('-').map(Number);
+    if (!hm) return ICAL.Time.fromData({ year: y, month: mo, day: d, isDate: true });
+    const [h, mi] = hm.split(':').map(Number);
+    if (zone) return ICAL.Time.fromData({ year: y, month: mo, day: d, hour: h, minute: mi, second: 0 }, zone);
+    const u = berlinUtc(date, hm);
+    return ICAL.Time.fromData({ year: +u.slice(0, 4), month: +u.slice(4, 6), day: +u.slice(6, 8), hour: +u.slice(9, 11), minute: +u.slice(11, 13), second: 0 }, ICAL.Timezone.utcTimezone);
+  };
+  const stamp = ICAL.Time.fromJSDate(new Date(), true);
+  const bump = (v: any) => { const s = Number(v.getFirstPropertyValue('sequence') ?? 0); v.updatePropertyWithValue('sequence', s + 1); v.updatePropertyWithValue('dtstamp', stamp); v.updatePropertyWithValue('last-modified', stamp); };
+
+  if (op === 'delete') {
+    // Nur diesen Termin: als Ausnahme (EXDATE) in der Serie vermerken, eine evtl. geänderte Einzelfassung entfernen
+    for (const v of vevents) if (v !== master && sameRid(v)) comp.removeSubcomponent(v);
+    const p = new ICAL.Property('exdate');
+    p.setValue(ridTime);
+    if (tzid && !ridTime.isDate && !/Z$/.test(rid)) p.setParameter('tzid', tzid);
+    master.addProperty(p);
+    bump(master);
+  } else {
+    const title = String(b.title ?? '').slice(0, 200), date = String(b.date ?? ''), note = b.note ? String(b.note).slice(0, 2000) : '';
+    const time = b.time ? String(b.time) : undefined, end = b.end ? String(b.end) : undefined;
+    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date) || (time && !/^\d{2}:\d{2}$/.test(time)) || (end && !/^\d{2}:\d{2}$/.test(end))) return json({ error: 'bad_request' }, 400);
+    const apply = (v: any, day: string) => {
+      v.updatePropertyWithValue('summary', title);
+      if (note) v.updatePropertyWithValue('description', note); else v.removeAllProperties('description');
+      if (!(allDayMaster && !time)) {
+        setTimeProp(v, 'dtstart', timeFor(day, time));
+        v.removeAllProperties('duration');
+        if (time) setTimeProp(v, 'dtend', timeFor(day, end ?? time));
+        else { const n = new Date(day + 'T12:00:00Z'); n.setUTCDate(n.getUTCDate() + 1); setTimeProp(v, 'dtend', timeFor(n.toISOString().slice(0, 10))); }
+      }
+      bump(v);
+    };
+    if (scope === 'all') {
+      // Ganze Serie: Titel, Notiz und Uhrzeit ändern, der Starttag der Serie bleibt
+      const startDay = mStart.getFirstValue().toString().slice(0, 10);
+      if (time && allDayMaster) return json({ error: 'bad_request' }, 400);
+      const old = mStart.getFirstValue().clone();
+      apply(master, startDay);
+      // Uhrzeit verschoben: Ausnahmen (gelöschte und einzeln geänderte Termine) mitverschieben, sonst passen sie nicht mehr
+      const delta = master.getFirstPropertyValue('dtstart').subtractDate(old);
+      if (delta.toSeconds() !== 0) {
+        for (const p of master.getAllProperties('exdate')) p.setValues(p.getValues().map((x: any) => { const y = x.clone(); if (!y.isDate) y.addDuration(delta); return y; }));
+        for (const v of vevents) if (v !== master) { const p = v.getFirstProperty('recurrence-id'); if (p) { const y = p.getFirstValue().clone(); if (!y.isDate) y.addDuration(delta); p.setValue(y); } }
+      }
+    } else {
+      let ov = vevents.find((v: any) => v !== master && sameRid(v));
+      if (!ov) {
+        ov = new ICAL.Component(JSON.parse(JSON.stringify(master.toJSON())));
+        for (const n of ['rrule', 'rdate', 'exdate', 'recurrence-id']) ov.removeAllProperties(n);
+        const p = new ICAL.Property('recurrence-id');
+        p.setValue(ridTime);
+        if (tzid && !ridTime.isDate && !/Z$/.test(rid)) p.setParameter('tzid', tzid);
+        ov.addProperty(p);
+        comp.addSubcomponent(ov);
+      }
+      apply(ov, date);
+    }
+  }
+  const r = await dav(href, 'PUT', comp.toString(), { 'Content-Type': 'text/calendar; charset=utf-8', ...etag });
+  if (r.status === 412) return json({ error: 'changed' }, 409);
+  if (!r.ok) return json({ error: op === 'delete' ? 'delete_failed' : 'save_failed', status: r.status }, 502);
+  return json({ ok: true, href });
+}
+
 async function icloudAction(body: any, userId: string, admin: any) {
   if (!IC_USER || !IC_PASS) return json({ error: 'icloud_not_set' }, 503);
   const { data: mem } = await admin.from('members').select('role').eq('user_id', userId).limit(1);
@@ -490,7 +590,8 @@ async function icloudAction(body: any, userId: string, admin: any) {
       return json({ events: all.flat() });
     }
     if (!parent) return json({ error: 'parents_only' }, 403);
-    if (body.action === 'icloud_save') return await icloudSave(body);
+    if (body.action === 'icloud_save') return body.rid ? await icloudSeries(body, 'save') : await icloudSave(body);
+    if (body.action === 'icloud_delete' && body.rid) return await icloudSeries(body, 'delete');
     if (body.action === 'icloud_delete') {
       const href = String(body.href ?? '');
       if (!href.startsWith('https://') || !new URL(href).hostname.endsWith('icloud.com')) return json({ error: 'bad_calendar' }, 400);
