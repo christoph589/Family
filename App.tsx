@@ -1,5 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { IcloudSetup } from './src/screens/IcloudSetup';
+import { UntisSetup } from './src/screens/UntisSetup';
+import { useUntisSync } from './src/data/untis';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { cloudEnabled, cloudStore, DeviceLink, getLink, signOut } from './src/data/cloud';
@@ -89,6 +91,7 @@ function Root() {
   useEffect(() => { scroller.current?.scrollTo({ y: 0, animated: false }); }, [tab]);
   const [pin, setPin] = useState('');
   const [pinErr, setPinErr] = useState(false);
+  useUntisSync(data, update);
 
   if (loading) return <View style={[s.screen, { justifyContent: 'center' }]}><ActivityIndicator color={C.accent} /></View>;
   if (!data) return <SafeAreaView style={s.screen}>{cloud ? (
@@ -235,6 +238,7 @@ function Root() {
         {tab === 'aufgaben' && admin && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
         {tab === 'aufgaben' && admin && section === 'ferien' && <Holiday />}
         {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <IcloudSetup />}
+        {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <UntisSetup />}
         {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
         {tab === 'aufgaben' && admin && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
       </ScrollView>

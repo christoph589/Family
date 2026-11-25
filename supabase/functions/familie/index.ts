@@ -504,6 +504,141 @@ async function icloudAction(body: any, userId: string, admin: any) {
   return json({ error: 'unknown_action' }, 400);
 }
 
+// ---------- WebUntis über den Zugang aus „Freigaben › Zugriff über Untis Mobile“ ----------
+// Gespeichert wird nur der App-Schlüssel (nicht das Passwort), verschlüsselt in family_secrets.
+// Genutzt wird dieselbe Schnittstelle wie die Untis-Mobile-App (inoffiziell, kann sich ändern).
+type UntisCred = { host: string; school: string; user: string; key: string };
+
+async function aesKey() {
+  const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('familie-secrets:' + SERVICE));
+  return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+const unb64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function seal(obj: unknown) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(), new TextEncoder().encode(JSON.stringify(obj))));
+  return b64(iv) + '.' + b64(ct);
+}
+async function unseal(s: string) {
+  const [iv, ct] = s.split('.');
+  return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(iv) }, await aesKey(), unb64(ct))));
+}
+
+function base32(s: string) {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const c of s.toUpperCase().replace(/[^A-Z2-7]/g, '')) bits += A.indexOf(c).toString(2).padStart(5, '0');
+  const out = new Uint8Array(Math.floor(bits.length / 8));
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(bits.slice(i * 8, i * 8 + 8), 2);
+  return out;
+}
+/** Einmal-Code (TOTP, 30 s, 6 Ziffern) wie in der Untis-Mobile-App */
+export async function totp(secret: string, now = Date.now()) {
+  const counter = Math.floor(now / 30000);
+  const msg = new Uint8Array(8);
+  new DataView(msg.buffer).setUint32(4, counter);
+  new DataView(msg.buffer).setUint32(0, Math.floor(counter / 2 ** 32));
+  const k = await crypto.subtle.importKey('raw', base32(secret), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const h = new Uint8Array(await crypto.subtle.sign('HMAC', k, msg));
+  const o = h[h.length - 1] & 15;
+  const code = ((h[o] & 127) << 24 | h[o + 1] << 16 | h[o + 2] << 8 | h[o + 3]) % 1_000_000;
+  return String(code).padStart(6, '0');
+}
+
+async function untisRpc(c: UntisCred, method: string, params: Record<string, unknown>) {
+  const now = Date.now();
+  const auth = { user: c.user, otp: await totp(c.key, now), clientTime: now };
+  const r = await fetch(`https://${c.host}/WebUntis/jsonrpc_intern.do?m=${method}&school=${encodeURIComponent(c.school)}&v=i2.2`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Familienplaner/1.0' },
+    body: JSON.stringify({ id: String(now), method, params: [{ ...params, auth }], jsonrpc: '2.0' }),
+  });
+  const text = await r.text();
+  let j: any;
+  try { j = JSON.parse(text); } catch { throw Object.assign(new Error('untis_failed'), { detail: `HTTP ${r.status}: ${text.slice(0, 160)}` }); }
+  if (j.error) throw Object.assign(new Error(/auth|credential|otp|secret|-8504|-8998/i.test(JSON.stringify(j.error)) ? 'untis_auth' : 'untis_failed'), { detail: `${j.error.code ?? ''} ${j.error.message ?? ''}`.trim() });
+  return j.result;
+}
+
+function untisCred(b: any): UntisCred | null {
+  const host = String(b.host ?? '').trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
+  const school = String(b.school ?? '').trim();
+  const user = String(b.user ?? '').trim();
+  const key = String(b.key ?? '').replace(/\s/g, '').toUpperCase();
+  if (!/^[a-z0-9-]+\.webuntis\.com$/.test(host) || !school || !user || !/^[A-Z2-7]{8,64}$/.test(key)) return null;
+  return { host, school, user, key };
+}
+
+/** Schüler, die dieser Zugang sehen darf: bei Eltern die Kinder, sonst man selbst */
+async function untisStudents(c: UntisCred) {
+  const r = await untisRpc(c, 'getUserData2017', { elementId: 0, deviceOs: 'AND', deviceOsVersion: '' });
+  const u = r?.userData ?? {};
+  const kids = (u.children ?? []).map((k: any) => ({ id: Number(k.id), name: String(k.displayName ?? k.name ?? k.id) }));
+  if (!kids.length && u.elemType === 'STUDENT') kids.push({ id: Number(u.elemId), name: String(u.displayName ?? 'Ich') });
+  return { students: kids, who: String(u.displayName ?? ''), type: String(u.elemType ?? ''), subjects: r?.masterData?.subjects ?? [] };
+}
+
+const hmOf = (s: string) => { const m = /T(\d{2}):(\d{2})/.exec(s); return m ? `${m[1]}:${m[2]}` : ''; };
+async function untisWeek(c: UntisCred, id: number, from: string, to: string) {
+  const r = await untisRpc(c, 'getTimetable2017', { id, type: 'STUDENT', startDate: from, endDate: to, masterDataTimestamp: 0, timetableTimestamp: 0, timetableTimestamps: [] });
+  const subjects = new Map<number, any>();
+  for (const s of r?.masterData?.subjects ?? []) subjects.set(Number(s.id), s);
+  const periods: any[] = r?.timetable?.periods ?? [];
+  const lessons = periods.map(p => {
+    const flags: string[] = Array.isArray(p.is) ? p.is.map(String) : Object.keys(p.is ?? {}).filter(k => p.is[k]);
+    const subj = (p.elements ?? []).find((e: any) => e.type === 'SUBJECT');
+    const sm = subj ? subjects.get(Number(subj.id)) : null;
+    return {
+      date: String(p.startDateTime ?? '').slice(0, 10), from: hmOf(String(p.startDateTime ?? '')), to: hmOf(String(p.endDateTime ?? '')),
+      subject: String(sm?.name ?? p.text?.lesson ?? ''), long: String(sm?.longName ?? ''),
+      cancelled: flags.some(f => /cancel/i.test(f)), changed: flags.some(f => /irregular|substit|additional|shift/i.test(f)),
+      info: [p.text?.substitution, p.text?.info].filter(Boolean).join(' · ').slice(0, 200),
+    };
+  }).filter(l => /^\d{4}-\d{2}-\d{2}$/.test(l.date) && l.from);
+  return { lessons, raw: periods.length ? { keys: Object.keys(periods[0]), start: periods[0].startDateTime, is: periods[0].is } : null };
+}
+
+async function untisAction(body: any, userId: string, admin: any) {
+  const { data: mem } = await admin.from('members').select('family_id, role').eq('user_id', userId).limit(1);
+  if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const fid = mem[0].family_id, parent = mem[0].role === 'eltern';
+  const load = async (): Promise<UntisCred | null> => {
+    const { data, error } = await admin.from('family_secrets').select('value').eq('family_id', fid).eq('kind', 'untis').maybeSingle();
+    if (error) throw Object.assign(new Error('untis_sql'), { detail: error.message });
+    return data ? await unseal(data.value) : null;
+  };
+  try {
+    if (body.action === 'untis_connect') {
+      if (!parent) return json({ error: 'parents_only' }, 403);
+      const c = untisCred(body);
+      if (!c) return json({ error: 'untis_bad_input' }, 400);
+      const info = await untisStudents(c);
+      const { error } = await admin.from('family_secrets').upsert({ family_id: fid, kind: 'untis', value: await seal(c), updated_at: new Date().toISOString() });
+      if (error) return json({ error: 'untis_sql', detail: error.message }, 500);
+      return json({ students: info.students, who: info.who, type: info.type });
+    }
+    if (body.action === 'untis_disconnect') {
+      if (!parent) return json({ error: 'parents_only' }, 403);
+      await admin.from('family_secrets').delete().eq('family_id', fid).eq('kind', 'untis');
+      return json({ ok: true });
+    }
+    if (body.action === 'untis_week') {
+      const from = String(body.from ?? ''), to = String(body.to ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return json({ error: 'bad_request' }, 400);
+      const c = await load();
+      if (!c) return json({ error: 'untis_not_set' }, 404);
+      const ids: number[] = (Array.isArray(body.students) ? body.students : []).slice(0, 8).map(Number).filter((n: number) => n > 0);
+      const out: Record<string, unknown> = {};
+      for (const id of ids) out[id] = await untisWeek(c, id, from, to);
+      return json({ weeks: out });
+    }
+  } catch (e) {
+    const m = (e as Error).message;
+    return json({ error: ['untis_auth', 'untis_sql'].includes(m) ? m : 'untis_failed', detail: (e as any).detail ?? m }, 502);
+  }
+  return json({ error: 'unknown_action' }, 400);
+}
+
 if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   const admin = createClient(URL_, SERVICE, { auth: { persistSession: false } });
@@ -535,6 +670,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       if (body.action === 'ai') return await runAi(body, user.user.id, admin);
       if (String(body.action).startsWith('push_')) return await pushAction(body, user.user.id, admin);
       if (String(body.action).startsWith('icloud_')) return await icloudAction(body, user.user.id, admin);
+      if (String(body.action).startsWith('untis_')) return await untisAction(body, user.user.id, admin);
       if (body.action === 'import') {
         let url = String(body.url ?? '').trim().replace(/^webcals?:\/\//i, 'https://');
         try { url = new URL(url).toString(); } catch { return json({ error: 'bad_url' }, 400); }

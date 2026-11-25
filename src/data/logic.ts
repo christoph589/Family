@@ -361,7 +361,7 @@ export function addTx(d: FamilyData, childId: string, cents: number, note: strin
   return setAccount(d, childId, a => ({ ...a, tx: [{ id: uid(), date, cents, note, kind }, ...a.tx] }));
 }
 
-const addDaysIso = (date: string, n: number) => { const x = new Date(date + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+export const addDaysIso = (date: string, n: number) => { const x = new Date(date + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
 const addMonthIso = (date: string) => { const [y, m, d] = date.split('-').map(Number); const x = new Date(y, m, Math.min(d, 28), 12); return x.toISOString().slice(0, 10); };
 
 /**
