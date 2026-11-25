@@ -8,7 +8,9 @@ const TIME_ICON: Record<string, string> = { morgens: ' 🌅', mittags: ' ☀️'
 import { Child, FamilyData } from '../data/types';
 import { Button } from '../ui/Button';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf, matchesPeople } from '../ui/CalViews';
-import { EventForm } from './Calendar';
+import { EventForm, IcloudForm } from './Calendar';
+import { icloudDelete, icloudEvent, icloudSave, IcloudEvent } from '../data/icloud';
+import { parentPinOk } from '../ui/DeleteButton';
 import { MealPlan, mealsOn, Shopping, shoppingFor, untilLabel } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, grad, s, SHADOW } from '../ui/theme';
@@ -31,6 +33,9 @@ export function Board({ onExit }: { onExit: () => void }) {
   const [filter, setFilter] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const [sel, setSel] = useState<{ it: CalItem; date: string } | null>(null);
+  const [icEdit, setIcEdit] = useState<IcloudEvent | null>(null);
+  const [icPin, setIcPin] = useState<string | null>(null);
+  const [icErr, setIcErr] = useState('');
   const [confirmDel, setConfirmDel] = useState(false);
   const [pane, setPaneState] = useState<Pane>('kalender');
   const setPane = (p: Pane) => { setPaneState(p); AsyncStorage.setItem('familienplaner:boardPane', p).catch(() => {}); };
@@ -188,20 +193,45 @@ export function Board({ onExit }: { onExit: () => void }) {
         <CalNav mode={mode} anchor={anchor} onMode={m => { setMode(m); setAnchor(date); AsyncStorage.setItem('familienplaner:boardView', m).catch(() => {}); }} onAnchor={setAnchor}
           right={<Button title="+ Termin" onPress={() => { setAdding(true); setSel(null); }} />} />
         {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
+        {icEdit && <IcloudForm key={icEdit.href} initial={icEdit} cals={data.settings?.icloud ?? []} onCancel={() => setIcEdit(null)} onSave={async ev => { await icloudSave(ev, (data.settings?.icloud ?? []).map(c => c.href)); setIcEdit(null); }} />}
         {sel && (
           <View style={{ backgroundColor: C.bg, borderRadius: 12, padding: 12, gap: 8, borderLeftWidth: 6, borderLeftColor: sel.it.color }}>
             <Text style={s.h2}>{sel.it.title}</Text>
             <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
             {sel.it.drive ? <Text style={[s.text, { fontWeight: '700' }]}>{sel.it.drive}</Text> : null}
             {sel.it.note ? <Text style={s.text}>📝 {sel.it.note}</Text> : null}
+            {sel.it.key.startsWith('i') && (() => {
+              const ev = icloudEvent(sel.it.key);
+              if (!ev) return null;
+              if (ev.recurring) return <Text style={s.muted}>🔁 Serientermin, bitte am iPhone ändern.</Text>;
+              if (!ev.editable) return <Text style={s.muted}>Dieser Kalender ist nur zum Lesen freigegeben.</Text>;
+              const hrefs = (data.settings?.icloud ?? []).map(c => c.href);
+              return (
+                <View style={{ gap: 8 }}>
+                  {icPin === null ? (
+                    <View style={s.row}>
+                      <Button ghost title="✏️ Bearbeiten" onPress={() => setIcPin('')} />
+                      <DeleteButton parent={false} title="🗑️ Löschen (auch am iPhone)" onDelete={() => { setIcErr(''); icloudDelete(ev.href, ev.etag, hrefs).then(() => setSel(null), e => setIcErr(e?.message ?? 'Löschen hat nicht geklappt.')); }} />
+                    </View>
+                  ) : (
+                    <View style={[s.row, { gap: 8 }]}>
+                      <TextInput autoFocus style={[s.input, { width: 120, letterSpacing: 8, textAlign: 'center' }]} value={icPin} secureTextEntry keyboardType="number-pad" maxLength={4} placeholder="PIN" accessibilityLabel="Eltern-PIN"
+                        onChangeText={v => { setIcPin(v); if (parentPinOk(data, v)) { setIcPin(null); setIcEdit(ev); setSel(null); } }} />
+                      <Text style={s.muted}>Eltern-PIN zum Bearbeiten</Text>
+                    </View>
+                  )}
+                  {icErr ? <Text style={{ color: C.danger }}>{icErr}</Text> : null}
+                </View>
+              );
+            })()}
             <View style={s.row}>
               {(data.events ?? []).some(e => e.id === sel.it.key) && <DeleteButton parent={false} title="Termin löschen" onDelete={() => { update(d => ({ ...d, events: (d.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
-              <Button ghost title="Schließen" onPress={() => { setSel(null); setConfirmDel(false); }} />
+              <Button ghost title="Schließen" onPress={() => { setSel(null); setConfirmDel(false); setIcPin(null); setIcErr(''); }} />
             </View>
           </View>
         )}
         <CalViews flat mode={mode} anchor={anchor} itemsFor={d => [...baseItems(data, d, null), ...feedItems(d), ...icItems(d)].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).filter(i => matchesPeople(i, filter))}
-          onItemPress={(it, d) => { setSel({ it, date: d }); setConfirmDel(false); setAdding(false); }} onPickDay={d => { setAnchor(d); setMode('tag'); }} />
+          onItemPress={(it, d) => { setSel({ it, date: d }); setConfirmDel(false); setAdding(false); setIcPin(null); setIcErr(''); }} onPickDay={d => { setAnchor(d); setMode('tag'); }} />
       </View>}
       <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Aufgaben abhaken geht auf den Geräten der Kinder oder in der Eltern-Ansicht. Termine, Essen und Einkauf kann hier jeder eintragen.</Text>
     </ScrollView>

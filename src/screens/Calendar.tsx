@@ -307,7 +307,7 @@ function IcloudDeleteButton({ onDelete }: { onDelete: () => Promise<void> }) {
 type IcCfg = { href: string; name: string; color: string; who?: string };
 type IcSave = { href?: string; etag?: string; cal?: string; title: string; date: string; time?: string; end?: string; note?: string };
 /** Termin direkt im iCloud-Kalender anlegen oder ändern. Erscheint danach auch auf dem iPhone. */
-function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Partial<IcloudEvent>; cals: IcCfg[]; onSave: (e: IcSave) => Promise<void>; onCancel: () => void }) {
+export function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Partial<IcloudEvent>; cals: IcCfg[]; onSave: (e: IcSave) => Promise<void>; onCancel: () => void }) {
   const editing = !!initial.href;
   const [title, setTitle] = useState(initial.title ?? '');
   const [date, setDate] = useState(initial.date ?? today());
