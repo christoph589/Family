@@ -459,3 +459,25 @@ function Done({ reward, right, total, bestCombo, givePoints, free, onAgain, onCl
     </View>
   );
 }
+
+/** Eltern: alle Vokabeln, Bücher und Lernstände löschen, um neu anzufangen. Sterne und Punkte bleiben. */
+export function VocabReset() {
+  const { data, update } = useFamily();
+  const [ask, setAsk] = useState(false);
+  const [done, setDone] = useState(false);
+  if (!data) return null;
+  const n = (data.vocab ?? []).reduce((a, d) => a + d.cards.length, 0), books = (data.vocabBooks ?? []).length;
+  if (done) return <Text style={{ color: C.ok, fontWeight: '700', textAlign: 'center' }}>Vokabeln sind zurückgesetzt. Ihr könnt neu anfangen.</Text>;
+  if (!n && !books) return null;
+  return (
+    <View style={[s.card, { gap: 8, backgroundColor: C.surface2 }]}>
+      <Text style={[s.text, { fontWeight: '800' }]}>Neu anfangen</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>Löscht für alle Kinder {n} Vokabeln in {(data.vocab ?? []).length} Kästen{books ? ` und ${books} ${books === 1 ? 'Buch' : 'Bücher'}` : ''} samt Lernstand. Punkte und Sterne bleiben. Das lässt sich nicht rückgängig machen.</Text>
+      <View style={s.row}>
+        {ask
+          ? <><Button title="Ja, alles löschen" color={C.danger} onPress={() => { update(d => ({ ...d, vocab: [], vocabBooks: [], vocabStats: {} })); setDone(true); }} /><Button ghost title="Abbrechen" onPress={() => setAsk(false)} /></>
+          : <Button ghost title="Alle Vokabeln zurücksetzen" onPress={() => setAsk(true)} />}
+      </View>
+    </View>
+  );
+}

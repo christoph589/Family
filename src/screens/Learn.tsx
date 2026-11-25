@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { printHtml } from '../ui/Print';
+import { Grades } from './Grades';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
@@ -11,7 +12,7 @@ import { sanitizeSvg } from '../ui/Math';
 import { Button, Segmented } from '../ui/Button';
 import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
 import { C, s } from '../ui/theme';
-import { Vocab } from './Vocab';
+import { VocabReset, Vocab } from './Vocab';
 import { ExamPrepScreen } from './Exam';
 import { dueCount } from '../data/vocab';
 
@@ -28,7 +29,7 @@ export async function shrink(a: ImagePicker.ImagePickerAsset): Promise<string> {
   return out.base64 ? `data:image/jpeg;base64,${out.base64}` : out.uri;
 }
 
-export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: boolean; meId?: string }) {
+export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; parent: boolean; meId?: string; admin?: boolean }) {
   const { data, update } = useFamily();
   const [childId, setChildId] = useState(childIds[0] ?? '');
   const [subject, setSubject] = useState('');
@@ -73,9 +74,10 @@ export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: 
       {tabs}
       {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
       <ExamPrepScreen childIds={childIds} parent={parent} meId={meId} onSolve={parent ? undefined : setSolveId} />
+      {admin && <Grades />}
     </View>
   );
-  if (part === 'vokabeln') return <View style={{ gap: 16 }}>{tabs}<Vocab childIds={childIds} parent={parent} meId={meId} /></View>;
+  if (part === 'vokabeln') return <View style={{ gap: 16 }}>{tabs}<Vocab childIds={childIds} parent={parent} meId={meId} />{admin && <VocabReset />}</View>;
 
   return (
     <View style={{ gap: 16 }}>
@@ -89,7 +91,7 @@ export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: 
         {!parent && (
           <View style={{ backgroundColor: C.warnSoft, borderRadius: 14, padding: 12, gap: 2 }}>
             <Text style={[s.text, { fontWeight: '800' }]}>⭐ Bonus, wenn du selbst hochlädst</Text>
-            <Text style={[s.text, { fontSize: 14 }]}>+{PRACTICE_POINTS} fürs Üben, +{SELF_BONUS.upload} fürs Hochladen, dazu +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
+            <Text style={[s.text, { fontSize: 14 }]}>+{SELF_BONUS.upload} fürs Hochladen, +{PRACTICE_POINTS} fürs Lernen, +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
           </View>
         )}
         {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}

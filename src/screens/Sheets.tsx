@@ -163,7 +163,7 @@ function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
           <Text style={[s.muted, { fontSize: 12 }]}>Die Note ist nur ein Richtwert nach einem üblichen Schlüssel, jede Lehrkraft bewertet anders.</Text>
         </View>
       )}
-      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern. {name} bekommt {sheet.exam ? EXAM_PREP_POINTS : PRACTICE_POINTS} Punkte fürs Üben{bonus ? ` und ${bonus} Bonuspunkte, weil selbst hochgeladen` : ''} und sieht danach die richtigen Lösungen.</Text>
+      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern. {name} bekommt {sheet.exam ? EXAM_PREP_POINTS : PRACTICE_POINTS} Punkte fürs Üben{bonus ? ` und ${bonus} Bonuspunkte fürs Verstehen${(data?.topics ?? []).find(t => t.id === sheet.topicId)?.by === sheet.childId ? ' und selbst Hochladen' : ''}` : ''} und sieht danach die richtigen Lösungen.</Text>
       <View style={s.row}>
         {res.some(r => !r) && <Button title={sheet.exam ? 'Schwachstellen üben lassen' : 'Falsches nochmal üben lassen'} onPress={() => update(d => finishCheck(d, sheet, res, true))} />}
         <Button title={res.every(Boolean) ? 'Fertig, alles verstanden' : 'Fertig'} color={C.ok} onPress={() => update(d => finishCheck(d, sheet, res))} />

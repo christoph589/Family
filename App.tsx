@@ -15,7 +15,6 @@ import { birthdaysOn, isAdmin, parentsOf, payAllowances, peopleOf, today } from 
 import { MoneyTab } from './src/screens/Gifts';
 import { Food } from './src/screens/Food';
 import { Calendar } from './src/screens/Calendar';
-import { Grades } from './src/screens/Grades';
 import { Learn } from './src/screens/Learn';
 import { Manage } from './src/screens/Manage';
 import { Points } from './src/screens/Points';
@@ -216,9 +215,8 @@ function Root() {
         {tab === 'heute' && <Today childIds={childIds} parent={parent} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'kalender' && <Timetable childIds={childIds} parent={parent} />}
-        {tab === 'lernen' && <Learn childIds={childIds} parent={parent} meId={profile.id} />}
+        {tab === 'lernen' && <Learn childIds={childIds} parent={parent} meId={profile.id} admin={admin} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} admin={admin} />}
-        {tab === 'lernen' && admin && <Grades />}
         {tab === 'geld' && <MoneyTab childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'essen' && <Food who={me.name} meId={profile.id} parent={parent} />}
         {tab === 'aufgaben' && admin && (

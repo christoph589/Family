@@ -17,8 +17,8 @@ export function Grades() {
   return (
     <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
       <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
-        <Text style={s.h2}>Arbeit eintragen</Text>
-        <Text style={s.muted}>Klassenarbeit oder Test. Punkte gibt es nach Note.</Text>
+        <Text style={s.h2}>Note aus der Schule eintragen</Text>
+        <Text style={s.muted}>Wenn die echte Klassenarbeit zurück ist. Punkte gibt es nach Note.</Text>
         <Text style={s.label}>Kind</Text>
         <Segmented value={childId} onChange={setChildId} options={data.children.map(c => ({ value: c.id, label: c.name }))} />
         <Text style={s.label}>Fach</Text>

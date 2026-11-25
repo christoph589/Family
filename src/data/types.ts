@@ -164,7 +164,7 @@ export interface FamilyData {
 export const EXAM_POINTS: Record<number, number> = { 1: 40, 2: 30, 3: 15, 4: 5, 5: 0, 6: 0 };
 
 // Punkte fürs Üben. Es zählt, dass geübt wird, nicht wie viel richtig ist.
-export const PRACTICE_POINTS = 10;
+export const PRACTICE_POINTS = 5;
 
 export type MealSlot = 'fruehstueck' | 'mittag' | 'abend';
 export interface Meal { id: string; date: string; slot: MealSlot; title: string }

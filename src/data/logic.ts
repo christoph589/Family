@@ -200,7 +200,8 @@ export function finishCheck(data: FamilyData, sheet: Worksheet, results: boolean
   const done = { ...sheet, results, understanding: understandingOf(right, sheet.questions.length), status: 'geprueft' as const };
   let next = addPoints(setSheet(data, done), sheet.childId, sheet.exam ? EXAM_PREP_POINTS : PRACTICE_POINTS, `${sheet.exam ? 'Probe-Klassenarbeit' : 'Geübt'}: ${sheet.title}`);
   const bonus = selfBonus(data, sheet, done.understanding!);
-  if (bonus) next = addPoints(next, sheet.childId, bonus, `⭐ Bonus selbst gelernt: ${sheet.title}`);
+  const self = (data.topics ?? []).find(t => t.id === sheet.topicId)?.by === sheet.childId;
+  if (bonus) next = addPoints(next, sheet.childId, bonus, `${self ? '⭐ Bonus selbst gelernt' : '⭐ Verstanden'}: ${sheet.title}`);
   const wrong = sheet.questions.filter((_, i) => !results[i]);
   if (retryWrong && wrong.length) {
     next = setSheet(next, { id: uid(), childId: sheet.childId, topicId: sheet.topicId, title: sheet.exam ? `Schwachstellen: ${sheet.title}` : sheet.title.replace(/^Nochmal: /, ''), date: today(), questions: wrong, status: 'offen', retryOf: sheet.id });
@@ -224,15 +225,17 @@ export function examScore(sheet: Worksheet, results: boolean[]) {
 }
 export const regionOf = (d: FamilyData) => d.settings?.autoHoliday?.state ?? d.settings?.region;
 
-/** Bonus, wenn das Kind den Unterrichtsstoff selbst hochgeladen hat: 5 fürs Hochladen, dazu 10 bei "verstanden", 5 bei "teilweise".
- *  Höchstens SELF_BONUS_PER_DAY Themen pro Tag und nur beim ersten Test eines Themas, damit sich Mehrfach-Hochladen nicht lohnt. */
+/** Täglicher Test: 5 fürs Üben (PRACTICE_POINTS), dazu 10 bei "verstanden", 5 bei "teilweise" und 1, wenn das Kind den Stoff selbst hochgeladen hat.
+ *  Nur beim ersten Test eines Themas. Selbst hochgeladene Themen höchstens SELF_BONUS_PER_DAY pro Tag, damit sich Mehrfach-Hochladen nicht lohnt. */
 export const SELF_BONUS_PER_DAY = 2;
-export const SELF_BONUS = { upload: 5, verstanden: 10, teilweise: 5, nochmal: 0 } as const;
+export const SELF_BONUS = { upload: 1, verstanden: 10, teilweise: 5, nochmal: 0 } as const;
 export function selfBonus(data: FamilyData, sheet: Worksheet, u: Understanding): number {
+  if (sheet.exam || sheet.retryOf) return 0;
   const topic = (data.topics ?? []).find(t => t.id === sheet.topicId);
-  if (!topic || topic.by !== sheet.childId || sheet.retryOf) return 0;
+  if (!topic) return 0;
   const first = (data.worksheets ?? []).filter(w => w.topicId === topic.id && w.status === 'geprueft' && w.id !== sheet.id).length === 0;
   if (!first) return 0;
+  if (topic.by !== sheet.childId) return SELF_BONUS[u];
   const day = today();
   const used = data.ledger.filter(e => e.childId === sheet.childId && e.reason.startsWith('⭐ Bonus selbst gelernt') && e.at.slice(0, 10) === day).length;
   if (used >= SELF_BONUS_PER_DAY) return 0;
