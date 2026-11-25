@@ -12,6 +12,7 @@ import { Button, Segmented } from '../ui/Button';
 import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
 import { C, s } from '../ui/theme';
 import { Vocab } from './Vocab';
+import { ExamPrepScreen } from './Exam';
 import { dueCount } from '../data/vocab';
 
 const MAX_TOPICS = 30; // Fotos liegen vorerst lokal, deshalb begrenzt.
@@ -37,7 +38,7 @@ export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: 
   const [msg, setMsg] = useState('');
   const [editing, setEditing] = useState<Topic | null>(null);
   const [solveId, setSolveId] = useState<string | null>(null);
-  const [part, setPart] = useState<'themen' | 'vokabeln'>('themen');
+  const [part, setPart] = useState<'themen' | 'klassenarbeit' | 'vokabeln'>('themen');
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const topics = (data.topics ?? []).filter(t => childIds.includes(t.childId));
@@ -66,7 +67,14 @@ export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: 
   }
 
   const vocabDue = childIds.reduce((n, id) => n + dueCount(data, id), 0);
-  const tabs = <Segmented value={part} onChange={setPart} options={[{ value: 'themen', label: '📚 Themen & Tests' }, { value: 'vokabeln', label: `🧠 Vokabeln${vocabDue ? ` (${vocabDue})` : ''}` }]} />;
+  const tabs = <Segmented value={part} onChange={setPart} options={[{ value: 'themen', label: 'Täglich' }, { value: 'klassenarbeit', label: 'Klassenarbeit' }, { value: 'vokabeln', label: `Vokabeln${vocabDue ? ` (${vocabDue})` : ''}` }]} />;
+  if (part === 'klassenarbeit') return (
+    <View style={{ gap: 16 }}>
+      {tabs}
+      {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
+      <ExamPrepScreen childIds={childIds} parent={parent} meId={meId} onSolve={parent ? undefined : setSolveId} />
+    </View>
+  );
   if (part === 'vokabeln') return <View style={{ gap: 16 }}>{tabs}<Vocab childIds={childIds} parent={parent} meId={meId} /></View>;
 
   return (

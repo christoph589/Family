@@ -55,7 +55,7 @@ function serverSample(): SampleFn {
   };
   const fn = (async (input: string, opts?: object) => ({ text: await call(input, opts) })) as SampleFn;
   fn.json = async <T,>(input: string, opts?: object) => parseJsonLoose<T>(await call(input, opts));
-  fn.limits = async () => ({ images: { maxCount: 8 } });
+  fn.limits = async () => ({ images: { maxCount: 20 } });
   return fn;
 }
 
@@ -150,6 +150,43 @@ Antworte nur mit JSON in genau dieser Form:
     .slice(0, 10);
   if (!questions.length) throw { code: 'invalid_json' };
   return { title: String(res.title || topic.text).slice(0, 80), questions };
+}
+
+export interface GeneratedExam { title: string; minutes: number; questions: Question[]; points: number[]; skills: string[] }
+/** Probe-Klassenarbeit aus allen Unterlagen, passend zu Klasse, Schulform und Bundesland. */
+export async function generateExam(e: { subject: string; title: string }, photos: string[], who: { name: string; grade?: string; schoolType?: string; state?: string }, signal?: AbortSignal): Promise<GeneratedExam> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const g = parseInt(who.grade ?? '', 10);
+  const prompt = `Du bist eine erfahrene Lehrkraft${who.state ? ` in ${who.state}` : ' in Deutschland'}${who.schoolType ? ` an einem/einer ${who.schoolType}` : ''}.
+Erstelle eine realistische PROBE-KLASSENARBEIT zur Vorbereitung für ${who.name}${who.grade ? `, Klasse ${who.grade}` : ''}.
+Fach: ${e.subject}. Thema der Klassenarbeit: ${e.title}.
+${images.length ? `Dazu ${images.length} Foto(s) mit allen Unterlagen (Heft, Arbeitsblätter, Buchseiten, Tafel). Die Arbeit deckt genau diesen Stoff ab, verteilt über alle Seiten.` : ''}
+
+So soll sie sein:
+- Niveau und Aufgabenformate wie in einer echten Klassenarbeit dieser Klassenstufe und Schulform${who.state ? `, nach dem Lehrplan von ${who.state}` : ''}.
+- 8 bis 12 Aufgaben, vom Leichten zum Schweren: etwa 40 % Wiedergeben, 40 % Anwenden, 20 % Transfer und Begründen.
+- Jede Aufgabe hat "pts" (Punkte, ganze Zahl 1 bis 8, schwerere Aufgaben mehr) und "skill" (Teilkompetenz in 2 bis 5 Wörtern, z. B. "Brüche erweitern").
+- "minutes": Bearbeitungszeit wie in der Schule (${g && g <= 4 ? '30 bis 45' : '45, bei viel Stoff 90'}).
+- Übernimm die Aufgabenarten aus den Fotos mit neuen Zahlen und Beispielen. Nichts abschreibbar.
+- Lösungen kurz und eindeutig, damit Eltern abgleichen können. Brüche als 3/4, gekürzt.
+- Keine Namen echter Personen aus den Fotos.
+
+Aufgabentypen wie bei einem Test:
+"text": {"type":"text","q":"...","solution":"...","pts":2,"skill":"..."}
+"choice": {"type":"choice","q":"...","options":["...","..."],"solution":"...","pts":1,"skill":"..."}
+"table": {"type":"table","q":"...","table":{"header":["..."],"rows":[["12","?"]]},"solution":"Wert1 | Wert2","pts":3,"skill":"..."} ("?" = leeres Feld, solution zeilenweise mit " | ")
+Optional "figure" als einfache SVG (viewBox 0 0 400 220, nur rect, circle, line, path, polygon, polyline, text, g, Schrift Arial 14 bis 18), nur wenn das Thema Bilder braucht.
+
+Antworte nur mit JSON: {"title":"...","minutes":45,"questions":[...]}`;
+  const res = await sample.json<any>(prompt, { images: images.length ? images : undefined, signal, cache: false });
+  const raw: any[] = Array.isArray(res?.questions) ? res.questions : [];
+  const out = raw.map(x => ({ q: cleanQuestion(x), pts: Math.min(10, Math.max(1, Math.round(Number(x?.pts) || 2))), skill: str(x?.skill, 40) || e.title })).filter(x => !!x.q).slice(0, 14);
+  if (out.length < 3) throw { code: 'invalid_json' };
+  const minutes = Math.min(120, Math.max(20, Math.round(Number(res?.minutes) || 45)));
+  return { title: str(res?.title, 80) || e.title, minutes, questions: out.map(x => x.q!), points: out.map(x => x.pts), skills: out.map(x => x.skill) };
 }
 
 const str = (v: unknown, max = 500) => String(v ?? '').trim().slice(0, max);

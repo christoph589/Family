@@ -26,6 +26,8 @@ export interface Child {
   seenBadges?: string[];
   /** Woche (Montag YYYY-MM-DD), deren Überraschungskiste geöffnet wurde */
   surpriseWeek?: string;
+  /** Schulform, z. B. Gymnasium. Für Probe-Klassenarbeiten auf dem richtigen Niveau. */
+  schoolType?: string;
 }
 
 export interface Emergency { doctor?: string; doctorPhone?: string; allergies?: string; meds?: string; blood?: string; insurance?: string; school?: string; schoolPhone?: string; contacts?: string; notes?: string }
@@ -87,7 +89,13 @@ export interface Worksheet {
   status: 'offen' | 'abgegeben' | 'geprueft';
   understanding?: Understanding;
   retryOf?: string;
+  /** Probe-Klassenarbeit: Punkte und Teilkompetenz je Aufgabe, Bearbeitungszeit */
+  exam?: { prepId: string; minutes: number; points: number[]; skills: string[] };
 }
+
+/** Klassenarbeit-Vorbereitung: alle Inhalte zum Thema, daraus macht die KI eine Probe-Arbeit. */
+export interface ExamPrep { id: string; childId: string; subject: string; title: string; date?: string; photos: string[]; createdAt: string; by?: string; eventId?: string }
+export const SCHOOL_TYPES = ['Grundschule', 'Gymnasium', 'Realschule', 'Gesamtschule', 'Mittelschule', 'Oberschule', 'Förderschule', 'Andere'] as const;
 
 export interface CalEvent {
   id: string; title: string; date: string; // YYYY-MM-DD
@@ -132,10 +140,11 @@ export interface FamilyData {
   vocab?: VocabDeck[];
   vocabStats?: Record<string, VocabStats>;
   worksheets?: Worksheet[];
+  exams?: ExamPrep[];
   events?: CalEvent[];
   gifts?: Gift[];
   giftOccasions?: GiftOccasion[];
-  settings?: { googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
+  settings?: { /** Bundesland, z. B. DE-NW (wenn keine automatischen Ferien gesetzt sind) */ region?: string; googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
     /** Automatische Ferien und Feiertage nach Bundesland */
     /** Eingebundene fremde Kalender (iCal-Links von iCloud, Google, Outlook, WebUntis) */
     feeds?: Feed[];

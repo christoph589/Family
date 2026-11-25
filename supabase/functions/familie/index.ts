@@ -182,7 +182,7 @@ async function runAi(body: any, userId: string, admin: any) {
   const prompt = String(body.prompt ?? '');
   if (!prompt || prompt.length > 20000) return json({ error: 'bad_request' }, 400);
   const images: any[] = [];
-  for (const raw of (Array.isArray(body.images) ? body.images : []).slice(0, 8)) {
+  for (const raw of (Array.isArray(body.images) ? body.images : []).slice(0, 20)) {
     const m = IMG.exec(String(raw));
     if (!m || m[2].length > 6_000_000) return json({ error: 'image_rejected' }, 400);
     images.push(m[1] === 'application/pdf'

@@ -198,15 +198,28 @@ export const UNDERSTANDING_LABEL: Record<Understanding, string> = { verstanden: 
 export function finishCheck(data: FamilyData, sheet: Worksheet, results: boolean[], retryWrong = false): FamilyData {
   const right = results.filter(Boolean).length;
   const done = { ...sheet, results, understanding: understandingOf(right, sheet.questions.length), status: 'geprueft' as const };
-  let next = addPoints(setSheet(data, done), sheet.childId, PRACTICE_POINTS, `Geübt: ${sheet.title}`);
+  let next = addPoints(setSheet(data, done), sheet.childId, sheet.exam ? EXAM_PREP_POINTS : PRACTICE_POINTS, `${sheet.exam ? 'Probe-Klassenarbeit' : 'Geübt'}: ${sheet.title}`);
   const bonus = selfBonus(data, sheet, done.understanding!);
   if (bonus) next = addPoints(next, sheet.childId, bonus, `⭐ Bonus selbst gelernt: ${sheet.title}`);
   const wrong = sheet.questions.filter((_, i) => !results[i]);
   if (retryWrong && wrong.length) {
-    next = setSheet(next, { id: uid(), childId: sheet.childId, topicId: sheet.topicId, title: sheet.title.replace(/^Nochmal: /, ''), date: today(), questions: wrong, status: 'offen', retryOf: sheet.id });
+    next = setSheet(next, { id: uid(), childId: sheet.childId, topicId: sheet.topicId, title: sheet.exam ? `Schwachstellen: ${sheet.title}` : sheet.title.replace(/^Nochmal: /, ''), date: today(), questions: wrong, status: 'offen', retryOf: sheet.id });
   }
   return next;
 }
+
+/** Punkte für eine geprüfte Probe-Klassenarbeit (mehr Aufwand als ein Tagestest) */
+export const EXAM_PREP_POINTS = 25;
+/** Ergebnis einer Probe-Klassenarbeit: Punkte, ungefähre Note (gängiger Schlüssel), schwache Teilkompetenzen */
+export function examScore(sheet: Worksheet, results: boolean[]) {
+  const pts = sheet.exam?.points ?? sheet.questions.map(() => 1);
+  const total = pts.reduce((a, b) => a + b, 0), got = pts.reduce((a, b, i) => a + (results[i] ? b : 0), 0);
+  const pct = total ? got / total : 0;
+  const note = pct >= 0.92 ? 1 : pct >= 0.81 ? 2 : pct >= 0.67 ? 3 : pct >= 0.5 ? 4 : pct >= 0.3 ? 5 : 6;
+  const weak = [...new Set((sheet.exam?.skills ?? []).filter((_, i) => !results[i]))];
+  return { got, total, pct, note, weak };
+}
+export const regionOf = (d: FamilyData) => d.settings?.autoHoliday?.state ?? d.settings?.region;
 
 /** Bonus, wenn das Kind den Unterrichtsstoff selbst hochgeladen hat: 5 fürs Hochladen, dazu 10 bei "verstanden", 5 bei "teilweise".
  *  Höchstens SELF_BONUS_PER_DAY Themen pro Tag und nur beim ersten Test eines Themas, damit sich Mehrfach-Hochladen nicht lohnt. */

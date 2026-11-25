@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { finishCheck, selfBonus, setSheet, today, uid, understandingOf, UNDERSTANDING_LABEL } from '../data/logic';
+import { examScore, finishCheck, selfBonus, EXAM_PREP_POINTS, setSheet, today, uid, understandingOf, UNDERSTANDING_LABEL } from '../data/logic';
 import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
 import { Button } from '../ui/Button';
 import { MathText } from '../ui/Math';
 import { AnswerView, isAnswered, isCorrect, QuestionInput } from './QuestionViews';
 import { C, s } from '../ui/theme';
+import { ResultLine } from './Exam';
 
 
 /** Eltern legen eine Arbeit an. Später schlägt die KI Fragen und Lösungen vor. */
@@ -71,8 +72,9 @@ export function KidSheets({ childId, openId, setOpenId }: { childId: string; ope
         <View key={w.id} style={{ gap: 4, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
           <View style={[s.row, { justifyContent: 'space-between' }]}>
             <Text style={[s.text, { fontWeight: '700', flex: 1 }]}>{w.title}</Text>
-            {w.understanding && <UnderstandingChip u={w.understanding} />}
+            {w.understanding && !w.exam && <UnderstandingChip u={w.understanding} />}
           </View>
+          {w.exam && w.results && <ResultLine sheet={w} />}
           {w.questions.map((q, i) => (w.results?.[i] ? null : <AnswerView key={i} q={q} answer={w.answers?.[i] ?? ''} />))}
         </View>
       ))}
@@ -83,8 +85,14 @@ export function KidSheets({ childId, openId, setOpenId }: { childId: string; ope
 // Angefangene Antworten bleiben erhalten, wenn das Kind den Test kurz verlässt.
 const drafts: Record<string, string[]> = {};
 
+// Startzeit der Probe-Arbeit, damit die Uhr beim kurzen Verlassen weiterläuft
+const started: Record<string, number> = {};
+const clock = (w: Worksheet) => { const m = Math.floor((Date.now() - (started[w.id] ?? Date.now())) / 60000); return `${m} Min`; };
+
 function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void }) {
   const { update } = useFamily();
+  const [, tick] = useState(0);
+  useEffect(() => { if (!sheet.exam) return; started[sheet.id] ??= Date.now(); const t = setInterval(() => tick(x => x + 1), 30000); return () => clearInterval(t); }, [sheet.id]);
   const [answers, setAnswersState] = useState<string[]>(drafts[sheet.id] ?? sheet.questions.map(() => ''));
   const setAnswers = (fn: (a: string[]) => string[]) => setAnswersState(a => (drafts[sheet.id] = fn(a)));
   const done = sheet.questions.filter((q, i) => isAnswered(q, answers[i] ?? '')).length;
@@ -95,13 +103,13 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
         <Button ghost title="‹ Zurück" onPress={onDone} style={{ paddingVertical: 8, paddingHorizontal: 12 }} />
         <View style={{ flex: 1 }}>
           <Text style={[s.text, { fontWeight: '800' }]} numberOfLines={1}>{sheet.title}</Text>
-          <Text style={[s.muted, { fontSize: 13 }]}>{done} von {sheet.questions.length} beantwortet</Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>{done} von {sheet.questions.length} beantwortet{sheet.exam ? ` · ⏱ ${clock(sheet)} von ${sheet.exam.minutes} Min` : ''}</Text>
         </View>
       </View>
       <ScrollView contentContainerStyle={[s.pad, { maxWidth: 700 }]} keyboardShouldPersistTaps="handled">
         {sheet.questions.map((q, i) => (
           <View key={i} style={[s.card, { gap: 8 }]}>
-            <Text style={s.label}>Frage {i + 1}</Text>
+            <Text style={s.label}>{sheet.exam ? `Aufgabe ${i + 1} · ${sheet.exam.points[i] ?? 1} ${(sheet.exam.points[i] ?? 1) === 1 ? 'Punkt' : 'Punkte'}` : `Frage ${i + 1}`}</Text>
             <QuestionInput q={q} value={answers[i] ?? ''} onChange={t => setAnswers(a => a.map((x, j) => (j === i ? t : x)))} />
           </View>
         ))}
@@ -132,6 +140,7 @@ function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
   const { data, update } = useFamily();
   const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '')));
   const bonus = data ? selfBonus(data, sheet, understandingOf(res.filter(Boolean).length, sheet.questions.length)) : 0;
+  const score = sheet.exam ? examScore(sheet, res) : null;
   return (
     <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
       <Text style={[s.text, { fontWeight: '700' }]}>{name}: {sheet.title}</Text>
@@ -147,9 +156,16 @@ function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
           </Pressable>
         </View>
       ))}
-      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern. {name} bekommt {PRACTICE_POINTS} Punkte fürs Üben{bonus ? ` und ${bonus} Bonuspunkte, weil selbst hochgeladen` : ''} und sieht danach die richtigen Lösungen.</Text>
+      {score && (
+        <View style={{ backgroundColor: C.accentSoft, borderRadius: 12, padding: 10, gap: 2 }}>
+          <Text style={[s.text, { fontWeight: '800' }]}>{score.got} von {score.total} Punkten · ungefähr Note {score.note}</Text>
+          {score.weak.length > 0 && <Text style={[s.text, { fontSize: 14 }]}>Schwachstellen: <Text style={{ fontWeight: '700', color: C.danger }}>{score.weak.join(', ')}</Text></Text>}
+          <Text style={[s.muted, { fontSize: 12 }]}>Die Note ist nur ein Richtwert nach einem üblichen Schlüssel, jede Lehrkraft bewertet anders.</Text>
+        </View>
+      )}
+      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern. {name} bekommt {sheet.exam ? EXAM_PREP_POINTS : PRACTICE_POINTS} Punkte fürs Üben{bonus ? ` und ${bonus} Bonuspunkte, weil selbst hochgeladen` : ''} und sieht danach die richtigen Lösungen.</Text>
       <View style={s.row}>
-        {res.some(r => !r) && <Button title="Falsches nochmal üben lassen" onPress={() => update(d => finishCheck(d, sheet, res, true))} />}
+        {res.some(r => !r) && <Button title={sheet.exam ? 'Schwachstellen üben lassen' : 'Falsches nochmal üben lassen'} onPress={() => update(d => finishCheck(d, sheet, res, true))} />}
         <Button title={res.every(Boolean) ? 'Fertig, alles verstanden' : 'Fertig'} color={C.ok} onPress={() => update(d => finishCheck(d, sheet, res))} />
       </View>
     </View>
