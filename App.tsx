@@ -12,7 +12,7 @@ import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { birthdaysOn, isAdmin, parentsOf, payAllowances, peopleOf, today } from './src/data/logic';
-import { Money } from './src/screens/Money';
+import { MoneyTab } from './src/screens/Gifts';
 import { Food } from './src/screens/Food';
 import { Calendar } from './src/screens/Calendar';
 import { Grades } from './src/screens/Grades';
@@ -219,7 +219,7 @@ function Root() {
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} admin={admin} />}
         {tab === 'lernen' && admin && <Grades />}
-        {tab === 'geld' && <Money childIds={childIds} parent={parent} />}
+        {tab === 'geld' && <MoneyTab childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'essen' && <Food who={me.name} meId={profile.id} />}
         {tab === 'aufgaben' && admin && (
           <View style={[s.row, { gap: 8 }]} accessibilityRole="tablist">

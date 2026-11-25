@@ -105,6 +105,11 @@ export interface CalEvent {
   remind?: number;
 }
 
+/** Geschenke: Idee oder gekauft, gehört zu einem Anlass in einem bestimmten Jahr. Beträge in Cent. */
+export interface Gift { id: string; occ: string; year: number; forId?: string; title: string; cents?: number; status: 'idee' | 'gekauft'; by?: string; at: string }
+/** Eigener jährlicher Anlass, z. B. Geburtstag Oma (md = MM-DD) */
+export interface GiftOccasion { id: string; title: string; md: string; forId?: string; icon?: string }
+
 export interface FamilyData {
   version: 1;
   family: { id: string; name: string; parentPin: string };
@@ -128,6 +133,8 @@ export interface FamilyData {
   vocabStats?: Record<string, VocabStats>;
   worksheets?: Worksheet[];
   events?: CalEvent[];
+  gifts?: Gift[];
+  giftOccasions?: GiftOccasion[];
   settings?: { googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
     /** Automatische Ferien und Feiertage nach Bundesland */
     /** Eingebundene fremde Kalender (iCal-Links von iCloud, Google, Outlook, WebUntis) */
