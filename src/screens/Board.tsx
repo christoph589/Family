@@ -116,6 +116,26 @@ export function Board({ onExit }: { onExit: () => void }) {
         </View>
       ))}
       <View style={{ flexDirection: wide ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
+        {wide && !kids ? (
+          // Volle Breite: Termine, Essen und Einkauf nebeneinander
+          <View style={{ flexDirection: 'row', gap: 16, width: '100%', alignItems: 'stretch' }}>
+            <View style={[s.card, { flex: 2 }]}>
+              <Text style={s.label}>Heute</Text>
+              <DayEvents data={data} date={date} big filter={filter} />
+            </View>
+            <View style={[s.card, { flex: 1, backgroundColor: '#fff2e0' }]}>
+              <Text style={s.label}>Heute gibt es</Text>
+              {mealsOn(data, date).length
+                ? mealsOn(data, date).sort((a, b) => a.slot.localeCompare(b.slot) * -1).map(m => <Text key={m.id} style={[s.text, { fontWeight: '800', fontSize: 20 }]}>{m.slot === 'mittag' ? '☀️' : m.slot === 'abend' ? '🌙' : '🥣'} {m.title}</Text>)
+                : <Text style={s.muted}>Noch nichts geplant</Text>}
+            </View>
+            <View style={[s.card, { flex: 1 }]}>
+              <Text style={s.label}>🛒 Einkaufsliste{open ? ` (${open})` : ''}</Text>
+              {open ? (data.shopping ?? []).filter(i => !i.done).slice(0, 6).map(i => <Text key={i.id} style={[s.text, { fontWeight: '600' }]} numberOfLines={1}>• {i.title}</Text>) : <Text style={s.muted}>Alles da</Text>}
+              {open > 6 && <Text style={s.muted}>und {open - 6} weitere</Text>}
+            </View>
+          </View>
+        ) : (
         <View style={[s.card, { width: wide && kids ? 300 : '100%' }]}>
           <Text style={s.label}>Heute</Text>
           <DayEvents data={data} date={date} big filter={filter} />
@@ -127,6 +147,7 @@ export function Board({ onExit }: { onExit: () => void }) {
           )}
           {(data.shopping ?? []).some(i => !i.done) && <Text style={s.muted}>🛒 {(data.shopping ?? []).filter(i => !i.done).length} Sachen auf der Einkaufsliste</Text>}
         </View>
+        )}
         {kids && <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 16, width: wide ? undefined : '100%' }}>
           {data.children.filter(c => !filter.length || filter.includes(c.id)).map(c => <KidColumn key={c.id} data={data} child={c} date={date} />)}
         </View>}
