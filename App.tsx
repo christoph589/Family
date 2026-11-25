@@ -274,7 +274,7 @@ function Root() {
           </Pressable>
         </View>
       </View>
-      <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingTop: 6, paddingBottom: 120 }]}>
+      <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingTop: 6, paddingBottom: 170 }]}>
         {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
         {tab === 'heute' && <Today childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} meId={profile.id} />}

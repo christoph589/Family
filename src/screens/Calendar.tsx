@@ -37,6 +37,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
   const [all, setAll] = useState(false);
   // Eltern: Ansicht auf eine Person einschränken (null = alle)
   const [focus, setFocus] = useState<string | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
   const days = daysOf(mode, anchor);
   const calId = data?.settings?.googleCalendarId;
 
@@ -82,8 +83,30 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
 
   return (
     <View style={{ gap: 16 }}>
-      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1, flexWrap: 'nowrap' }]}><Button ghost title={narrow ? '📄' : '📄 Elternbrief'} accessibilityLabel="Elternbrief" onPress={() => setLetter(true)} style={narrow ? { paddingHorizontal: 14 } : undefined} />{target === 'both' && <Button ghost title={narrow ? '📱 +' : '📱 + Handy-Kalender'} accessibilityLabel="Termin im Handy-Kalender" onPress={() => setIcEdit({ date: anchor })} style={narrow ? { paddingHorizontal: 14 } : undefined} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
+      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent && !narrow ? <View style={[s.row, { gap: 8, flexShrink: 1, flexWrap: 'nowrap' }]}><Button ghost title={narrow ? '📄' : '📄 Elternbrief'} accessibilityLabel="Elternbrief" onPress={() => setLetter(true)} style={narrow ? { paddingHorizontal: 14 } : undefined} />{target === 'both' && <Button ghost title={narrow ? '📱 +' : '📱 + Handy-Kalender'} accessibilityLabel="Termin im Handy-Kalender" onPress={() => setIcEdit({ date: anchor })} style={narrow ? { paddingHorizontal: 14 } : undefined} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
 
+      {parent && narrow && (<>
+        {fabOpen && (
+          <Pressable onPress={() => setFabOpen(false)} style={{ position: 'fixed' as any, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#1a153055', zIndex: 40 }}>
+            <View style={{ position: 'absolute', right: 20, bottom: 186, gap: 10, alignItems: 'flex-end' }}>
+              {[
+                { l: '🏠 Termin in Famelio', f: () => setAdding(true), show: target !== 'icloud' },
+                { l: '📱 Termin im Handy-Kalender', f: () => setIcEdit({ date: anchor }), show: target !== 'app' },
+                { l: '📄 Elternbrief abfotografieren', f: () => setLetter(true), show: true },
+              ].filter(x => x.show).map(x => (
+                <Pressable key={x.l} accessibilityRole="button" onPress={() => { setFabOpen(false); x.f(); }}
+                  style={{ backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 10 }}>
+                  <Text style={{ fontWeight: '800', fontSize: 15, color: C.fg }}>{x.l}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        )}
+        <Pressable accessibilityRole="button" accessibilityLabel="Neu" onPress={() => setFabOpen(o => !o)}
+          style={{ position: 'fixed' as any, right: 20, bottom: 112, width: 60, height: 60, borderRadius: 30, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center', zIndex: 41, shadowColor: C.accent, shadowOpacity: 0.45, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } }}>
+          <Text style={{ color: '#fff', fontSize: 32, fontWeight: '600', marginTop: -3 }}>{fabOpen ? '×' : '+'}</Text>
+        </Pressable>
+      </>)}
       {parent && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {[{ id: null as string | null, name: 'Alle', color: C.fg }, ...people.map(p => ({ id: p.id as string | null, name: p.name, color: p.color }))].map(p => {
