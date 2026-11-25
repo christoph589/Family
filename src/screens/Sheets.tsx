@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { finishCheck, setSheet, today, uid, UNDERSTANDING_LABEL } from '../data/logic';
+import { finishCheck, selfBonus, setSheet, today, uid, understandingOf, UNDERSTANDING_LABEL } from '../data/logic';
 import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
 import { Button } from '../ui/Button';
 import { MathText } from '../ui/Math';
@@ -129,8 +129,9 @@ export function ReviewSheets({ childIds }: { childIds: string[] }) {
 }
 
 function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
-  const { update } = useFamily();
+  const { data, update } = useFamily();
   const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '')));
+  const bonus = data ? selfBonus(data, sheet, understandingOf(res.filter(Boolean).length, sheet.questions.length)) : 0;
   return (
     <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
       <Text style={[s.text, { fontWeight: '700' }]}>{name}: {sheet.title}</Text>
@@ -146,7 +147,7 @@ function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
           </Pressable>
         </View>
       ))}
-      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern. {name} bekommt {PRACTICE_POINTS} Punkte fürs Üben und sieht danach die richtigen Lösungen.</Text>
+      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern. {name} bekommt {PRACTICE_POINTS} Punkte fürs Üben{bonus ? ` und ${bonus} Bonuspunkte, weil selbst hochgeladen` : ''} und sieht danach die richtigen Lösungen.</Text>
       <View style={s.row}>
         {res.some(r => !r) && <Button title="Falsches nochmal üben lassen" onPress={() => update(d => finishCheck(d, sheet, res, true))} />}
         <Button title={res.every(Boolean) ? 'Fertig, alles verstanden' : 'Fertig'} color={C.ok} onPress={() => update(d => finishCheck(d, sheet, res))} />

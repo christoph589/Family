@@ -4,9 +4,9 @@ import * as Print from 'expo-print';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { currentGrade, setSheet, today, topicUnderstanding, uid } from '../data/logic';
-import { AI_ERROR, generateQuiz, getSample } from '../ai/generate';
-import { Question, Topic } from '../data/types';
+import { currentGrade, setSheet, today, topicUnderstanding, uid, SELF_BONUS, SELF_BONUS_PER_DAY } from '../data/logic';
+import { askTopic, QA, AI_ERROR, generateQuiz, getSample } from '../ai/generate';
+import { PRACTICE_POINTS, Question, Topic } from '../data/types';
 import { sanitizeSvg } from '../ui/Math';
 import { Button, Segmented } from '../ui/Button';
 import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
@@ -78,6 +78,12 @@ export function Learn({ childIds, parent, meId }: { childIds: string[]; parent: 
       <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
         <Text style={s.h2}>Was kam heute dran?</Text>
         <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Die KI macht daraus einen kurzen Test, mit dem ihr seht, ob das Thema verstanden wurde.</Text>
+        {!parent && (
+          <View style={{ backgroundColor: C.warnSoft, borderRadius: 14, padding: 12, gap: 2 }}>
+            <Text style={[s.text, { fontWeight: '800' }]}>⭐ Bonus, wenn du selbst hochlädst</Text>
+            <Text style={[s.text, { fontSize: 14 }]}>+{PRACTICE_POINTS} fürs Üben, +{SELF_BONUS.upload} fürs Hochladen, dazu +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
+          </View>
+        )}
         {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
         <Text style={s.label}>Fach (optional)</Text>
         <TextInput style={s.input} value={subject} onChangeText={setSubject} placeholder="z. B. Mathe" />
@@ -123,6 +129,7 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
   const { data, update } = useFamily();
   const [ai, setAi] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
   const ctl = useRef<AbortController | null>(null);
   useEffect(() => { let on = true; getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, []);
   const u = data ? topicUnderstanding(data, topic.id) : undefined;
@@ -183,11 +190,59 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
           {open && onSolve && !busy && <Button title="Test lösen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => onSolve(open.id)} />}
           {ai && !open && !waiting && !busy && <Button title={sheets.length ? 'Neuen Test erstellen' : 'Test erstellen'} style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={makeTest} />}
           {busy && <Button ghost title="Abbrechen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => ctl.current?.abort()} />}
+          {ai && !busy && !asking && <Button ghost title="❓ Frage stellen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => setAsking(true)} />}
           {parent && !busy && <Button ghost title="Selbst Fragen schreiben" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={onCreate} />}
           {latest && <Button ghost title="Drucken" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={print} />}
           {parent && <Button ghost title="Löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => update(d => ({ ...d, topics: (d.topics ?? []).filter(x => x.id !== topic.id) }))} />}
         </View>
+        {asking && <AskBox topic={topic} childName={childName} onClose={() => setAsking(false)} />}
       </View>
+    </View>
+  );
+}
+
+/** Rückfragen zum Stoff. Das Gespräch bleibt nur auf diesem Gerät und nur, solange die Box offen ist. Höchstens 6 Fragen. */
+function AskBox({ topic, childName, onClose }: { topic: Topic; childName: string; onClose: () => void }) {
+  const { data } = useFamily();
+  const [q, setQ] = useState('');
+  const [log, setLog] = useState<QA[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const ctl = useRef<AbortController | null>(null);
+  const MAX = 6;
+  async function send() {
+    const question = q.trim();
+    if (!question || busy) return;
+    setBusy(true); setErr('');
+    ctl.current = new AbortController();
+    try {
+      const child = data?.children.find(c => c.id === topic.childId);
+      const a = await askTopic(topic, photosOf(topic), child?.name ?? childName, child ? currentGrade(child) : undefined, log, question, ctl.current.signal);
+      setLog(l => [...l, { q: question, a: a || 'Dazu habe ich gerade keine Antwort. Frag am besten Mama oder Papa.' }]); setQ('');
+    } catch (e: any) { if (e?.code !== 'cancelled') setErr(AI_ERROR[e?.code] ?? 'Die KI ist gerade nicht erreichbar.'); }
+    setBusy(false);
+  }
+  return (
+    <View style={{ marginTop: 8, gap: 8, backgroundColor: C.accentSoft, borderRadius: 14, padding: 10 }}>
+      <Text style={[s.label, { color: C.accent }]}>❓ Frag nach, was du nicht verstanden hast</Text>
+      {log.map((x, i) => (
+        <View key={i} style={{ gap: 4 }}>
+          <Text style={[s.text, { fontWeight: '700', fontSize: 15 }]}>🙋 {x.q}</Text>
+          <Text style={[s.text, { fontSize: 15, backgroundColor: C.surface, borderRadius: 10, padding: 10 }]}>{x.a}</Text>
+        </View>
+      ))}
+      {log.length < MAX ? (
+        <>
+          <TextInput style={[s.input, { backgroundColor: C.surface }]} value={q} onChangeText={setQ} placeholder="z. B. Warum muss der Nenner gleich bleiben?" accessibilityLabel="Deine Frage" multiline onSubmitEditing={send} />
+          <View style={s.row}>
+            <Button title={busy ? 'Denkt nach …' : 'Fragen'} disabled={busy || q.trim().length < 3} onPress={send} />
+            {busy ? <Button ghost title="Abbrechen" onPress={() => ctl.current?.abort()} /> : <Button ghost title="Schließen" onPress={onClose} />}
+          </View>
+        </>
+      ) : (
+        <View style={s.row}><Text style={[s.muted, { flex: 1 }]}>Genug gefragt für jetzt. Mach jetzt den Test, dann siehst du, ob es sitzt.</Text><Button ghost title="Schließen" onPress={onClose} /></View>
+      )}
+      {!!err && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{err}</Text>}
     </View>
   );
 }

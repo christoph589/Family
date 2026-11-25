@@ -88,6 +88,27 @@ export const AI_ERROR: Record<string, string> = {
   ai_down: 'Die KI ist gerade nicht erreichbar. Bitte gleich nochmal versuchen.',
 };
 
+export interface QA { q: string; a: string }
+/** Kind fragt zum Unterrichtsstoff nach. Die KI erklärt kindgerecht mit Blick auf die Fotos, löst aber keine Hausaufgaben vor. */
+export async function askTopic(topic: Topic, photos: string[], childName: string, grade: string | undefined, history: QA[], question: string, signal?: AbortSignal): Promise<string> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const prompt = `Du bist eine freundliche, geduldige Nachhilfelehrkraft. ${childName}${grade ? ` (Klasse ${grade})` : ''} hat eine Frage zum heutigen Unterricht.
+Fach: ${topic.subject}. Thema: ${topic.text}.${images.length ? ' Die Fotos zeigen das Heft, die Tafel oder das Arbeitsblatt von heute.' : ''}
+
+Regeln:
+- Erkläre in einfacher Sprache, passend zum Alter, höchstens 120 Wörter. Kurze Sätze, gern ein kleines Beispiel.
+- Wenn die Frage eine Hausaufgabe ist: nicht die Lösung verraten, sondern den Weg zeigen und mit einer Rückfrage zum Selberdenken enden.
+- Bleib beim Schulstoff. Bei anderen Themen freundlich zurück zum Thema lenken.
+- Keine Markdown-Überschriften, keine Tabellen. Rechnungen schlicht, z. B. 3/4 + 1/4 = 1.
+${history.length ? `\nBisheriges Gespräch:\n${history.map(h => `Kind: ${h.q}\nDu: ${h.a}`).join('\n')}\n` : ''}
+Frage von ${childName}: ${question.trim().slice(0, 500)}`;
+  const res = await sample(prompt, { images: images.length ? images : undefined, signal, cache: false });
+  return String(res?.text ?? '').replace(/^#+\s*/gm, '').trim();
+}
+
 export async function generateQuiz(topic: Topic, photos: string[], childName: string, grade: string | undefined, signal?: AbortSignal): Promise<GeneratedQuiz> {
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
