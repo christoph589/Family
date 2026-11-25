@@ -244,7 +244,7 @@ function Root() {
       </View>
       <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingTop: 6, paddingBottom: 120 }]}>
         {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
-        {tab === 'heute' && <Today childIds={childIds} parent={parent} />}
+        {tab === 'heute' && <Today childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'kalender' && <Timetable childIds={childIds} parent={parent} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} meId={profile.id} admin={admin} />}

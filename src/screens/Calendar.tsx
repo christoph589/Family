@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { GCal, GEvent, getMcp, GOOGLE_ERROR, listCalendars, listWeek } from '../data/google';
-import { peopleOf, Person, today, uid } from '../data/logic';
+import { isMasked, peopleOf, Person, PRIV_MODE, today, uid } from '../data/logic';
 import { CalEvent } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { DateField } from '../ui/DateField';
@@ -64,7 +64,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
       const kid = personInTitle(e.title);
       return { key: 'g' + e.id, time: e.time, title: e.title, color: kid?.color ?? '#4285f4', tag: 'Google', kid: kid?.id };
     }).filter(e => !mine || (e.kid && childIds.includes(e.kid))).map(({ kid, ...e }) => e);
-    const base = baseItems(data!, date, parent || all ? null : childIds, mine);
+    const base = baseItems(data!, date, parent || all ? null : childIds, mine, meId);
     const ext = [...feedItems(date), ...icItems(date)].filter(i => !mine || !i.who?.length || i.who.some(w => childIds.includes(w)));
     const tasks = base.filter(i => i.key.startsWith('t'));
     return [...base.filter(i => !i.key.startsWith('t')), ...g, ...ext].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).concat(tasks);
@@ -80,9 +80,9 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
     <View style={{ gap: 16 }}>
       <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} />{target === 'both' && <Button ghost title="🍎 + iCloud" onPress={() => setIcEdit({ date: anchor })} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
 
-      {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
+      {adding && <EventForm meId={meId} people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
 
-      {editing && <Popup onClose={() => setEditing(null)}><EventForm key={editing.id} initial={editing} people={people} days={daysOf('woche', anchor)} onCancel={() => setEditing(null)} onSave={ev => { update(d => ({ ...d, events: (d.events ?? []).map(e => (e.id === ev.id ? ev : e)) })); setEditing(null); }} /></Popup>}
+      {editing && <Popup onClose={() => setEditing(null)}><EventForm meId={meId} key={editing.id} initial={editing} people={people} days={daysOf('woche', anchor)} onCancel={() => setEditing(null)} onSave={ev => { update(d => ({ ...d, events: (d.events ?? []).map(e => (e.id === ev.id ? ev : e)) })); setEditing(null); }} /></Popup>}
       {icEdit && <Popup onClose={() => setIcEdit(null)}><IcloudForm key={icEdit.href ?? 'neu'} initial={icEdit} cals={icCals} onCancel={() => setIcEdit(null)} onSave={async ev => { await icloudSave(ev, icHrefs); setIcEdit(null); setAnchor(ev.date); }} /></Popup>}
       {letter && <LetterImport onDone={n => { setLetter(false); }} />}
 
@@ -90,7 +90,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
         <Popup accent={sel.it.color} onClose={() => setSel(null)}>
           <Text style={s.h2}>{sel.it.title}</Text>
           <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
-          {(() => { const ev = (data.events ?? []).find(e => e.id === sel.it.key); if (!ev) return null; const dt = driveText(ev, people); return (<>
+          {(() => { const ev = (data.events ?? []).find(e => e.id === sel.it.key); if (!ev) return null; if (isMasked(data, ev, meId)) return <Text style={s.muted}>🔒 Privater Termin</Text>; const dt = driveText(ev, people); return (<>
             {dt ? <Text style={[s.text, { fontWeight: '700' }]}>{dt}</Text> : null}
             {ev.note ? <Text style={s.text}>📝 {ev.note}</Text> : null}
             {ev.remind !== undefined ? <Text style={s.muted}>{remindLabel(ev.remind)}</Text> : null}
@@ -118,8 +118,8 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
             {!parent && ev.recurring ? <Text style={s.muted}>🔁 Serientermin</Text> : null}
           </>); })()}
           <View style={s.row}>
-            {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button ghost title="✏️ Bearbeiten" onPress={() => { setEditing((data.events ?? []).find(e => e.id === sel.it.key) ?? null); setSel(null); }} />}
-            {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button title="Termin löschen" color={C.danger} onPress={() => { update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
+            {parent && (data.events ?? []).some(e => e.id === sel.it.key && !isMasked(data, e, meId)) && <Button ghost title="✏️ Bearbeiten" onPress={() => { setEditing((data.events ?? []).find(e => e.id === sel.it.key) ?? null); setSel(null); }} />}
+            {parent && (data.events ?? []).some(e => e.id === sel.it.key && !isMasked(data, e, meId)) && <Button title="Termin löschen" color={C.danger} onPress={() => { update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
             {parent && sel.it.key.startsWith('x') && <Button title="✏️ In Familienkalender übernehmen" onPress={() => {
               const it = sel.it, ev: CalEvent = { id: uid(), title: it.title, date: sel.date, time: it.time, end: it.end, who: it.who ?? [] };
               update(d => ({ ...d, events: [...(d.events ?? []), ev], settings: { ...d.settings, hiddenFeed: [...(d.settings?.hiddenFeed ?? []).slice(-300), `${it.key}|${sel.date}`] } }));
@@ -180,7 +180,8 @@ function EventRow({ item, canDelete, onDelete }: { item: Item; canDelete: boolea
   );
 }
 
-export function EventForm({ people, days, onSave, onCancel, initial }: { people: Person[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void; initial?: CalEvent }) {
+export function EventForm({ people, days, onSave, onCancel, initial, meId }: { people: Person[]; days: string[]; onSave: (e: CalEvent) => void; onCancel: () => void; initial?: CalEvent; meId?: string }) {
+  const [priv, setPriv] = useState(!!initial?.priv);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [icon, setIcon] = useState(initial?.icon ?? '');
   const [iconTouched, setIconTouched] = useState(!!initial);
@@ -267,9 +268,18 @@ export function EventForm({ people, days, onSave, onCancel, initial }: { people:
         </View>
         <Text style={s.text}>Jede Woche</Text>
       </Pressable>
+      {meId && (
+        <Pressable onPress={() => setPriv(v => !v)} style={s.row} accessibilityRole="checkbox" accessibilityState={{ checked: priv }}>
+          <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: C.accent, backgroundColor: priv ? C.accent : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+            {priv && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+          </View>
+          <Text style={s.text}>🔒 Privat</Text>
+          <Text style={[s.muted, { flexShrink: 1 }]}>{PRIV_MODE === 'belegt' ? 'Andere sehen nur „Belegt“' : PRIV_MODE === 'eltern' ? 'Nur Eltern sehen ihn' : 'Nur du siehst ihn'}</Text>
+        </Pressable>
+      )}
       <View style={s.row}>
         <Button ghost title="Abbrechen" onPress={onCancel} />
-        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: initial?.id ?? uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly, bring: bring.trim() || undefined, pick: pick.trim() || undefined, note: note.trim() || undefined, remind })} />
+        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: initial?.id ?? uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly, bring: bring.trim() || undefined, pick: pick.trim() || undefined, note: note.trim() || undefined, remind, priv: priv ? (initial?.priv ?? meId) : undefined })} />
       </View>
     </View>
   );

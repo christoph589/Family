@@ -13,12 +13,12 @@ import { shoppingFor, untilLabel } from './Food';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
 import { dueCount, liveStreak } from '../data/vocab';
 
-export function Today({ childIds, parent }: { childIds: string[]; parent: boolean }) {
+export function Today({ childIds, parent, meId }: { childIds: string[]; parent: boolean; meId?: string }) {
   const { data, update } = useFamily();
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const people = peopleOf(data);
-  const events = eventsOn(data, today(), parent ? null : childIds, true);
+  const events = eventsOn(data, today(), parent ? null : childIds, true, meId);
   const holiday = holidayLabel(data, today());
   const bdays = birthdaysOn(data, today()).filter(b => parent || childIds.includes(b.child.id));
   const year = Number(today().slice(0, 4));

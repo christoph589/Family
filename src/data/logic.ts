@@ -1,5 +1,5 @@
 import { TEMPLATES } from './templates';
-import { Child, Completion, FamilyData, MoneyAccount, Parent, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
+import { CalEvent, Child, Completion, FamilyData, MoneyAccount, Parent, Reward, PRACTICE_POINTS, Task, Understanding, Worksheet } from './types';
 
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 // Änderungen laufen u. U. mehrfach (Anzeige, Speichern, Konflikt). Damit dabei dieselben IDs entstehen,
@@ -249,12 +249,24 @@ export function topicUnderstanding(data: FamilyData, topicId: string): Understan
 
 /** Eigene Termine an einem Tag. childIds = null zeigt alle (Eltern). Kinder sehen keine Termine der Geschwister. */
 /** childIds null = alle Termine. onlyOwn: nur Termine der Kinder selbst und der ganzen Familie, ohne reine Eltern-Termine. */
-export function eventsOn(d: FamilyData, date: string, childIds: string[] | null, onlyOwn = false) {
+/** Wie private Termine für andere aussehen: 'belegt' (nur Zeit), 'aus' (unsichtbar), 'eltern' (Eltern sehen alles, sonst unsichtbar) */
+export const PRIV_MODE = 'aus' as 'belegt' | 'aus' | 'eltern';
+/** Termin aus Sicht einer Person. null = nicht zeigen. viewer fehlt = Wandansicht. */
+export function privView(d: FamilyData, e: CalEvent, viewer?: string): CalEvent | null {
+  if (!e.priv || e.priv === viewer) return e;
+  if (PRIV_MODE === 'eltern' && viewer && parentsOf(d).some(p => p.id === viewer && p.admin !== false)) return e;
+  if (PRIV_MODE !== 'belegt') return null;
+  return { id: e.id, date: e.date, time: e.time, end: e.end, weekly: e.weekly, who: e.who, title: 'Belegt', icon: '🔒', priv: e.priv };
+}
+export const isMasked = (d: FamilyData, e: CalEvent, viewer?: string) => privView(d, e, viewer) !== e;
+
+export function eventsOn(d: FamilyData, date: string, childIds: string[] | null, onlyOwn = false, viewer?: string) {
   const parentIds = onlyOwn ? [] : parentsOf(d).map(p => p.id);
   const wd = new Date(date + 'T12:00:00').getDay();
   return (d.events ?? [])
     .filter(e => (e.weekly ? new Date(e.date + 'T12:00:00').getDay() === wd && e.date <= date : e.date === date))
     .filter(e => !childIds || e.who.length === 0 || e.who.some(w => childIds.includes(w) || parentIds.includes(w)))
+    .map(e => privView(d, e, viewer)).filter((e): e is CalEvent => !!e)
     .sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99'));
 }
 

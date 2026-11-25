@@ -127,6 +127,8 @@ export interface CalEvent {
   note?: string;
   /** Erinnerung: Minuten vorher, -1 = Vorabend 19 Uhr. Fehlt = keine. */
   remind?: number;
+  /** Privat: Person-ID. Nur diese Person sieht Titel und Details. */
+  priv?: string;
 }
 
 /** Geschenke: Idee oder gekauft, gehört zu einem Anlass in einem bestimmten Jahr. Beträge in Cent. */

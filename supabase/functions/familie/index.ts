@@ -304,8 +304,8 @@ async function tick(body: any, admin: any) {
       const key = `${ev.id}|${date}|${ev.remind}`;
       const { error } = await admin.from('push_sent').insert({ family_id: fid, key });
       if (error) continue; // schon verschickt
-      const to = recipients(ev, d);
-      const target = rows.filter(r => !to || !r.person_id || to.has(r.person_id));
+      const to = (ev as any).priv ? new Set<string>([(ev as any).priv]) : recipients(ev, d);
+      const target = rows.filter(r => !to || (r.person_id ? to.has(r.person_id) : !(ev as any).priv));
       const when = ev.remind === -1 || ev.remind >= 1440 ? (ev.time ? `Morgen ${ev.time} Uhr` : 'Morgen') : ev.time ? `Heute ${ev.time} Uhr` : 'Heute';
       const lines = [ev.who?.length ? ev.who.map(name).filter(Boolean).join(', ') : '', ev.bring || ev.pick ? [name(ev.bring) && `🚗 ${name(ev.bring)}`, name(ev.pick) && `🏠 ${name(ev.pick)}`].filter(Boolean).join(' · ') : '', ev.note ?? ''].filter(Boolean);
       total += await sendTo(admin, target, { title: `${ev.icon ? ev.icon + ' ' : ''}${ev.title}`, body: [when, ...lines].join('\n'), tag: key });
@@ -755,7 +755,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       const { data: st } = await admin.from('family_state').select('data').eq('family_id', fam.id).single();
       const d = st!.data as any;
       const people: Person[] = [...(d.parents ?? [{ id: 'mama', name: 'Mama' }, { id: 'papa', name: 'Papa' }]), ...(d.children ?? [])];
-      const ics = buildIcs(fam.name, d.events ?? [], people, d.children ?? []);
+      const ics = buildIcs(fam.name, (d.events ?? []).filter((e: any) => !e.priv), people, d.children ?? []);
       return new Response(ics, { headers: { ...cors, 'content-type': 'text/calendar; charset=utf-8', 'cache-control': 'max-age=300' } });
     }
 
