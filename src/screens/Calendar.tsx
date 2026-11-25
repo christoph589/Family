@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { GCal, GEvent, getMcp, GOOGLE_ERROR, listCalendars, listWeek } from '../data/google';
 import { isMasked, peopleOf, Person, PRIV_MODE, today, uid } from '../data/logic';
@@ -22,6 +22,7 @@ type Item = CalItem;
 
 export function Calendar({ childIds, parent, meId }: { childIds: string[]; parent: boolean; meId?: string }) {
   const { data, update } = useFamily();
+  const narrow = useWindowDimensions().width < 600;
   const [mode, setMode] = useState<CalMode>('woche');
   const [sel, setSel] = useState<{ it: CalItem; date: string } | null>(null);
   const [anchor, setAnchor] = useState(today());
@@ -78,7 +79,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
 
   return (
     <View style={{ gap: 16 }}>
-      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} />{target === 'both' && <Button ghost title="📱 + Handy-Kalender" onPress={() => setIcEdit({ date: anchor })} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
+      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1, flexWrap: 'nowrap' }]}><Button ghost title={narrow ? '📄' : '📄 Elternbrief'} accessibilityLabel="Elternbrief" onPress={() => setLetter(true)} style={narrow ? { paddingHorizontal: 14 } : undefined} />{target === 'both' && <Button ghost title={narrow ? '📱 +' : '📱 + Handy-Kalender'} accessibilityLabel="Termin im Handy-Kalender" onPress={() => setIcEdit({ date: anchor })} style={narrow ? { paddingHorizontal: 14 } : undefined} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
 
       {adding && <EventForm meId={meId} people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
 

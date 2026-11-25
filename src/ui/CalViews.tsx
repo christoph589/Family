@@ -38,11 +38,12 @@ export function stepAnchor(mode: CalMode, anchor: string, dir: 1 | -1) {
   if (mode === 'monat') return addMonths(anchor, dir);
   return addDays(anchor, dir * (mode === 'tag' ? 1 : mode === '3tage' ? 3 : 7));
 }
-export function rangeLabel(mode: CalMode, anchor: string) {
+export function rangeLabel(mode: CalMode, anchor: string, short = false) {
   const f = (d: string, o: Intl.DateTimeFormatOptions) => parse(d).toLocaleDateString('de-DE', o);
   if (mode === 'tag') return f(anchor, { weekday: 'short', day: 'numeric', month: 'long' });
   if (mode === 'monat') return f(anchor, { month: 'long', year: 'numeric' });
   const ds = daysOf(mode, anchor), a = ds[0], b = ds[ds.length - 1];
+  if (short) return `${f(a, { day: 'numeric', month: a.slice(0, 7) === b.slice(0, 7) ? undefined : 'numeric' })}${a.slice(0, 7) === b.slice(0, 7) ? '.' : ''}–${f(b, { day: 'numeric', month: 'numeric' })}`;
   return a.slice(0, 7) === b.slice(0, 7) ? `${parse(a).getDate()}.–${f(b, { day: 'numeric', month: 'short' })}` : `${f(a, { day: 'numeric', month: 'short' })} – ${f(b, { day: 'numeric', month: 'short' })}`;
 }
 
@@ -93,6 +94,22 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
 }
 
 export function CalNav({ mode, anchor, onMode, onAnchor, right }: { mode: CalMode; anchor: string; onMode: (m: CalMode) => void; onAnchor: (a: string) => void; right?: ReactNode }) {
+  const narrow = useWindowDimensions().width < 600;
+  if (narrow) return (
+    <View style={{ gap: 10 }}>
+      <Segmented value={mode} onChange={onMode} options={CAL_MODES} />
+      <View style={[s.row, { flexWrap: 'nowrap', gap: 6 }]}>
+        <Button ghost title="‹" accessibilityLabel="Zurück" onPress={() => onAnchor(stepAnchor(mode, anchor, -1))} style={{ paddingHorizontal: 12 }} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Heute" onPress={() => onAnchor(today())} style={{ flexShrink: 1, paddingHorizontal: 4 }}>
+          <Text style={[s.text, { fontWeight: '800', fontSize: 14 }]} numberOfLines={1}>{rangeLabel(mode, anchor, true)}</Text>
+          {anchor !== today() && <Text style={{ color: C.accent, fontSize: 11, fontWeight: '700' }}>zu heute</Text>}
+        </Pressable>
+        <Button ghost title="›" accessibilityLabel="Weiter" onPress={() => onAnchor(stepAnchor(mode, anchor, 1))} style={{ paddingHorizontal: 12 }} />
+        <View style={{ flex: 1 }} />
+        {right}
+      </View>
+    </View>
+  );
   return (
     <View style={{ gap: 10 }}>
       <View style={[s.row, { justifyContent: 'space-between' }]}>
@@ -217,7 +234,7 @@ function Agenda({ days, itemsFor, onItemPress, onPickDay }: { days: string[]; it
               {rest.map(it => (
                 <Pressable key={it.key} disabled={!onItemPress} onPress={() => onItemPress?.(it, d)} accessibilityRole="button" accessibilityLabel={`${it.time ?? ''} ${it.title}`}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderLeftWidth: 4, borderLeftColor: it.color, backgroundColor: it.color + '14', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: C.muted, width: 40 }}>{it.time ?? 'ganzt.'}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: C.muted, width: 50, flexShrink: 0 }}>{it.time ?? 'ganzt.'}</Text>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontSize: 14.5, fontWeight: '700', color: C.fg }} numberOfLines={1}>{it.title}</Text>
                     {(it.tag || it.drive) ? <Text style={{ fontSize: 12, color: C.muted }} numberOfLines={1}>{[it.tag, it.drive].filter(Boolean).join(' · ')}</Text> : null}
