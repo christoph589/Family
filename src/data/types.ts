@@ -159,6 +159,8 @@ export interface FamilyData {
     /** Automatische Ferien und Feiertage nach Bundesland */
     /** Eingebundene fremde Kalender (iCal-Links von iCloud, Google, Outlook, WebUntis) */
     feeds?: Feed[];
+    /** Aus einem Abo übernommene Termine ("key|datum"), das Original wird ausgeblendet */
+    hiddenFeed?: string[];
     autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string } };
 }
 

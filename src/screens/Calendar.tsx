@@ -45,7 +45,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
     return () => { on = false; };
   }, [calId, days[0], days.length]);
 
-  const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : []);
+  const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : [], data?.settings?.hiddenFeed);
   if (!data) return null;
   const people = peopleOf(data);
   const personInTitle = (t: string) => people.find(k => t.toLowerCase().split(/[^\p{L}]+/u).includes(k.name.toLowerCase()));
@@ -89,6 +89,11 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
           <View style={s.row}>
             {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button ghost title="✏️ Bearbeiten" onPress={() => { setEditing((data.events ?? []).find(e => e.id === sel.it.key) ?? null); setSel(null); }} />}
             {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button title="Termin löschen" color={C.danger} onPress={() => { update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
+            {parent && sel.it.key.startsWith('x') && <Button title="✏️ In Familienkalender übernehmen" onPress={() => {
+              const it = sel.it, ev: CalEvent = { id: uid(), title: it.title, date: sel.date, time: it.time, end: it.end, who: it.who ?? [] };
+              update(d => ({ ...d, events: [...(d.events ?? []), ev], settings: { ...d.settings, hiddenFeed: [...(d.settings?.hiddenFeed ?? []).slice(-300), `${it.key}|${sel.date}`] } }));
+              setSel(null); setEditing(ev);
+            }} />}
             <Button ghost title="Schließen" onPress={() => setSel(null)} />
           </View>
         </View>

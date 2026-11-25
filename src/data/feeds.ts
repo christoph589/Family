@@ -50,7 +50,8 @@ export const feedStatus = (url: string) => cache.get(url);
 export const reloadFeed = (url: string) => refresh(url, true);
 
 /** Liefert eine Funktion Datum -> Kalendereinträge aller eingebundenen Kalender. */
-export function useFeedItems(feeds: Feed[] | undefined, people: { id: string; name: string; color: string; photo?: string }[]) {
+/** hidden: übernommene Termine als "key|datum", die nicht mehr aus dem Abo angezeigt werden */
+export function useFeedItems(feeds: Feed[] | undefined, people: { id: string; name: string; color: string; photo?: string }[], hidden: string[] = []) {
   const [, setTick] = useState(0);
   const key = (feeds ?? []).map(f => f.url).join('|');
   useEffect(() => {
@@ -63,7 +64,7 @@ export function useFeedItems(feeds: Feed[] | undefined, people: { id: string; na
   }, [key]);
   return (date: string): CalItem[] => (feeds ?? []).flatMap(f => {
     const person = people.find(p => p.id === f.who);
-    return (cache.get(f.url)?.events ?? []).filter(e => e.date === date).map(e => ({
+    return (cache.get(f.url)?.events ?? []).filter(e => e.date === date && !hidden.includes('x' + f.id + e.uid + '|' + date)).map(e => ({
       key: 'x' + f.id + e.uid, time: e.time, end: e.end, title: f.icon ? `${f.icon} ${e.title}` : e.title, color: f.color,
       tag: person ? `${person.name} · ${f.name}` : f.name, badge: person ? undefined : f.icon, who: f.who ? [f.who] : [], people: person ? [{ id: person.id, name: person.name, color: person.color, photo: person.photo }] : undefined,
     }));

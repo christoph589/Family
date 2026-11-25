@@ -38,7 +38,7 @@ export function Board({ onExit }: { onExit: () => void }) {
   const setKids = (v: boolean) => { setKidsState(v); AsyncStorage.setItem('familienplaner:boardKids', v ? '1' : '0').catch(() => {}); };
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardKids').then(v => v === '0' && setKidsState(false), () => {}); }, []);
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardPane').then(v => v && setPaneState(v as Pane), () => {}); }, []);
-  const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : []);
+  const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : [], data?.settings?.hiddenFeed);
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardView').then(v => v && setMode(v as CalMode), () => {}); }, []);
   // Nach 2 Minuten ohne Bedienung zurück zu heute
   useEffect(() => { const t = setTimeout(() => setAnchor(today()), 120000); return () => clearTimeout(t); }, [anchor, mode, touched]);
