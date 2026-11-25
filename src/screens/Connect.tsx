@@ -11,16 +11,31 @@ import { Landing } from './Landing';
 const sso = { borderRadius: 14, paddingVertical: 14, alignItems: 'center' as const };
 const ssoT = { fontSize: 16, fontWeight: '700' as const };
 
+const INVITE_KEY = 'famelio:partner';
+/** Einladungscode aus ?partner=… merken (überlebt die Weiterleitung zu Google/Apple). */
+function readInvite(): string {
+  try {
+    const q = new URLSearchParams(window.location.search);
+    const c = (q.get('partner') ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (c.length === 8) {
+      localStorage.setItem(INVITE_KEY, c);
+      q.delete('partner'); window.history.replaceState(null, '', window.location.pathname + (q.toString() ? '?' + q : ''));
+    }
+    return localStorage.getItem(INVITE_KEY) ?? '';
+  } catch { return ''; }
+}
+
 type Step = 'start' | 'eltern' | 'neu' | 'kind' | 'kindWahl';
 
 /** Erster Start mit Server: Familien-Pad (Eltern-Konto) oder Kindergerät (Familiencode). */
 export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
-  const [step, setStep] = useState<Step>('start');
+  const [invite] = useState(readInvite);
+  const [step, setStep] = useState<Step>(invite ? 'eltern' : 'start');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
-  const [mode, setMode] = useState<'login' | 'neu'>('login');
+  const [mode, setMode] = useState<'login' | 'neu'>(invite ? 'neu' : 'login');
   const [info, setInfo] = useState('');
   const [code, setCode] = useState('');
   const [local, setLocal] = useState<FamilyData | null>(null);
@@ -40,6 +55,11 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
   const link = async (l: DeviceLink) => { await setLink(l); onLinked(l); };
 
   const afterParentLogin = async () => {
+    if (invite) {
+      const fid = await joinFamily(invite, 'eltern').catch(e => { try { localStorage.removeItem(INVITE_KEY); } catch { /* egal */ } throw e; });
+      try { localStorage.removeItem(INVITE_KEY); } catch { /* egal */ }
+      return link({ familyId: fid, role: 'eltern' });
+    }
     const fid = await myParentFamily();
     if (fid) return link({ familyId: fid, role: 'eltern' });
     setStep('neu');
@@ -54,7 +74,8 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
   if (step === 'start') return <Landing onNew={() => { setMode('neu'); setStep('eltern'); }} onLogin={() => { setMode('login'); setStep('eltern'); }} onKid={() => setStep('kind')} />;
 
   if (step === 'eltern') return box(<>
-    <Text style={s.h1}>Eltern-Anmeldung</Text>
+    <Text style={s.h1}>{invite ? 'Willkommen bei Famelio' : 'Eltern-Anmeldung'}</Text>
+    {!!invite && <Text style={s.muted}>Du wurdest in eine Familie eingeladen. Melde dich an oder lege ein Konto an, dann bist du direkt drin.</Text>}
     {(prov.apple || prov.google) && <View style={{ gap: 10 }}>
       {prov.apple && <Pressable disabled={busy} onPress={() => run(() => parentOAuth('apple'))} style={[sso, { backgroundColor: '#000' }]}><Text style={[ssoT, { color: '#fff' }]}>Mit Apple fortfahren</Text></Pressable>}
       {prov.google && <Pressable disabled={busy} onPress={() => run(() => parentOAuth('google'))} style={[sso, { backgroundColor: '#fff', borderWidth: 1, borderColor: '#dadce0' }]}><Text style={[ssoT, { color: '#1f1f1f' }]}><Text style={{ color: '#4285f4', fontWeight: '900' }}>G</Text>  Mit Google fortfahren</Text></Pressable>}

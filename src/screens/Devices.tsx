@@ -10,7 +10,27 @@ export function Devices({ link, onSignOut }: { link: DeviceLink; onSignOut: () =
   const [err, setErr] = useState('');
   const [confirm, setConfirm] = useState(false);
   useEffect(() => { joinCode(link.familyId).then(setCode, () => setErr('Code konnte nicht geladen werden.')); }, [link.familyId]);
-  return (
+  const [copied, setCopied] = useState(false);
+  const invite = code && typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}?partner=${code}` : '';
+  async function share() {
+    const text = `Ich habe uns bei Famelio angemeldet, unserem Familienplaner. Hier kommst du mit deinem eigenen Konto in unsere Familie: ${invite}`;
+    try {
+      if ((navigator as any).share) await (navigator as any).share({ title: 'Famelio-Einladung', text });
+      else { await navigator.clipboard.writeText(text); setCopied(true); }
+    } catch { /* abgebrochen */ }
+  }
+  return (<>
+    {link.role === 'eltern' && (
+      <View style={s.card}>
+        <Text style={s.h2}>👫 Partner einladen</Text>
+        <Text style={s.muted}>Dein Partner bekommt ein eigenes Konto (E-Mail, Google oder Apple) und sieht alles, was du siehst.</Text>
+        <View style={s.row}>
+          <Button title="Einladung senden" disabled={!invite} onPress={share} />
+          {copied && <Text style={{ color: C.accent, fontWeight: '700' }}>Kopiert. Jetzt per WhatsApp oder Mail schicken.</Text>}
+        </View>
+        <Text style={[s.muted, { fontSize: 12 }]} selectable>{invite}</Text>
+      </View>
+    )}
     <View style={s.card}>
       <Text style={s.label}>Geräte</Text>
       <Text style={s.text}>Kindergerät verbinden: App öffnen, „Gerät eines Kindes“ wählen und diesen Code eingeben.</Text>
@@ -24,7 +44,7 @@ export function Devices({ link, onSignOut }: { link: DeviceLink; onSignOut: () =
           <Button ghost title="Abbrechen" onPress={() => setConfirm(false)} />
         </>}
       </View>
-      <Text style={[s.muted, { fontSize: 13 }]}>Ein neuer Code macht den alten ungültig. Schon verbundene Geräte bleiben verbunden.</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>Ein neuer Code macht den alten ungültig (auch die Partner-Einladung). Schon verbundene Geräte bleiben verbunden.</Text>
     </View>
-  );
+  </>);
 }
