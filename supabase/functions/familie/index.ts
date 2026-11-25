@@ -342,8 +342,8 @@ async function pushAction(body: any, userId: string, admin: any) {
 // Braucht zwei Geheimnisse in Supabase (Edge Functions > Secrets):
 //   ICLOUD_USER          = Apple-ID (E-Mail)
 //   ICLOUD_APP_PASSWORD  = app-spezifisches Passwort von appleid.apple.com (nicht das normale Apple-Passwort)
-const IC_USER = Deno.env.get('ICLOUD_USER');
-const IC_PASS = Deno.env.get('ICLOUD_APP_PASSWORD');
+const IC_USER = Deno.env.get('ICLOUD_USER')?.trim();
+const IC_PASS = Deno.env.get('ICLOUD_APP_PASSWORD')?.replace(/\s/g, '');
 const IC_ROOT = 'https://caldav.icloud.com';
 
 async function dav(url: string, method: string, body?: string, headers: Record<string, string> = {}) {
