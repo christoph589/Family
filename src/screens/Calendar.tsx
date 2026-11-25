@@ -233,7 +233,7 @@ export function EventForm({ people, days, onSave, onCancel, initial }: { people:
       </Pressable>
       <View style={s.row}>
         <Button ghost title="Abbrechen" onPress={onCancel} />
-        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: initial?.id ?? uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly, bring: bring || undefined, pick: pick || undefined, note: note.trim() || undefined, remind })} />
+        <Button title="Speichern" disabled={!title.trim() || !timeOk} onPress={() => onSave({ id: initial?.id ?? uid(), title: title.trim(), icon: icon.trim() || undefined, date, time: time ? fix(time) : undefined, end: time && end ? fix(end) : undefined, who, weekly, bring: bring.trim() || undefined, pick: pick.trim() || undefined, note: note.trim() || undefined, remind })} />
       </View>
     </View>
   );
@@ -252,6 +252,8 @@ function DriverRow({ label, adults, value, onChange }: { label: string; adults: 
           </Pressable>
         );
       })}
+      <TextInput style={[s.input, { flexGrow: 1, flexBasis: 140, minWidth: 120, paddingVertical: 8 }]} value={adults.some(a => a.id === value) ? '' : value}
+        onChangeText={onChange} placeholder="oder: z. B. Oma, Fahrgemeinschaft" accessibilityLabel={`${label}: andere Person`} />
     </View>
   );
 }
@@ -264,7 +266,7 @@ export const remindLabel = (v?: number) => (v === undefined ? '' : `🔔 ${REMIN
 
 /** "🚗 Papa bringt · 🏠 Mama holt ab" */
 export function driveText(e: { bring?: string; pick?: string }, people: { id: string; name: string }[]) {
-  const n = (id?: string) => people.find(p => p.id === id)?.name;
+  const n = (id?: string) => (id ? people.find(p => p.id === id)?.name ?? id : undefined);
   const b = n(e.bring), p = n(e.pick);
   if (b && p && b === p) return `🚗 ${b} fährt hin und zurück`;
   return [b && `🚗 ${b} bringt`, p && `🏠 ${p} holt ab`].filter(Boolean).join(' · ');

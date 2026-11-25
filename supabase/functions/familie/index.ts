@@ -270,7 +270,9 @@ function recipients(e: RemEv, d: any): Set<string> | null {
   if (!e.who?.length) return null; // ganze Familie
   const kids = new Set((d.children ?? []).map((c: any) => c.id));
   const to = new Set<string>([...e.who, ...[e.bring, e.pick].filter(Boolean) as string[]]);
-  if (e.who.some(w => kids.has(w)) && !e.bring && !e.pick) for (const p of d.parents ?? []) if (p.admin !== false) to.add(p.id);
+  // Fährt niemand aus der Familie (leer oder Freitext wie „Oma“), bekommen Mama und Papa die Erinnerung
+  const member = (x?: string) => !!x && (d.parents ?? []).some((p: any) => p.id === x);
+  if (e.who.some(w => kids.has(w)) && !member(e.bring) && !member(e.pick)) for (const p of d.parents ?? []) if (p.admin !== false) to.add(p.id);
   return to;
 }
 
@@ -296,7 +298,7 @@ async function tick(body: any, admin: any) {
     const d = st?.data as any;
     if (!d) continue;
     const people = [...(d.parents ?? []), ...(d.children ?? [])];
-    const name = (id?: string) => people.find((p: any) => p.id === id)?.name;
+    const name = (id?: string) => (id ? people.find((p: any) => p.id === id)?.name ?? id : undefined);
     for (const { ev, date } of dueReminders(d.events ?? [], now)) {
       const key = `${ev.id}|${date}|${ev.remind}`;
       const { error } = await admin.from('push_sent').insert({ family_id: fid, key });

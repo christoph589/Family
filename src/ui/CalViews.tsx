@@ -59,7 +59,7 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
   });
   const ev = eventsOn(data, date, childIds, onlyOwn).map(e => {
     const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
-    const nm = (id?: string) => people.find(p => p.id === id)?.name;
+    const nm = (id?: string) => (id ? people.find(p => p.id === id)?.name ?? id : undefined);
     const b = nm(e.bring), pk = nm(e.pick);
     const drive = b && pk && b === pk ? `🚗 ${b} hin und zurück` : [b && `🚗 ${b}`, pk && `🏠 ${pk}`].filter(Boolean).join(' · ') || undefined;
     return { key: e.id, time: e.time, end: e.end, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, tag: ps.length ? ps.map(p => p.name).join(', ') : 'Alle', who: e.who, people: ps, drive, note: e.note };
