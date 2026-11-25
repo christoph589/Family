@@ -4,7 +4,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { ALL_COLORS, autoHolidayOn, freeColor, isAdmin, CHILD_COLORS, manualHolidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
 import { TEMPLATES } from '../data/templates';
-import { ageOf, gradeLabel, pruneAiPhotos, removeChild, schoolYearOf } from '../data/logic';
+import { ageOf, currentGrade, gradeLabel, pruneAiPhotos, removeChild, schoolYearOf } from '../data/logic';
 import { Child } from '../data/types';
 import { KidDraft, KidFields } from '../ui/KidFields';
 import { FamilyData } from '../data/types';
@@ -17,7 +17,9 @@ import { EmergencyEdit } from './Emergency';
 export function Family() {
   const { data, update } = useFamily();
   const [open, setOpen] = useState<string | null>(null);
-  const [focusId, setFocusId] = useState<string | null>(null);
+  const [focusId, setFocusIdRaw] = useState<string | null>(null);
+  const [edit, setEdit] = useState<string | null>(null);
+  const setFocusId = (id: string) => { setFocusIdRaw(id); setEdit(id); };
   const [delKid, setDelKid] = useState<string | null>(null);
   const [crop, setCrop] = useState<{ id: string; src?: string; error?: string } | null>(null);
   if (!data) return null;
@@ -27,6 +29,10 @@ export function Family() {
     ...parents.map(p => ({ id: p.id, name: p.name, color: p.color, photo: p.photo, role: 'eltern' as const })),
     ...data.children.map(c => ({ id: c.id, name: c.name, color: c.color, photo: c.photo, role: 'kind' as const })),
   ];
+  const sub = (r: (typeof rows)[number]) => {
+    if (r.role === 'kind') { const c = data.children.find(x => x.id === r.id)!; const g = currentGrade(c); return ['Kind', g ? `Klasse ${g}` : '', c.schoolType ?? ''].filter(Boolean).join(' · '); }
+    const p = parents.find(x => x.id === r.id)!; return [p.title, isAdmin(p) ? 'Admin' : 'ohne Admin'].filter(Boolean).join(' · ');
+  };
   const rename = (id: string, role: string, name: string) => role === 'eltern'
     ? setParents(ps => ps.map(p => (p.id === id ? { ...p, name } : p)))
     : update((d: FamilyData) => ({ ...d, children: d.children.map(c => (c.id === id ? { ...c, name } : c)) }));
@@ -41,16 +47,27 @@ export function Family() {
     <View style={s.card}>
       <Text style={s.label}>Familie</Text>
       {rows.map(r => (
-        <View key={r.id} style={{ gap: 8 }}>
+        <View key={r.id} style={{ gap: 8, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 8 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${r.name || 'Neue Person'} bearbeiten`} onPress={() => setEdit(e => (e === r.id ? null : r.id))}
+            style={[s.row, { flexWrap: 'nowrap', gap: 12, paddingVertical: 4 }]}>
+            <Avatar name={r.name} color={r.color} photo={r.photo} size={44} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[s.text, { fontWeight: '800', fontSize: 17 }]} numberOfLines={1}>{r.name || 'Neue Person'}</Text>
+              <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={1}>{sub(r)}</Text>
+            </View>
+            <Text style={{ fontSize: 22, color: C.muted, transform: [{ rotate: edit === r.id ? '90deg' : '0deg' }] }}>›</Text>
+          </Pressable>
+          {edit === r.id && (
+          <View style={{ gap: 8, paddingBottom: 8 }}>
           <View style={[s.row, { flexWrap: 'nowrap' }]}>
             <Pressable accessibilityLabel={`Foto oder Farbe für ${r.name}`} onPress={() => setOpen(o => (o === r.id ? null : r.id))}
               >
               <Avatar name={r.name} color={r.color} photo={r.photo} size={44} />
+              <Text style={{ fontSize: 11, color: C.accent, fontWeight: '700', textAlign: 'center' }}>ändern</Text>
             </Pressable>
             <TextInput style={[s.input, { flex: 1, minWidth: 0 }]} value={r.name} onChangeText={t => rename(r.id, r.role, t.slice(0, 24))} accessibilityLabel="Name"
               placeholder={r.role === 'kind' ? 'Name des Kindes' : 'Vorname, z. B. Christoph'} autoFocus={focusId === r.id} selectTextOnFocus />
-            <Text style={[s.muted, { flexShrink: 0 }]}>{r.role === 'kind' ? 'Kind' : isAdmin(parents.find(p => p.id === r.id)) ? 'Admin' : 'Erwachsen'}</Text>
-            {r.role === 'eltern' && parents.length > 1 && !(isAdmin(parents.find(p => p.id === r.id)) && parents.filter(isAdmin).length === 1) && (
+                        {r.role === 'eltern' && parents.length > 1 && !(isAdmin(parents.find(p => p.id === r.id)) && parents.filter(isAdmin).length === 1) && (
               <Pressable onPress={() => setParents(ps => ps.filter(p => p.id !== r.id))}><Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text></Pressable>
             )}
             {r.role === 'kind' && data.children.length > 1 && (
@@ -58,7 +75,7 @@ export function Family() {
             )}
           </View>
           {delKid === r.id && (
-            <View style={{ marginLeft: 50, backgroundColor: '#fde8e6', borderRadius: 12, padding: 12, gap: 8 }}>
+            <View style={{ marginLeft: 0, backgroundColor: '#fde8e6', borderRadius: 12, padding: 12, gap: 8 }}>
               <Text style={[s.text, { fontWeight: '700' }]}>{r.name || 'Dieses Kind'} wirklich löschen?</Text>
               <Text style={s.muted}>Dabei verschwinden auch Aufgaben, Punkte, Wünsche, Übungen, Taschengeld-Konto und Stundenplan. Das lässt sich nicht rückgängig machen.</Text>
               <View style={s.row}>
@@ -73,7 +90,7 @@ export function Family() {
             const lastAdmin = adm && parents.filter(isAdmin).length === 1;
             const set = (patch: Partial<typeof p>) => setParents(ps => ps.map(x => (x.id === p.id ? { ...x, ...patch } : x)));
             return (
-              <View style={{ marginLeft: 50, gap: 8 }}>
+              <View style={{ marginLeft: 0, gap: 8 }}>
                 <View style={[s.row, { flexWrap: 'nowrap' }]}>
                   <Text style={s.muted}>Rolle</Text>
                   <TextInput style={[s.input, { flex: 1, minWidth: 0, paddingVertical: 8 }]} value={p.title ?? ''} onChangeText={t => set({ title: t.slice(0, 16) || undefined })}
@@ -105,24 +122,26 @@ export function Family() {
           {r.role === 'kind' && <KidProfileEdit child={data.children.find(c => c.id === r.id)!} />}
           {r.role === 'kind' && <EmergencyEdit child={data.children.find(c => c.id === r.id)!} />}
           {crop?.id === r.id && (
-            <View style={{ paddingLeft: 50 }}>
+            <View style={{ paddingLeft: 0 }}>
               {crop.error ? <View style={s.row}><Text style={{ color: C.danger, flexShrink: 1 }}>{crop.error}</Text><Button ghost title="OK" onPress={() => setCrop(null)} /></View>
                 : crop.src && <PhotoCropper src={crop.src} onCancel={() => setCrop(null)} onDone={ph => { setPhoto(r.id, r.role, ph); setCrop(null); }} />}
             </View>
           )}
           {open === r.id && (
-            <View style={[s.row, { paddingLeft: 50 }]}>
+            <View style={[s.row, { paddingLeft: 0 }]}>
               <Button ghost title={r.photo ? 'Anderes Foto' : '📷 Foto hochladen'} onPress={() => pickImageFile().then(res => { if (res) { setCrop({ id: r.id, ...res }); setOpen(null); } })} />
               {r.photo && <Button ghost title="Foto entfernen" onPress={() => setPhoto(r.id, r.role, undefined)} />}
             </View>
           )}
           {open === r.id && (
-            <View style={[s.row, { gap: 8, paddingLeft: 50 }]}>
+            <View style={[s.row, { gap: 8, paddingLeft: 0 }]}>
               {ALL_COLORS.map(c => (
                 <Pressable key={c} accessibilityLabel={`Farbe ${c}`} onPress={() => { recolor(r.id, r.role, c); setOpen(null); }}
                   style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c, borderWidth: 3, borderColor: c === r.color ? C.fg : 'transparent' }} />
               ))}
             </View>
+          )}
+          </View>
           )}
         </View>
       ))}
@@ -134,7 +153,7 @@ export function Family() {
         <Button ghost title="+ Elternteil" onPress={() => { const id = uid(); setFocusId(id); update(d => ({ ...d, parents: [...parentsOf(d), { id, name: '', color: freeColor(d, PARENT_COLORS) }] })); }} />
         <Button ghost title="+ Oma, Opa, …" onPress={() => { const id = uid(); setFocusId(id); update(d => ({ ...d, parents: [...parentsOf(d), { id, name: '', admin: false, color: freeColor(d) }] })); }} />
       </View>
-      <Text style={[s.muted, { fontSize: 13 }]}>Tipp auf den Kreis: Foto hochladen oder Farbe ändern. Termine und Aufgaben tragen die Farbe der Person.</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>Person antippen zum Bearbeiten. Termine und Aufgaben tragen die Farbe der Person.</Text>
     </View>
   );
 }
@@ -233,7 +252,7 @@ function KidProfileEdit({ child }: { child: Child }) {
   const age = ageOf(child);
   const missing = !child.birthday || !child.gender || !child.grade;
   return (
-    <View style={{ paddingLeft: 50, gap: 4 }}>
+    <View style={{ paddingLeft: 0, gap: 4 }}>
       <KidFields value={draft} name={child.name} onChange={v => {
         const next = { ...draft, ...v };
         setDraft(next);
