@@ -8,6 +8,7 @@ import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text,
 import { cloudEnabled, cloudStore, DeviceLink, getLink, signOut } from './src/data/cloud';
 import { FamilyProvider, useFamily } from './src/data/FamilyContext';
 import { Connect } from './src/screens/Connect';
+import { Landing } from './src/screens/Landing';
 import { Avatar } from './src/ui/Avatar';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
@@ -45,10 +46,16 @@ export default function App() {
   );
 }
 
+/** ?start zeigt die Startseite auch auf verbundenen Geräten (zum Ansehen und Teilen). */
+const wantsStart = () => Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]start\b/.test(location.search);
+
 function CloudApp() {
   const [link, setLinkState] = useState<DeviceLink | null | undefined>(undefined);
+  const [start, setStart] = useState(wantsStart());
+  const leave = () => { try { history.replaceState(null, '', location.pathname); } catch { /* egal */ } setStart(false); };
   useEffect(() => { getLink().then(setLinkState, () => setLinkState(null)); }, []);
   const store = useMemo(() => (link ? cloudStore(link.familyId) : null), [link?.familyId]);
+  if (start) return <Landing onNew={leave} onLogin={leave} onKid={leave} />;
   if (link === undefined) return <View style={[s.screen, { justifyContent: 'center' }]}><ActivityIndicator color={C.accent} /></View>;
   if (!link || !store) return (
     <FamilyProvider>
