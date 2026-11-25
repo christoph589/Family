@@ -85,9 +85,17 @@ language sql stable security definer set search_path = public as $$
   ) end;
 $$;
 
+-- Länge eines JSON-Arrays, 0 wenn es fehlt
+create or replace function public.jlen(j jsonb)
+returns integer language sql immutable as $$
+  select case when jsonb_typeof(j) = 'array' then jsonb_array_length(j) else 0 end;
+$$;
+
 -- Operator: alle Familien, nur Kennzahlen, keine Inhalte
+drop function if exists public.op_families();
 create or replace function public.op_families()
-returns table (id uuid, name text, created_at timestamptz, parents bigint, kids bigint, children integer, updated_at timestamptz, ai_today integer, support_until timestamptz, mine boolean)
+returns table (id uuid, name text, created_at timestamptz, parents bigint, kids bigint, children integer, updated_at timestamptz,
+  ai_today integer, support_until timestamptz, mine boolean, done7 integer, features text[])
 language plpgsql security definer set search_path = public as $$
 begin
   if not public.is_operator() then raise exception 'not_operator'; end if;
@@ -96,11 +104,20 @@ begin
   select f.id, f.name, f.created_at,
     (select count(*) from public.members m where m.family_id = f.id and m.role = 'eltern' and m.until is null),
     (select count(*) from public.members m where m.family_id = f.id and m.role = 'kind'),
-    coalesce(jsonb_array_length(s.data -> 'children'), 0),
+    public.jlen(s.data -> 'children'),
     s.updated_at,
     case when f.ai_day = (now() at time zone 'Europe/Berlin')::date then f.ai_count else 0 end,
     (select a.until from public.support_access a where a.family_id = f.id and a.until > now()),
-    exists (select 1 from public.members m where m.family_id = f.id and m.user_id = auth.uid() and m.until is null)
+    exists (select 1 from public.members m where m.family_id = f.id and m.user_id = auth.uid() and m.until is null),
+    (select count(*)::int from jsonb_array_elements(case when jsonb_typeof(s.data -> 'completions') = 'array' then s.data -> 'completions' else '[]'::jsonb end) e
+      where e ->> 'date' >= to_char(now() - interval '7 days', 'YYYY-MM-DD')),
+    array_remove(array[
+      case when public.jlen(s.data -> 'events') > 0 then 'kalender' end,
+      case when coalesce(s.data -> 'money', '{}'::jsonb) <> '{}'::jsonb then 'geld' end,
+      case when public.jlen(s.data -> 'topics') + public.jlen(s.data -> 'worksheets') > 0 then 'lernen' end,
+      case when public.jlen(s.data -> 'meals') > 0 then 'essen' end,
+      case when s.data -> 'settings' ? 'icloud' or s.data -> 'settings' ? 'untis' or public.jlen(s.data -> 'settings' -> 'feeds') > 0 then 'sync' end
+    ], null)
   from public.families f left join public.family_state s on s.family_id = f.id
   order by s.updated_at desc nulls last;
 end $$;

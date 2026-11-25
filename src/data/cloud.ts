@@ -120,7 +120,7 @@ export function cloudStore(fid: string): DataStore {
 
 // Operator-Ansicht und Support-Zugang ------------------------------------------
 
-export interface OpFamily { id: string; name: string; created_at: string; parents: number; kids: number; children: number; updated_at: string | null; ai_today: number; support_until: string | null; mine: boolean }
+export interface OpFamily { id: string; name: string; created_at: string; parents: number; kids: number; children: number; updated_at: string | null; ai_today: number; support_until: string | null; mine: boolean; done7: number; features: string[] | null }
 const rpcErr = (e: { message?: string } | null) => {
   const m = e?.message ?? '';
   if (/not_operator/.test(m)) return new Error('Dieses Konto ist kein Operator.');
