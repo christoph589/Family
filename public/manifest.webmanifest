@@ -1,6 +1,6 @@
 {
-  "name": "Familienplaner",
-  "short_name": "Familie",
+  "name": "Nestwerk",
+  "short_name": "Nestwerk",
   "start_url": "/Family/",
   "scope": "/Family/",
   "display": "standalone",

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Familienplaner",
+    "name": "Nestwerk",
     "slug": "familienplaner",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,7 +22,7 @@
       "bundler": "metro",
       "output": "single",
       "favicon": "./assets/favicon.png",
-      "name": "Familienplaner"
+      "name": "Nestwerk"
     },
     "experiments": {
       "baseUrl": "/Family"
