@@ -127,7 +127,7 @@ const rpcErr = (e: { message?: string } | null) => {
   if (/not_operator/.test(m)) return new Error('Dieses Konto ist kein Operator.');
   if (/no_support_access/.test(m)) return new Error('Diese Familie hat den Support-Zugang nicht freigegeben.');
   if (/name_mismatch/.test(m)) return new Error('Der Name stimmt nicht genau.');
-  if (/own_family/.test(m)) return new Error('Die eigene Familie kann hier nicht gelöscht werden.');
+  if (/own_family/.test(m)) return new Error('Eigene Familie: bitte zuerst fix-09-eigene-familie-loeschen.sql im SQL Editor ausführen.');
   if (/op_rename|op_delete_family/.test(m) && /does not exist|Could not find/i.test(m)) return new Error('Bitte zuerst das SQL „fix-08-operator-verwalten“ ausführen.');
   if (/not_parent/.test(m)) return new Error('Nur Eltern können den Support-Zugang ändern.');
   if (/function .* does not exist|Could not find the function/i.test(m)) return new Error('Bitte zuerst das SQL „fix-07-operator“ in Supabase ausführen.');
@@ -147,6 +147,9 @@ export async function opEnter(fid: string): Promise<void> {
   if (cur && !(await AsyncStorage.getItem(BACK_KEY))) await AsyncStorage.setItem(BACK_KEY, JSON.stringify(cur));
   await setLink({ familyId: fid, role: 'eltern' });
 }
+/** In eine andere Familie wechseln, in der man selbst Elternteil ist. */
+export async function switchFamily(fid: string): Promise<void> { await setLink({ familyId: fid, role: 'eltern' }); }
+export async function currentFamilyId(): Promise<string | null> { return (await getLink())?.familyId ?? null; }
 export async function supportBack(): Promise<DeviceLink | null> {
   const raw = await AsyncStorage.getItem(BACK_KEY);
   return raw ? JSON.parse(raw) : null;

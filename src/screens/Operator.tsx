@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { OpFamily, signOut, opDelete, opEnter, opFamilies, opRename } from '../data/cloud';
+import { OpFamily, currentFamilyId, signOut, switchFamily, opDelete, opEnter, opFamilies, opRename } from '../data/cloud';
 import { Popup } from '../ui/Popup';
 import { BRAND } from '../brand';
 import { Button } from '../ui/Button';
@@ -40,6 +40,8 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Status | 'alle'>('alle');
   const [copied, setCopied] = useState(false);
+  const [cur, setCur] = useState<string | null>(null);
+  useEffect(() => { currentFamilyId().then(setCur, () => {}); }, []);
   const [edit, setEdit] = useState<{ f: OpFamily; mode: 'menu' | 'rename' | 'delete'; text: string; err: string } | null>(null);
   const runEdit = async () => {
     if (!edit) return;
@@ -60,7 +62,10 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
   };
   const more = (f: OpFamily) => <Pressable accessibilityLabel={`Mehr zu ${f.name}`} onPress={() => setEdit({ f, mode: 'menu', text: '', err: '' })} style={{ paddingHorizontal: 8, paddingVertical: 6 }}><Text style={{ color: C.muted, fontSize: 20, fontWeight: '800' }}>⋯</Text></Pressable>;
   const help = (f: OpFamily) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>{helpBtn(f)}{more(f)}</View>;
-  const helpBtn = (f: OpFamily) => f.mine ? <Text style={[s.muted, { fontSize: 13 }]}>eure Familie</Text> : (
+  const helpBtn = (f: OpFamily) => f.id === cur ? <Text style={[s.muted, { fontSize: 13 }]}>hier angemeldet</Text> : f.mine ? (
+    <Button ghost title={busy === f.id ? '…' : 'Wechseln →'} disabled={!!busy} style={{ paddingVertical: 8, paddingHorizontal: 14, minHeight: 0 }}
+      onPress={() => { setBusy(f.id); switchFamily(f.id).then(onEntered, e => { setErr(e.message); setBusy(''); }); }} />
+  ) : (
     <Button title={busy === f.id ? '…' : 'Öffnen →'} disabled={!!busy} style={{ paddingVertical: 8, paddingHorizontal: 14, minHeight: 0 }}
       onPress={() => { setBusy(f.id); opEnter(f.id).then(onEntered, e => { setErr(e.message); setBusy(''); }); }} />
   );
@@ -159,7 +164,7 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
             {edit.mode === 'menu' && (
               <>
                 <Button ghost title="✏️ Umbenennen" onPress={() => setEdit({ ...edit, mode: 'rename', text: edit.f.name })} />
-                {!edit.f.mine && <Button ghost title="🗑️ Familie löschen" onPress={() => setEdit({ ...edit, mode: 'delete', text: '' })} />}
+                {edit.f.id !== cur && <Button ghost title="🗑️ Familie löschen" onPress={() => setEdit({ ...edit, mode: 'delete', text: '' })} />}
               </>
             )}
             {edit.mode === 'rename' && (
