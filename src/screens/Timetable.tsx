@@ -166,7 +166,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
         </View>
       )}
       {empty && !edit ? (
-        <Text style={s.muted}>{parent ? 'Noch leer. Trag Schulbeginn und Schulende ein, dann zeigt „Heute“ und der Kalender, wann Schule ist. Fächer sind optional.' : 'Noch kein Stundenplan eingetragen.'}</Text>
+        <Text style={s.muted}>{parent ? 'Noch leer. Trag Schulbeginn und Schulende ein, dann zeigt „Heute“ und der Kalender, wann Schule ist. Fächer sind optional.' : 'Noch kein Stundenplan. Mama oder Papa tragen ihn unter ⚙️ › Stundenplan ein.'}</Text>
       ) : (
         <ScrollView horizontal onLayout={e => setW(e.nativeEvent.layout.width)} contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
           <View style={{ gap: 6, paddingTop: 30, width: edit ? 70 : 30 }}>

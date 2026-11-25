@@ -97,11 +97,12 @@ function CloudApp() {
 
 const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', essen: '🍽️', aufgaben: '⚙️' };
 
-type Section = 'familie' | 'aufgaben' | 'geld' | 'ferien' | 'kalender' | 'geraete';
+type Section = 'familie' | 'aufgaben' | 'schule' | 'geld' | 'ferien' | 'kalender' | 'geraete';
 const SETTINGS: { value: Section; label: string; hint: string; cloud?: boolean }[] = [
   { value: 'familie', label: '👪 Familie', hint: 'Personen, Fotos, PINs, Schule' }, { value: 'aufgaben', label: '✅ Aufgaben', hint: 'Aufgaben, Routinen, Haushalt' },
+  { value: 'schule', label: '🏫 Stundenplan', hint: 'Hochladen, bearbeiten, WebUntis' },
   { value: 'geld', label: '💶 Geld', hint: 'Taschengeld und Spartöpfe' }, { value: 'ferien', label: '🏖️ Ferien', hint: 'Ferien und Feiertage' },
-  { value: 'kalender', label: '📅 Kalender', hint: 'Handy-Kalender, WebUntis, Abo', cloud: true }, { value: 'geraete', label: '📱 Geräte', hint: 'Partner einladen, Kindergeräte', cloud: true },
+  { value: 'kalender', label: '📅 Kalender', hint: 'Handy-Kalender, Abo', cloud: true }, { value: 'geraete', label: '📱 Geräte', hint: 'Partner einladen, Kindergeräte', cloud: true },
 ];
 
 function Root() {
@@ -275,7 +276,7 @@ function Root() {
         {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
         {tab === 'heute' && <Today childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} meId={profile.id} />}
-        {tab === 'kalender' && <Timetable childIds={childIds} parent={parent} />}
+        {tab === 'kalender' && <Timetable childIds={childIds} parent={false} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} meId={profile.id} admin={admin} />}
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} admin={admin} />}
         {tab === 'geld' && <MoneyTab childIds={childIds} parent={parent} meId={profile.id} />}
@@ -317,10 +318,11 @@ function Root() {
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <AiPrivacy />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
         {tab === 'aufgaben' && admin && showSec && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
+        {tab === 'aufgaben' && admin && showSec && section === 'schule' && <Timetable childIds={childIds} parent />}
+        {tab === 'aufgaben' && admin && showSec && section === 'schule' && cloud && <UntisSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'geld' && <MoneySettings />}
         {tab === 'aufgaben' && admin && showSec && section === 'ferien' && <Holiday />}
         {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <IcloudSetup />}
-        {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <UntisSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
         {tab === 'aufgaben' && admin && showSec && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
         {tab === 'aufgaben' && admin && cloud && (
