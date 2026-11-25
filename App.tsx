@@ -15,12 +15,13 @@ import { SupportSetup } from './src/screens/SupportSetup';
 import { Avatar } from './src/ui/Avatar';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
-import { Family, Holiday, ParentPin } from './src/screens/Family';
+import { AiPrivacy, Family, Holiday, ParentPin } from './src/screens/Family';
 import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import { Kiosk, wantsWall } from './src/ui/Kiosk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { birthdaysOn, extraStates, isAdmin, parentsOf, payAllowances, peopleOf, today } from './src/data/logic';
+import { birthdaysOn, extraStates, isAdmin, parentsOf, payAllowances, peopleOf, pruneAiPhotos, today } from './src/data/logic';
+import { AiConsent } from './src/ui/AiConsent';
 import { loadHolidays } from './src/data/holidays';
 import { MoneyTab } from './src/screens/Gifts';
 import { Food } from './src/screens/Food';
@@ -122,6 +123,7 @@ function Root() {
   const showSec = !narrowSet || !menu;
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
   useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
+  useEffect(() => { if (data && pruneAiPhotos(data) !== data) update(d => pruneAiPhotos(d)); }, [data?.exams, data?.topics, data && today()]);
   // Ferien für Kinder mit eigenem Bundesland nachladen
   const needStates = data ? extraStates(data).filter(st => { const x = data.settings?.autoHoliday?.extra?.[st]; const soon = new Date(); soon.setDate(soon.getDate() + 200); return data.settings?.autoHoliday?.on && (!x || x.validTo < today(soon)); }).join(',') : '';
   useEffect(() => {
@@ -312,6 +314,7 @@ function Root() {
         )}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Family />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <ParentPin />}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <AiPrivacy />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
         {tab === 'aufgaben' && admin && showSec && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
         {tab === 'aufgaben' && admin && showSec && section === 'geld' && <MoneySettings />}
@@ -356,6 +359,7 @@ function Root() {
           })}
         </View>
       </View>
+      <AiConsent />
     </SafeAreaView>
   );
 }

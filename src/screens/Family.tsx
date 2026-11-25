@@ -4,7 +4,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { ALL_COLORS, autoHolidayOn, freeColor, isAdmin, CHILD_COLORS, manualHolidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
 import { TEMPLATES } from '../data/templates';
-import { ageOf, gradeLabel, removeChild, schoolYearOf } from '../data/logic';
+import { ageOf, gradeLabel, pruneAiPhotos, removeChild, schoolYearOf } from '../data/logic';
 import { Child } from '../data/types';
 import { KidDraft, KidFields } from '../ui/KidFields';
 import { FamilyData } from '../data/types';
@@ -279,6 +279,27 @@ function KidState({ child, onSave }: { child: Child; onSave: (st: string | undef
 }
 
 /** Eltern-PIN ändern. Die alte PIN wird abgefragt, falls das Tablet gerade offen herumliegt. */
+/** Einwilligung zur KI-Verarbeitung und Fotos löschen. */
+export function AiPrivacy() {
+  const { data, update } = useFamily();
+  const [done, setDone] = useState('');
+  if (!data) return null;
+  const c = data.settings?.aiConsent;
+  const n = (data.exams ?? []).reduce((a, e) => a + (e.photos?.length ?? 0), 0) + (data.topics ?? []).reduce((a, t) => a + (t.photos?.length ?? (t.photo ? 1 : 0)), 0);
+  return (
+    <View style={s.card}>
+      <Text style={s.h2}>🤖 KI und Fotos</Text>
+      <Text style={s.muted}>{c ? `Zugestimmt am ${new Date(c.at).toLocaleDateString('de-DE')}. Fotos gehen zur Auswertung an die KI von Anthropic (USA) und bleiben in eurer Familie.` : 'Noch nicht zugestimmt. Beim ersten Foto-Upload fragt Famelio nach.'}</Text>
+      <Text style={s.muted}>Gespeicherte Fotos: {n}. Sie werden automatisch gelöscht, 7 Tage nach der Klassenarbeit bzw. 14 Tage nach dem Thema. Lernkarten und Ergebnisse bleiben.</Text>
+      <View style={s.row}>
+        {n > 0 && <Button ghost title="Alle Fotos jetzt löschen" onPress={() => { update(d => pruneAiPhotos(d, undefined, true)); setDone('Fotos gelöscht.'); }} />}
+        {c && <Button ghost title="Zustimmung widerrufen" onPress={() => { update(d => ({ ...d, settings: { ...d.settings, aiConsent: undefined } })); setDone('Widerrufen. Ohne neue Zustimmung gehen keine Fotos mehr an die KI.'); }} />}
+      </View>
+      {!!done && <Text style={{ color: C.accent, fontWeight: '700' }}>{done}</Text>}
+    </View>
+  );
+}
+
 export function ParentPin() {
   const { data, update } = useFamily();
   const [old, setOld] = useState('');

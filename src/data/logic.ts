@@ -495,3 +495,21 @@ export function removeChild(d: FamilyData, childId: string): FamilyData {
     money, birthdayBonus: bonus,
   };
 }
+
+/** Datensparsamkeit: Fotos für die KI nur so lange behalten, wie sie gebraucht werden.
+ *  Klassenarbeit: 7 Tage nach dem Termin (ohne Termin 60 Tage nach Anlage). Thema: 14 Tage. Lernkarten und Ergebnisse bleiben. */
+export function pruneAiPhotos(d: FamilyData, date = today(), all = false): FamilyData {
+  const examCut = addDaysIso(date, -7), oldCut = addDaysIso(date, -60), topicCut = addDaysIso(date, -14);
+  let changed = false;
+  const exams = (d.exams ?? []).map(e => {
+    if (!e.photos?.length) return e;
+    if (all || (e.date ? e.date < examCut : e.createdAt < oldCut)) { changed = true; return { ...e, photos: [] }; }
+    return e;
+  });
+  const topics = (d.topics ?? []).map(t => {
+    if (!t.photos?.length && !t.photo) return t;
+    if (all || t.date < topicCut) { changed = true; return { ...t, photos: undefined, photo: undefined }; }
+    return t;
+  });
+  return changed ? { ...d, exams, topics } : d;
+}

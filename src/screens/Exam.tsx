@@ -5,7 +5,7 @@ import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextIn
 import { useFamily } from '../data/FamilyContext';
 import { addPoints, currentGrade, examScore, finishCheck, regionOf, setSheet, today, uid, EXAM_PREP_POINTS } from '../data/logic';
 import { learnedShare, LEARN_GOAL, newCards } from '../data/vocab';
-import { Practice } from './Vocab';
+import { DeckEditor, Practice } from './Vocab';
 import { STATES } from '../data/holidays';
 import { AI_ERROR, generateCards, generateExam, getSample } from '../ai/generate';
 import { printHtml, sheetHtml } from '../ui/Print';
@@ -147,6 +147,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   const waiting = sheets.find(w => w.status === 'abgegeben');
   const n = prep.date ? daysTo(prep.date) : null;
   const region = (child?.state) || regionOf(d);
+  const [editCards, setEditCards] = useState(false);
   const deck = (d.vocab ?? []).find(v => v.id === prep.deckId);
   const share = deck ? learnedShare(deck) : 0;
   const learned = deck ? deck.cards.filter(c => c.box >= 1).length : 0;
@@ -220,8 +221,11 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
             <Text style={[s.muted, { fontSize: 13 }]}>{learned} von {deck.cards.length} Lernkarten sitzen{share >= LEARN_GOAL ? ' · Probe-Arbeit ist frei 🎉' : ` · ab ${Math.ceil(deck.cards.length * LEARN_GOAL)} gibt es die Probe-Arbeit`}</Text>
             <View style={s.row}>
               <Button title="📚 Lernkarten üben" onPress={() => setPlaying(true)} style={{ paddingVertical: 8, minHeight: 40 }} />
+              {parent && !cardBusy && <Button ghost title="✏️ Prüfen" onPress={() => setEditCards(true)} style={{ paddingVertical: 8, minHeight: 40 }} />}
               {parent && !cardBusy && ai && <Button ghost title="Neu erstellen" onPress={makeCards} style={{ paddingVertical: 8, minHeight: 40 }} />}
             </View>
+            <Text style={[s.muted, { fontSize: 12 }]}>Die KI kann sich irren. {parent ? 'Bitte die Karten kurz durchsehen und Fehler korrigieren.' : 'Wenn dir eine Karte komisch vorkommt, frag Mama oder Papa.'}</Text>
+            {editCards && <DeckEditor deck={deck} childId={prep.childId} parent onDone={() => setEditCards(false)} />}
           </>) : (<>
             <Text style={[s.muted, { fontSize: 13 }]}>Die KI macht aus den Unterlagen Lernkarten. Wer die meisten kann, bekommt die Probe-Arbeit.</Text>
             {ai && !cardBusy && <Button title="📚 Lernkarten erstellen" disabled={!prep.photos.length && prep.title.length < 10} onPress={makeCards} style={{ paddingVertical: 8, minHeight: 40 }} />}

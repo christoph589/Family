@@ -36,8 +36,13 @@ function parseJsonLoose<T>(text: string): T {
   throw { code: 'invalid_json' };
 }
 
+/** Vor dem ersten Foto-Upload an die KI fragt die App einmal die Eltern (siehe AiConsent in App.tsx). */
+let consentAsker: (() => Promise<boolean>) | null = null;
+export const setAiConsentAsker = (f: (() => Promise<boolean>) | null) => { consentAsker = f; };
+
 function serverSample(): SampleFn {
   const call = async (input: string, opts?: any): Promise<string> => {
+    if (((opts?.images ?? []) as Blob[]).length && consentAsker && !(await consentAsker())) throw { code: 'no_consent' };
     const images = await Promise.all(((opts?.images ?? []) as Blob[]).map(blobToDataUrl));
     const signal: AbortSignal | undefined = opts?.signal;
     if (signal?.aborted) throw { code: 'cancelled' };
@@ -72,6 +77,7 @@ export interface GeneratedQuiz { title: string; questions: Question[] }
 
 export const AI_ERROR: Record<string, string> = {
   not_granted: 'Die KI wurde für diese Seite nicht erlaubt.',
+  no_consent: 'Ohne Zustimmung der Eltern schickt Famelio keine Fotos an die KI.',
   sampling_disabled: 'Für dieses Konto ist die KI nicht verfügbar.',
   rate_limited: 'Gerade zu viele Anfragen. Bitte in ein paar Minuten nochmal.',
   image_rejected: 'Ein Foto konnte nicht gelesen werden. Bitte ein anderes nehmen.',

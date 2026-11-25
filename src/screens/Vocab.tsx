@@ -131,7 +131,7 @@ function BoxBar({ deck }: { deck: VocabDeck }) {
   );
 }
 
-function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: VocabDeck; childId: string; meId?: string; parent: boolean; onDone: () => void }) {
+export function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: VocabDeck; childId: string; meId?: string; parent: boolean; onDone: () => void }) {
   const { update } = useFamily();
   const [title, setTitle] = useState(deck?.title ?? '');
   const [lang, setLang] = useState(deck?.lang ?? 'Englisch');
@@ -175,7 +175,7 @@ function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: VocabDeck;
     if (!all.length) return;
     const t = title.trim() || `${lang} ${new Date().toLocaleDateString('de-DE')}`;
     const id = deck?.id ?? uid();
-    const next: VocabDeck = { id, childId, title: t, lang, cards: all, createdAt: deck?.createdAt ?? today(), by: deck?.by ?? meId };
+    const next: VocabDeck = { ...(deck ?? {}), id, childId, title: t, lang, cards: all, createdAt: deck?.createdAt ?? today(), by: deck?.by ?? meId };
     update(d => ({ ...d, vocab: deck ? (d.vocab ?? []).map(v => (v.id === id ? next : v)) : [next, ...(d.vocab ?? [])] }));
     onDone();
   }

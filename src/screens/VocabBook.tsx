@@ -38,7 +38,7 @@ function NewBook({ childId, meId, onDone }: { childId: string; meId?: string; on
   const [lang, setLang] = useState('Englisch');
   return (
     <View style={{ gap: 8, backgroundColor: C.accentSoft, borderRadius: 14, padding: 12 }}>
-      <TextInput style={[s.input, { backgroundColor: C.surface }]} value={title} onChangeText={setTitle} placeholder="Name des Buchs, z. B. Green Line 2" accessibilityLabel="Name des Buchs" />
+      <TextInput style={[s.input, { backgroundColor: C.surface }]} value={title} onChangeText={setTitle} placeholder="Name des Buchs, z. B. Englisch Klasse 6" accessibilityLabel="Name des Buchs" />
       <View style={[s.row, { gap: 6 }]}>
         {LANGS.map(l => (
           <Pressable key={l.value} onPress={() => setLang(l.value)} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, borderWidth: 2, borderColor: C.accent, backgroundColor: lang === l.value ? C.accent : C.surface }}>
