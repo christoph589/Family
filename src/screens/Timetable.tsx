@@ -102,7 +102,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
                     </View>
                     {Array.from({ length: rows }, (_, i) => (
                       <View key={i} style={{ height: 30, borderRadius: 8, backgroundColor: d.lessons?.[i] ? (isToday ? child.color + '22' : C.bg) : 'transparent', justifyContent: 'center', paddingHorizontal: 6 }}>
-                        <Text style={{ fontSize: 13, color: C.fg }} numberOfLines={1}>{d.lessons?.[i] ?? ''}</Text>
+                        <Text style={{ fontSize: (d.lessons?.[i] ?? '').length > 8 ? 10.5 : 13, lineHeight: (d.lessons?.[i] ?? '').length > 8 ? 12 : 16, color: C.fg }} numberOfLines={2}>{d.lessons?.[i] ?? ''}</Text>
                       </View>
                     ))}
                   </>
