@@ -54,9 +54,10 @@ export async function signOut() { await sb().auth.signOut(); await setLink(null)
 export async function myParentFamily(): Promise<string | null> {
   const { data: u } = await sb().auth.getUser();
   if (!u.user) return null;
-  const { data, error } = await sb().from('members').select('family_id').eq('user_id', u.user.id).eq('role', 'eltern').limit(1);
+  // Support-Mitgliedschaften (mit Ablaufzeit) zählen nicht als eigene Familie
+  const { data, error } = await sb().from('members').select('*').eq('user_id', u.user.id).eq('role', 'eltern');
   if (error) throw friendly(error);
-  return data?.[0]?.family_id ?? null;
+  return (data ?? []).find((m: any) => !m.until)?.family_id ?? null;
 }
 
 export async function createFamily(d: FamilyData): Promise<string> {
@@ -115,4 +116,49 @@ export function cloudStore(fid: string): DataStore {
     },
     async clear() { await setLink(null); },
   };
+}
+
+// Operator-Ansicht und Support-Zugang ------------------------------------------
+
+export interface OpFamily { id: string; name: string; created_at: string; parents: number; kids: number; children: number; updated_at: string | null; ai_today: number; support_until: string | null; mine: boolean }
+const rpcErr = (e: { message?: string } | null) => {
+  const m = e?.message ?? '';
+  if (/not_operator/.test(m)) return new Error('Dieses Konto ist kein Operator.');
+  if (/no_support_access/.test(m)) return new Error('Diese Familie hat den Support-Zugang nicht freigegeben.');
+  if (/not_parent/.test(m)) return new Error('Nur Eltern können den Support-Zugang ändern.');
+  if (/function .* does not exist|Could not find the function/i.test(m)) return new Error('Bitte zuerst das SQL „fix-07-operator“ in Supabase ausführen.');
+  return friendly(e);
+};
+export async function opFamilies(): Promise<OpFamily[]> {
+  const { data, error } = await sb().rpc('op_families');
+  if (error) throw rpcErr(error);
+  return (data ?? []) as OpFamily[];
+}
+const BACK_KEY = 'familienplaner:supportBack';
+/** Operator geht in eine Familie. Die eigene Verbindung wird gemerkt und kann mit leaveSupport() zurückgeholt werden. */
+export async function opEnter(fid: string): Promise<void> {
+  const { error } = await sb().rpc('op_enter', { fid });
+  if (error) throw rpcErr(error);
+  const cur = await getLink();
+  if (cur && !(await AsyncStorage.getItem(BACK_KEY))) await AsyncStorage.setItem(BACK_KEY, JSON.stringify(cur));
+  await setLink({ familyId: fid, role: 'eltern' });
+}
+export async function supportBack(): Promise<DeviceLink | null> {
+  const raw = await AsyncStorage.getItem(BACK_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+export async function leaveSupport(): Promise<void> {
+  const back = await supportBack();
+  await setLink(back);
+  await AsyncStorage.removeItem(BACK_KEY);
+}
+export async function setSupport(fid: string, hours: number): Promise<string | null> {
+  const { data, error } = await sb().rpc('set_support', { fid, hours });
+  if (error) throw rpcErr(error);
+  return (data as string | null) ?? null;
+}
+export async function supportStatus(fid: string): Promise<{ until: string | null; visits: string[] } | null> {
+  const { data, error } = await sb().rpc('support_status', { fid });
+  if (error) throw rpcErr(error);
+  return (data as { until: string | null; visits: string[] } | null) ?? null;
 }

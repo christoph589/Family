@@ -5,10 +5,12 @@ import { MoneySettings } from './src/screens/MoneySettings';
 import { useUntisSync } from './src/data/untis';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { cloudEnabled, cloudStore, DeviceLink, getLink, signOut } from './src/data/cloud';
+import { cloudEnabled, cloudStore, DeviceLink, getLink, leaveSupport, signOut, supportBack } from './src/data/cloud';
 import { FamilyProvider, useFamily } from './src/data/FamilyContext';
 import { Connect } from './src/screens/Connect';
 import { Landing } from './src/screens/Landing';
+import { Operator } from './src/screens/Operator';
+import { SupportSetup } from './src/screens/SupportSetup';
 import { Avatar } from './src/ui/Avatar';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
@@ -48,14 +50,20 @@ export default function App() {
 
 /** ?start zeigt die Startseite auch auf verbundenen Geräten (zum Ansehen und Teilen). */
 const wantsStart = () => Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]start\b/.test(location.search);
+const wantsOperator = () => Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]operator\b/.test(location.search);
+const cleanUrl = () => { try { history.replaceState(null, '', location.pathname); } catch { /* egal */ } };
 
 function CloudApp() {
   const [link, setLinkState] = useState<DeviceLink | null | undefined>(undefined);
   const [start, setStart] = useState(wantsStart());
-  const leave = () => { try { history.replaceState(null, '', location.pathname); } catch { /* egal */ } setStart(false); };
-  useEffect(() => { getLink().then(setLinkState, () => setLinkState(null)); }, []);
+  const [op, setOp] = useState(wantsOperator());
+  const [back, setBack] = useState<DeviceLink | null>(null);
+  const leave = () => { cleanUrl(); setStart(false); };
+  const reload = () => Promise.all([getLink(), supportBack()]).then(([l, b]) => { setLinkState(l); setBack(b); }, () => setLinkState(null));
+  useEffect(() => { reload(); }, []);
   const store = useMemo(() => (link ? cloudStore(link.familyId) : null), [link?.familyId]);
   if (start) return <Landing onNew={leave} onLogin={leave} onKid={leave} />;
+  if (op && link) return <SafeAreaView style={s.screen}><Operator onClose={() => { cleanUrl(); setOp(false); }} onEntered={() => { cleanUrl(); setOp(false); reload(); }} /></SafeAreaView>;
   if (link === undefined) return <View style={[s.screen, { justifyContent: 'center' }]}><ActivityIndicator color={C.accent} /></View>;
   if (!link || !store) return (
     <FamilyProvider>
@@ -67,6 +75,14 @@ function CloudApp() {
     <LinkCtx.Provider value={{ link, unlink: () => { signOut().finally(() => setLinkState(null)); } }}>
       <FamilyProvider key={link.familyId} store={store}>
         <StatusBar style="dark" />
+        {back && (
+          <View style={{ backgroundColor: C.ok, paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <Text style={{ color: '#fff', fontWeight: '800', flexShrink: 1 }}>🛟 Support-Modus: Du bist in einer anderen Familie. Änderungen sind echt.</Text>
+            <Pressable onPress={() => leaveSupport().then(reload)} style={{ backgroundColor: '#ffffff33', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ color: '#fff', fontWeight: '800' }}>Zurück zu meiner Familie</Text>
+            </Pressable>
+          </View>
+        )}
         <Root />
       </FamilyProvider>
     </LinkCtx.Provider>
@@ -244,6 +260,7 @@ function Root() {
         )}
         {tab === 'aufgaben' && admin && section === 'familie' && <Family />}
         {tab === 'aufgaben' && admin && section === 'familie' && <ParentPin />}
+        {tab === 'aufgaben' && admin && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
         {tab === 'aufgaben' && admin && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
         {tab === 'aufgaben' && admin && section === 'geld' && <MoneySettings />}
         {tab === 'aufgaben' && admin && section === 'ferien' && <Holiday />}
