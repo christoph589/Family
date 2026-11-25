@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { GCal, GEvent, getMcp, GOOGLE_ERROR, listCalendars, listWeek } from '../data/google';
 import { isMasked, peopleOf, Person, PRIV_MODE, today, uid } from '../data/logic';
@@ -35,6 +35,8 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
   const [letter, setLetter] = useState(false);
   // Kinder sehen zuerst nur ihre eigenen Termine und die der ganzen Familie
   const [all, setAll] = useState(false);
+  // Eltern: Ansicht auf eine Person einschränken (null = alle)
+  const [focus, setFocus] = useState<string | null>(null);
   const days = daysOf(mode, anchor);
   const calId = data?.settings?.googleCalendarId;
 
@@ -68,7 +70,8 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
     const base = baseItems(data!, date, parent || all ? null : childIds, mine, meId);
     const ext = [...feedItems(date), ...icItems(date)].filter(i => !mine || !i.who?.length || i.who.some(w => childIds.includes(w)));
     const tasks = base.filter(i => i.key.startsWith('t'));
-    return [...base.filter(i => !i.key.startsWith('t')), ...g, ...ext].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).concat(tasks);
+    const list = [...base.filter(i => !i.key.startsWith('t')), ...g, ...ext].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).concat(tasks);
+    return focus ? list.filter(i => !i.who?.length || i.who.includes(focus)) : list;
   }
 
   async function connect() {
@@ -80,6 +83,20 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
   return (
     <View style={{ gap: 16 }}>
       <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1, flexWrap: 'nowrap' }]}><Button ghost title={narrow ? '📄' : '📄 Elternbrief'} accessibilityLabel="Elternbrief" onPress={() => setLetter(true)} style={narrow ? { paddingHorizontal: 14 } : undefined} />{target === 'both' && <Button ghost title={narrow ? '📱 +' : '📱 + Handy-Kalender'} accessibilityLabel="Termin im Handy-Kalender" onPress={() => setIcEdit({ date: anchor })} style={narrow ? { paddingHorizontal: 14 } : undefined} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
+
+      {parent && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {[{ id: null as string | null, name: 'Alle', color: C.fg }, ...people.map(p => ({ id: p.id as string | null, name: p.name, color: p.color }))].map(p => {
+            const on = focus === p.id;
+            return (
+              <Pressable key={p.id ?? 'alle'} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => setFocus(p.id)}
+                style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99, borderWidth: 2, borderColor: p.color, backgroundColor: on ? p.color : C.surface }}>
+                <Text style={{ color: on ? '#fff' : C.fg, fontWeight: '700' }}>{p.name}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {adding && <EventForm meId={meId} people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
 

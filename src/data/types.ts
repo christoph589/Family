@@ -181,7 +181,7 @@ export interface FamilyData {
     /** Aufteilung des Taschengelds in Prozent (Rest = Ausgeben) und Eltern-Zins pro Monat */
     money?: { spar: number; invest: number; rate: number };
     /** WebUntis: welcher Untis-Schüler zu welchem Kind gehört. Der Schlüssel liegt nur auf dem Server. */
-    untis?: { who?: string; at?: string; checkedAt?: string; links: { child: string; id: number; name: string }[] };
+    untis?: { who?: string; at?: string; checkedAt?: string; links: { child: string; id: number; name: string; /** welcher Zugang (0 = erster) */ slot?: number }[]; /** weitere Zugänge: Anzeigename je slot */ accounts?: Record<number, string> };
     autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string;
       /** Ferien weiterer Bundesländer für Kinder mit eigenem Bundesland */
       extra?: Record<string, { ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string }> } };

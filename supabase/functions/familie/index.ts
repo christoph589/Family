@@ -922,8 +922,11 @@ async function untisAction(body: any, userId: string, admin: any) {
   const { data: mem } = await admin.from('members').select('family_id, role').eq('user_id', userId).limit(1);
   if (!mem?.length) return json({ error: 'not_member' }, 403);
   const fid = mem[0].family_id, parent = mem[0].role === 'eltern';
+  // Mehrere Zugänge (z. B. Kinder an verschiedenen Schulen): slot 0 = 'untis', slot 1 = 'untis2' …
+  const slot = Math.max(0, Math.min(3, Number(body.slot) || 0));
+  const kind = slot ? `untis${slot + 1}` : 'untis';
   const load = async (): Promise<UntisCred | null> => {
-    const { data, error } = await admin.from('family_secrets').select('value').eq('family_id', fid).eq('kind', 'untis').maybeSingle();
+    const { data, error } = await admin.from('family_secrets').select('value').eq('family_id', fid).eq('kind', kind).maybeSingle();
     if (error) throw Object.assign(new Error('untis_sql'), { detail: error.message });
     return data ? await unseal(data.value) : null;
   };
@@ -933,13 +936,13 @@ async function untisAction(body: any, userId: string, admin: any) {
       const c = untisCred(body);
       if (!c) return json({ error: 'untis_bad_input' }, 400);
       const info = await untisStudents(c);
-      const { error } = await admin.from('family_secrets').upsert({ family_id: fid, kind: 'untis', value: await seal(c), updated_at: new Date().toISOString() });
+      const { error } = await admin.from('family_secrets').upsert({ family_id: fid, kind, value: await seal(c), updated_at: new Date().toISOString() });
       if (error) return json({ error: 'untis_sql', detail: error.message }, 500);
       return json({ students: info.students, who: info.who, type: info.type });
     }
     if (body.action === 'untis_disconnect') {
       if (!parent) return json({ error: 'parents_only' }, 403);
-      await admin.from('family_secrets').delete().eq('family_id', fid).eq('kind', 'untis');
+      await admin.from('family_secrets').delete().eq('family_id', fid).eq('kind', kind);
       return json({ ok: true });
     }
     if (body.action === 'untis_week') {

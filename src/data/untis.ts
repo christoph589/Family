@@ -31,11 +31,11 @@ async function call<T>(body: object): Promise<T> {
   return data as T;
 }
 
-export const untisConnect = (c: { host: string; school: string; user: string; key: string }) =>
-  call<{ students: { id: number; name: string }[]; who: string; type: string }>({ action: 'untis_connect', ...c });
-export const untisDisconnect = () => call<{ ok: boolean }>({ action: 'untis_disconnect' });
-export async function untisWeeks(ids: number[], from: string, to: string) {
-  const r = await call<{ weeks: Record<string, { lessons: UntisLesson[] }> }>({ action: 'untis_week', students: ids, from, to });
+export const untisConnect = (c: { host: string; school: string; user: string; key: string }, slot = 0) =>
+  call<{ students: { id: number; name: string }[]; who: string; type: string }>({ action: 'untis_connect', ...c, slot });
+export const untisDisconnect = (slot = 0) => call<{ ok: boolean }>({ action: 'untis_disconnect', slot });
+export async function untisWeeks(ids: number[], from: string, to: string, slot = 0) {
+  const r = await call<{ weeks: Record<string, { lessons: UntisLesson[] }> }>({ action: 'untis_week', students: ids, from, to, slot });
   const out: Record<number, UntisLesson[]> = {};
   for (const [k, v] of Object.entries(r.weeks)) out[Number(k)] = fixTimes(v.lessons);
   return out;
@@ -100,7 +100,7 @@ let tried = 0;
  *  Der Zeitpunkt der letzten Prüfung steht in den Familiendaten, damit nicht jedes Gerät einzeln fragt. */
 export function useUntisSync(data: FamilyData | null, update: (fn: (d: FamilyData) => FamilyData) => void) {
   const links = data?.settings?.untis?.links ?? [];
-  const key = links.map(l => l.child + ':' + l.id).join('|');
+  const key = links.map(l => l.child + ':' + (l.slot ?? 0) + ':' + l.id).join('|');
   const ref = useRef(data);
   ref.current = data;
   useEffect(() => {
@@ -113,12 +113,16 @@ export function useUntisSync(data: FamilyData | null, update: (fn: (d: FamilyDat
       tried = Date.now();
       const from = today(), to = addDaysIso(from, 13);
       try {
-        const weeks = await untisWeeks(links.map(l => l.id), from, to);
+        const slots = [...new Set(links.map(l => l.slot ?? 0))];
+        const per = await Promise.all(slots.map(sl => untisWeeks(links.filter(l => (l.slot ?? 0) === sl).map(l => l.id), from, to, sl)));
+        const weeks: Record<string, UntisLesson[]> = {};
+        slots.forEach((sl, i) => Object.entries(per[i]).forEach(([id, ls]) => { weeks[sl + ':' + id] = ls; }));
+        const W = (l: { id: number; slot?: number }) => weeks[(l.slot ?? 0) + ':' + l.id] ?? [];
         if (!alive) return;
-        links.forEach(l => lessonCache.set(l.child, weeks[l.id] ?? []));
+        links.forEach(l => lessonCache.set(l.child, W(l)));
         const stamp = new Date().toISOString();
         update(d => {
-          const next = links.reduce((acc, l) => applyUntis(acc, l.child, weeks[l.id] ?? [], from, to), d);
+          const next = links.reduce((acc, l) => applyUntis(acc, l.child, W(l), from, to), d);
           return next.settings?.untis ? { ...next, settings: { ...next.settings, untis: { ...next.settings.untis, checkedAt: stamp } } } : next;
         });
       } catch { /* nächster Versuch in 15 Minuten */ }
