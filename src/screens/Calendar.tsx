@@ -10,6 +10,8 @@ import { guessIcon, IconPicker } from '../ui/IconPicker';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 import { useFeedItems } from '../data/feeds';
+import { icloudDelete, icloudEvent, icloudSave, IcloudEvent, useIcloudItems } from '../data/icloud';
+import { DeleteButton } from '../ui/DeleteButton';
 import { LetterImport } from './Letter';
 import { PushSetup } from '../ui/Push';
 
@@ -46,7 +48,11 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
   }, [calId, days[0], days.length]);
 
   const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : [], data?.settings?.hiddenFeed);
+  const icItems = useIcloudItems(data?.settings?.icloud, data ? peopleOf(data) : []);
+  const [icEdit, setIcEdit] = useState<Partial<IcloudEvent> | null>(null);
   if (!data) return null;
+  const icCals = data.settings?.icloud ?? [];
+  const icHrefs = icCals.map(c => c.href);
   const people = peopleOf(data);
   const personInTitle = (t: string) => people.find(k => t.toLowerCase().split(/[^\p{L}]+/u).includes(k.name.toLowerCase()));
 
@@ -57,7 +63,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
       return { key: 'g' + e.id, time: e.time, title: e.title, color: kid?.color ?? '#4285f4', tag: 'Google', kid: kid?.id };
     }).filter(e => !mine || (e.kid && childIds.includes(e.kid))).map(({ kid, ...e }) => e);
     const base = baseItems(data!, date, parent || all ? null : childIds, mine);
-    const ext = feedItems(date).filter(i => !mine || !i.who?.length || i.who.some(w => childIds.includes(w)));
+    const ext = [...feedItems(date), ...icItems(date)].filter(i => !mine || !i.who?.length || i.who.some(w => childIds.includes(w)));
     const tasks = base.filter(i => i.key.startsWith('t'));
     return [...base.filter(i => !i.key.startsWith('t')), ...g, ...ext].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).concat(tasks);
   }
@@ -70,11 +76,12 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
 
   return (
     <View style={{ gap: 16 }}>
-      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} /><Button title="+ Termin" onPress={() => setAdding(true)} /></View> : undefined} />
+      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} />{icCals.length > 0 && <Button ghost title="🍎 + iCloud" onPress={() => setIcEdit({ date: anchor })} />}<Button title="+ Termin" onPress={() => setAdding(true)} /></View> : undefined} />
 
       {adding && <EventForm people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
 
       {editing && <EventForm key={editing.id} initial={editing} people={people} days={daysOf('woche', anchor)} onCancel={() => setEditing(null)} onSave={ev => { update(d => ({ ...d, events: (d.events ?? []).map(e => (e.id === ev.id ? ev : e)) })); setEditing(null); }} />}
+      {icEdit && <IcloudForm key={icEdit.href ?? 'neu'} initial={icEdit} cals={icCals} onCancel={() => setIcEdit(null)} onSave={async ev => { await icloudSave(ev, icHrefs); setIcEdit(null); setAnchor(ev.date); }} />}
       {letter && <LetterImport onDone={n => { setLetter(false); }} />}
 
       {sel && (
@@ -85,6 +92,16 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
             {dt ? <Text style={[s.text, { fontWeight: '700' }]}>{dt}</Text> : null}
             {ev.note ? <Text style={s.text}>📝 {ev.note}</Text> : null}
             {ev.remind !== undefined ? <Text style={s.muted}>{remindLabel(ev.remind)}</Text> : null}
+          </>); })()}
+          {sel.it.key.startsWith('i') && (() => { const ev = icloudEvent(sel.it.key); if (!ev) return null; return (<>
+            {ev.note ? <Text style={s.text}>📝 {ev.note}</Text> : null}
+            {ev.recurring ? <Text style={s.muted}>🔁 Serientermin, bitte am iPhone ändern.</Text> : !ev.editable ? <Text style={s.muted}>Dieser Kalender ist nur zum Lesen freigegeben.</Text> : null}
+            {parent && ev.editable && !ev.recurring && (
+              <View style={s.row}>
+                <Button ghost title="✏️ Bearbeiten" onPress={() => { setIcEdit(ev); setSel(null); }} />
+                <IcloudDeleteButton onDelete={async () => { await icloudDelete(ev.href, ev.etag, icHrefs); setSel(null); }} />
+              </View>
+            )}
           </>); })()}
           <View style={s.row}>
             {parent && (data.events ?? []).some(e => e.id === sel.it.key) && <Button ghost title="✏️ Bearbeiten" onPress={() => { setEditing((data.events ?? []).find(e => e.id === sel.it.key) ?? null); setSel(null); }} />}
@@ -102,7 +119,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
         <Segmented value={all ? 'alle' : 'meine'} onChange={v => setAll(v === 'alle')} options={[{ value: 'meine', label: '👤 Meine Termine' }, { value: 'alle', label: '👨‍👩‍👧 Ganze Familie' }]} />
       )}
       <CalViews mode={mode} anchor={anchor} itemsFor={itemsFor} onItemPress={(it, date) => setSel({ it, date })} onPickDay={d => { setAnchor(d); setMode('tag'); }}
-        renderItem={it => <EventRow key={it.key} item={it} canDelete={parent && !/^[gtsb]/.test(it.key)} onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />} />
+        renderItem={it => <EventRow key={it.key} item={it} canDelete={parent && !/^[gtsbxi]/.test(it.key)} onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />} />
       <PushSetup meId={meId} />
 
       {parent && gState !== 'off' && (
@@ -275,4 +292,84 @@ export function driveText(e: { bring?: string; pick?: string }, people: { id: st
   const b = n(e.bring), p = n(e.pick);
   if (b && p && b === p) return `🚗 ${b} fährt hin und zurück`;
   return [b && `🚗 ${b} bringt`, p && `🏠 ${p} holt ab`].filter(Boolean).join(' · ');
+}
+
+function IcloudDeleteButton({ onDelete }: { onDelete: () => Promise<void> }) {
+  const [err, setErr] = useState('');
+  return (
+    <View style={{ gap: 4 }}>
+      <DeleteButton parent title="🗑️ Auch am iPhone löschen" confirm="Wirklich löschen (auch am iPhone)" onDelete={() => { setErr(''); onDelete().catch(e => setErr(e?.message ?? 'Löschen hat nicht geklappt.')); }} />
+      {err ? <Text style={{ color: C.danger }}>{err}</Text> : null}
+    </View>
+  );
+}
+
+type IcCfg = { href: string; name: string; color: string; who?: string };
+type IcSave = { href?: string; etag?: string; cal?: string; title: string; date: string; time?: string; end?: string; note?: string };
+/** Termin direkt im iCloud-Kalender anlegen oder ändern. Erscheint danach auch auf dem iPhone. */
+function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Partial<IcloudEvent>; cals: IcCfg[]; onSave: (e: IcSave) => Promise<void>; onCancel: () => void }) {
+  const editing = !!initial.href;
+  const [title, setTitle] = useState(initial.title ?? '');
+  const [date, setDate] = useState(initial.date ?? today());
+  const [allDay, setAllDay] = useState(editing ? !initial.time : false);
+  const [time, setTime] = useState(initial.time ?? '16:00');
+  const [end, setEnd] = useState(initial.end ?? '17:00');
+  const [note, setNote] = useState(initial.note ?? '');
+  const [cal, setCal] = useState(initial.cal ?? cals[0]?.href ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const hm = /^([01]?\d|2[0-3]):[0-5]\d$/;
+  const pad = (x: string) => x.padStart(5, '0');
+  const timeOk = allDay || (hm.test(time) && hm.test(end) && pad(end) > pad(time));
+  async function save() {
+    setBusy(true); setErr('');
+    try {
+      await onSave({ href: initial.href, etag: initial.etag, cal: editing ? undefined : cal, title: title.trim(), date, time: allDay ? undefined : pad(time), end: allDay ? undefined : pad(end), note: note.trim() || undefined });
+    } catch (e: any) { setErr(e?.message ?? 'Speichern hat nicht geklappt.'); setBusy(false); }
+  }
+  return (
+    <View style={[s.card, { gap: 10 }]}>
+      <Text style={s.h2}>🍎 {editing ? 'iCloud-Termin ändern' : 'Neuer iCloud-Termin'}</Text>
+      <Text style={s.muted}>Wird direkt in deinem Apple-Kalender gespeichert und erscheint auch auf dem iPhone.</Text>
+      <Text style={s.label}>Was</Text>
+      <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="z. B. Zahnarzt" accessibilityLabel="Titel" />
+      <Text style={s.label}>Wann</Text>
+      <DateField value={date} onChange={setDate} label="Datum" />
+      <Pressable onPress={() => setAllDay(v => !v)} style={s.row} accessibilityRole="checkbox" accessibilityState={{ checked: allDay }}>
+        <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: C.accent, backgroundColor: allDay ? C.accent : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+          {allDay && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+        </View>
+        <Text style={s.text}>Ganztägig</Text>
+      </Pressable>
+      {!allDay && (
+        <View style={[s.row, { gap: 8 }]}>
+          <TextInput style={[s.input, { width: 90 }]} value={time} onChangeText={setTime} placeholder="16:00" accessibilityLabel="Beginn" />
+          <Text style={s.muted}>bis</Text>
+          <TextInput style={[s.input, { width: 90 }]} value={end} onChangeText={setEnd} placeholder="17:00" accessibilityLabel="Ende" />
+        </View>
+      )}
+      {!timeOk && <Text style={{ color: C.danger }}>Uhrzeit bitte so: 16:30. Das Ende muss nach dem Beginn liegen.</Text>}
+      {!editing && cals.length > 1 && (<>
+        <Text style={s.label}>In welchen Kalender</Text>
+        <View style={[s.row, { gap: 8 }]}>
+          {cals.map(c => {
+            const on = c.href === cal;
+            return (
+              <Pressable key={c.href} onPress={() => setCal(c.href)} accessibilityRole="radio" accessibilityState={{ checked: on }}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99, borderWidth: 2, borderColor: c.color, backgroundColor: on ? c.color : C.surface }}>
+                <Text style={{ color: on ? '#fff' : C.fg, fontWeight: '700' }}>{c.name}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </>)}
+      <Text style={s.label}>Notiz (optional)</Text>
+      <TextInput style={s.input} value={note} onChangeText={setNote} accessibilityLabel="Notiz" />
+      {err ? <Text style={{ color: C.danger }}>{err}</Text> : null}
+      <View style={s.row}>
+        <Button title={busy ? 'Speichert …' : 'Speichern'} disabled={busy || !title.trim() || !timeOk || (!editing && !cal)} onPress={save} />
+        <Button ghost title="Abbrechen" onPress={onCancel} />
+      </View>
+    </View>
+  );
 }

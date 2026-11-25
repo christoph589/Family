@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar, PersonHead } from '../ui/Avatar';
 import { useFeedItems } from '../data/feeds';
+import { useIcloudItems } from '../data/icloud';
 
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 
@@ -39,6 +40,7 @@ export function Board({ onExit }: { onExit: () => void }) {
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardKids').then(v => v === '0' && setKidsState(false), () => {}); }, []);
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardPane').then(v => v && setPaneState(v as Pane), () => {}); }, []);
   const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : [], data?.settings?.hiddenFeed);
+  const icItems = useIcloudItems(data?.settings?.icloud, data ? peopleOf(data) : []);
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardView').then(v => v && setMode(v as CalMode), () => {}); }, []);
   // Nach 2 Minuten ohne Bedienung zurück zu heute
   useEffect(() => { const t = setTimeout(() => setAnchor(today()), 120000); return () => clearTimeout(t); }, [anchor, mode, touched]);
@@ -198,7 +200,7 @@ export function Board({ onExit }: { onExit: () => void }) {
             </View>
           </View>
         )}
-        <CalViews flat mode={mode} anchor={anchor} itemsFor={d => [...baseItems(data, d, null), ...feedItems(d)].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).filter(i => matchesPeople(i, filter))}
+        <CalViews flat mode={mode} anchor={anchor} itemsFor={d => [...baseItems(data, d, null), ...feedItems(d), ...icItems(d)].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).filter(i => matchesPeople(i, filter))}
           onItemPress={(it, d) => { setSel({ it, date: d }); setConfirmDel(false); setAdding(false); }} onPickDay={d => { setAnchor(d); setMode('tag'); }} />
       </View>}
       <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Aufgaben abhaken geht auf den Geräten der Kinder oder in der Eltern-Ansicht. Termine, Essen und Einkauf kann hier jeder eintragen.</Text>

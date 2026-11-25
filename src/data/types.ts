@@ -161,6 +161,8 @@ export interface FamilyData {
     feeds?: Feed[];
     /** Aus einem Abo übernommene Termine ("key|datum"), das Original wird ausgeblendet */
     hiddenFeed?: string[];
+    /** Verbundene iCloud-Kalender (lesen und schreiben über den Server) */
+    icloud?: { href: string; name: string; color: string; who?: string }[];
     autoHoliday?: { on: boolean; state: string; ranges: { name: string; from: string; to: string; kind: 'ferien' | 'feiertag' }[]; validTo: string } };
 }
 

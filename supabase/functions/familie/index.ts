@@ -3,6 +3,7 @@
 // GET  /familie?ics=<token>          Familienkalender als iCal-Abo (für iPhone, Mac, Google, Outlook)
 // POST /familie {action:'import', url} Fremden Kalender (iCal-Link) einlesen, nur für angemeldete Geräte
 // POST /familie {action:'push_key' | 'push_sub' | 'push_test'}  Erinnerungen aufs Handy (Web-Push), braucht fix-05-erinnerungen.sql
+// POST /familie {action:'icloud_calendars' | 'icloud_events' | 'icloud_save' | 'icloud_delete'} iCloud-Kalender lesen und schreiben (Secrets ICLOUD_USER, ICLOUD_APP_PASSWORD)
 // POST /familie {action:'tick', token}  kommt alle 5 Minuten vom Zeitplan aus fix-05 und verschickt fällige Erinnerungen
 // POST /familie {action:'ai', prompt, images} KI-Test und Vokabel-Foto, nur für Mitglieder einer Familie,
 //      höchstens AI_DAILY Aufrufe pro Familie und Tag. Braucht das Secret ANTHROPIC_API_KEY und fix-03-ki.sql.
@@ -336,6 +337,175 @@ async function pushAction(body: any, userId: string, admin: any) {
 
 // ---------- Server ----------
 
+
+// ---------- iCloud-Kalender (CalDAV, lesen und schreiben) ----------
+// Braucht zwei Geheimnisse in Supabase (Edge Functions > Secrets):
+//   ICLOUD_USER          = Apple-ID (E-Mail)
+//   ICLOUD_APP_PASSWORD  = app-spezifisches Passwort von appleid.apple.com (nicht das normale Apple-Passwort)
+const IC_USER = Deno.env.get('ICLOUD_USER');
+const IC_PASS = Deno.env.get('ICLOUD_APP_PASSWORD');
+const IC_ROOT = 'https://caldav.icloud.com';
+
+async function dav(url: string, method: string, body?: string, headers: Record<string, string> = {}) {
+  return await fetch(url, {
+    method, body,
+    headers: { Authorization: 'Basic ' + btoa(`${IC_USER}:${IC_PASS}`), 'Content-Type': 'application/xml; charset=utf-8', ...headers },
+  });
+}
+const unxml = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#13;|&#x[dD];/g, '\r').replace(/&#10;|&#x[aA];/g, '\n').replace(/&amp;/g, '&');
+const tag = (xml: string, name: string) => { const m = new RegExp(`<(?:[\\w-]+:)?${name}[^>]*>([\\s\\S]*?)</(?:[\\w-]+:)?${name}>`, 'i').exec(xml); return m ? m[1] : undefined; };
+const responses = (xml: string) => xml.match(/<(?:[\w-]+:)?response[\s>][\s\S]*?<\/(?:[\w-]+:)?response>/gi) ?? [];
+const abs = (base: string, href: string) => new URL(href.trim(), base).toString();
+
+let icHome: string | null = null;
+async function icloudHome(): Promise<string> {
+  if (icHome) return icHome;
+  const p1 = await dav(IC_ROOT + '/', 'PROPFIND', '<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>', { Depth: '0' });
+  if (p1.status === 401) throw new Error('icloud_auth');
+  const x1 = await p1.text();
+  const principal = tag(tag(x1, 'current-user-principal') ?? '', 'href');
+  if (!principal) throw new Error('icloud_discovery');
+  const purl = abs(p1.url || IC_ROOT, principal);
+  const p2 = await dav(purl, 'PROPFIND', '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>', { Depth: '0' });
+  const x2 = await p2.text();
+  const home = tag(tag(x2, 'calendar-home-set') ?? '', 'href');
+  if (!home) throw new Error('icloud_discovery');
+  icHome = abs(purl, home);
+  return icHome;
+}
+
+async function icloudCalendars() {
+  const home = await icloudHome();
+  const r = await dav(home, 'PROPFIND', '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/"><d:prop><d:displayname/><d:resourcetype/><a:calendar-color/><c:supported-calendar-component-set/><d:current-user-privilege-set/></d:prop></d:propfind>', { Depth: '1' });
+  const xml = await r.text();
+  return responses(xml).filter(x => /<(?:[\w-]+:)?calendar[\s/>]/i.test(tag(x, 'resourcetype') ?? '') && /VEVENT/i.test(tag(x, 'supported-calendar-component-set') ?? 'VEVENT'))
+    .map(x => ({ href: abs(home, tag(x, 'href')!), name: unxml(tag(x, 'displayname') ?? 'Kalender'), color: (tag(x, 'calendar-color') ?? '#4285f4').slice(0, 7), readOnly: !/<(?:[\w-]+:)?write[\s/>]/i.test(tag(x, 'current-user-privilege-set') ?? '<write/>') }));
+}
+
+const caldate = (iso: string) => iso.replace(/-/g, '') + 'T000000Z';
+async function icloudEvents(cal: string, from: string, to: string) {
+  if (!cal.startsWith('https://') || !new URL(cal).hostname.endsWith('icloud.com')) throw new Error('bad_calendar');
+  const body = `<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${caldate(from)}" end="${caldate(to)}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`;
+  const r = await dav(cal, 'REPORT', body, { Depth: '1' });
+  if (r.status === 401) throw new Error('icloud_auth');
+  const xml = await r.text();
+  const out: any[] = [];
+  for (const x of responses(xml)) {
+    const href = tag(x, 'href'), data = tag(x, 'calendar-data');
+    if (!href || !data) continue;
+    const ics = unxml(data);
+    const recurring = /\nRRULE:/i.test(ics) || /\nRECURRENCE-ID/i.test(ics);
+    let notes = '';
+    try { notes = String(new ICAL.Event(new ICAL.Component(ICAL.parse(ics)).getFirstSubcomponent('vevent')).description ?? ''); } catch { /* egal */ }
+    for (const e of parseIcs(ics, from, to)) {
+      const multi = e.uid.includes(':') && !recurring; // mehrtägiger Ganztagstermin
+      out.push({ ...e, href: abs(cal, href), etag: unxml(tag(x, 'getetag') ?? ''), cal, recurring, editable: !recurring && !multi, note: notes.slice(0, 500) || undefined });
+    }
+  }
+  return out;
+}
+
+// Berliner Ortszeit -> UTC im iCal-Format
+function berlinUtc(date: string, time: string) {
+  const [y, mo, d] = date.split('-').map(Number), [h, mi] = time.split(':').map(Number);
+  let t = Date.UTC(y, mo - 1, d, h, mi);
+  for (let i = 0; i < 2; i++) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t)).map(x => [x.type, x.value]));
+    const shown = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
+    t -= shown - Date.UTC(y, mo - 1, d, h, mi);
+  }
+  return new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+}
+/** Lange Zeilen nach iCal-Regel umbrechen (75 Zeichen, Fortsetzung mit Leerzeichen) */
+const fold = (l: string) => (l.length <= 74 ? l : l.match(/.{1,73}/g)!.join('\r\n '));
+const icsText = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const nextDay = (iso: string) => { const x = new Date(iso + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10).replace(/-/g, ''); };
+
+function eventLines(ev: { title: string; date: string; time?: string; end?: string; note?: string }) {
+  const lines = [`SUMMARY:${icsText(ev.title)}`];
+  if (ev.time) {
+    lines.push(`DTSTART:${berlinUtc(ev.date, ev.time)}`);
+    const end = ev.end && ev.end > ev.time ? ev.end : `${String(Math.min(23, +ev.time.slice(0, 2) + 1)).padStart(2, '0')}:${ev.time.slice(3)}`;
+    lines.push(`DTEND:${berlinUtc(ev.date, end)}`);
+  } else {
+    lines.push(`DTSTART;VALUE=DATE:${ev.date.replace(/-/g, '')}`, `DTEND;VALUE=DATE:${nextDay(ev.date)}`);
+  }
+  if (ev.note) lines.push(`DESCRIPTION:${icsText(ev.note)}`);
+  return lines;
+}
+
+async function icloudSave(b: any) {
+  const ev = { title: String(b.title ?? '').slice(0, 200), date: String(b.date ?? ''), time: b.time ? String(b.time) : undefined, end: b.end ? String(b.end) : undefined, note: b.note ? String(b.note).slice(0, 2000) : undefined };
+  if (!ev.title || !/^\d{4}-\d{2}-\d{2}$/.test(ev.date) || (ev.time && !/^\d{2}:\d{2}$/.test(ev.time)) || (ev.end && !/^\d{2}:\d{2}$/.test(ev.end))) return json({ error: 'bad_request' }, 400);
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  if (b.href) {
+    // Bestehenden Termin ändern: Original holen, nur Titel, Zeit und Notiz ersetzen, Rest (Erinnerungen, Ort) bleibt
+    const href = String(b.href);
+    if (!new URL(href).hostname.endsWith('icloud.com')) return json({ error: 'bad_calendar' }, 400);
+    const g = await dav(href, 'GET', undefined, { 'Content-Type': 'text/calendar' });
+    if (!g.ok) return json({ error: 'not_found' }, 404);
+    const text = await g.text();
+    if (/\nRRULE:/i.test(text)) return json({ error: 'recurring' }, 400);
+    const keep = (l: string) => !/^(SUMMARY|DTSTART|DTEND|DURATION|DESCRIPTION|DTSTAMP|LAST-MODIFIED)[;:]/i.test(l);
+    const unfolded = text.replace(/\r?\n[ \t]/g, '');
+    // Nur Eigenschaften direkt im VEVENT ersetzen, Unterteile wie VALARM bleiben unangetastet
+    const lines: string[] = [];
+    let depth = 0;
+    for (const l of unfolded.split(/\r?\n/)) {
+      if (!l) continue;
+      if (/^BEGIN:VEVENT/i.test(l)) { depth = 1; lines.push(l, ...eventLines(ev), `DTSTAMP:${stamp}`, `LAST-MODIFIED:${stamp}`); continue; }
+      if (depth >= 1 && /^BEGIN:/i.test(l)) depth++;
+      if (depth >= 1 && /^END:/i.test(l)) depth--;
+      if (depth === 1 && !keep(l)) continue;
+      lines.push(l);
+    }
+    const out = lines.map(fold).join('\r\n') + '\r\n';
+    const r = await dav(href, 'PUT', out, { 'Content-Type': 'text/calendar; charset=utf-8', ...(b.etag ? { 'If-Match': String(b.etag) } : {}) });
+    if (r.status === 412) return json({ error: 'changed' }, 409);
+    if (!r.ok) return json({ error: 'save_failed', status: r.status }, 502);
+    return json({ ok: true, href });
+  }
+  const cal = String(b.cal ?? '');
+  if (!cal.startsWith('https://') || !new URL(cal).hostname.endsWith('icloud.com')) return json({ error: 'bad_calendar' }, 400);
+  const uid = crypto.randomUUID();
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Familienplaner//DE', 'BEGIN:VEVENT', `UID:${uid}`, `DTSTAMP:${stamp}`, ...eventLines(ev), 'END:VEVENT', 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
+  const href = cal.replace(/\/?$/, '/') + uid + '.ics';
+  const r = await dav(href, 'PUT', ics, { 'Content-Type': 'text/calendar; charset=utf-8', 'If-None-Match': '*' });
+  if (!r.ok) return json({ error: 'save_failed', status: r.status }, 502);
+  return json({ ok: true, href });
+}
+
+async function icloudAction(body: any, userId: string, admin: any) {
+  if (!IC_USER || !IC_PASS) return json({ error: 'icloud_not_set' }, 503);
+  const { data: mem } = await admin.from('members').select('role').eq('user_id', userId).limit(1);
+  if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const parent = mem[0].role === 'eltern';
+  try {
+    if (body.action === 'icloud_calendars') { if (!parent) return json({ error: 'parents_only' }, 403); return json({ calendars: await icloudCalendars() }); }
+    if (body.action === 'icloud_events') {
+      const from = String(body.from ?? ''), to = String(body.to ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return json({ error: 'bad_request' }, 400);
+      const cals: string[] = (Array.isArray(body.cals) ? body.cals : []).slice(0, 12).map(String);
+      const all = await Promise.all(cals.map(c => icloudEvents(c, from, to).catch(e => { if ((e as Error).message === 'icloud_auth') throw e; return []; })));
+      return json({ events: all.flat() });
+    }
+    if (!parent) return json({ error: 'parents_only' }, 403);
+    if (body.action === 'icloud_save') return await icloudSave(body);
+    if (body.action === 'icloud_delete') {
+      const href = String(body.href ?? '');
+      if (!href.startsWith('https://') || !new URL(href).hostname.endsWith('icloud.com')) return json({ error: 'bad_calendar' }, 400);
+      const r = await dav(href, 'DELETE', undefined, body.etag ? { 'If-Match': String(body.etag) } : {});
+      if (r.status === 412) return json({ error: 'changed' }, 409);
+      if (!r.ok && r.status !== 404) return json({ error: 'delete_failed', status: r.status }, 502);
+      return json({ ok: true });
+    }
+  } catch (e) {
+    const m = (e as Error).message;
+    return json({ error: m === 'icloud_auth' ? 'icloud_auth' : m === 'icloud_discovery' ? 'icloud_discovery' : 'icloud_failed' }, 502);
+  }
+  return json({ error: 'unknown_action' }, 400);
+}
+
 if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   const admin = createClient(URL_, SERVICE, { auth: { persistSession: false } });
@@ -366,6 +536,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       const body = await req.json();
       if (body.action === 'ai') return await runAi(body, user.user.id, admin);
       if (String(body.action).startsWith('push_')) return await pushAction(body, user.user.id, admin);
+      if (String(body.action).startsWith('icloud_')) return await icloudAction(body, user.user.id, admin);
       if (body.action === 'import') {
         let url = String(body.url ?? '').trim().replace(/^webcals?:\/\//i, 'https://');
         try { url = new URL(url).toString(); } catch { return json({ error: 'bad_url' }, 400); }

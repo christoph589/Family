@@ -1,4 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
+import { IcloudSetup } from './src/screens/IcloudSetup';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { cloudEnabled, cloudStore, DeviceLink, getLink, signOut } from './src/data/cloud';
@@ -233,6 +234,7 @@ function Root() {
         {tab === 'aufgaben' && admin && section === 'familie' && <ParentPin />}
         {tab === 'aufgaben' && admin && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
         {tab === 'aufgaben' && admin && section === 'ferien' && <Holiday />}
+        {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <IcloudSetup />}
         {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
         {tab === 'aufgaben' && admin && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
       </ScrollView>
