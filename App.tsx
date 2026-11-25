@@ -97,9 +97,10 @@ function CloudApp() {
 const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', essen: '🍽️', aufgaben: '⚙️' };
 
 type Section = 'familie' | 'aufgaben' | 'geld' | 'ferien' | 'kalender' | 'geraete';
-const SETTINGS: { value: Section; label: string; cloud?: boolean }[] = [
-  { value: 'familie', label: '👪 Familie' }, { value: 'aufgaben', label: '✅ Aufgaben' }, { value: 'geld', label: '💶 Geld' }, { value: 'ferien', label: '🏖️ Ferien' },
-  { value: 'kalender', label: '📅 Kalender', cloud: true }, { value: 'geraete', label: '📱 Geräte', cloud: true },
+const SETTINGS: { value: Section; label: string; hint: string; cloud?: boolean }[] = [
+  { value: 'familie', label: '👪 Familie', hint: 'Personen, Fotos, PINs, Schule' }, { value: 'aufgaben', label: '✅ Aufgaben', hint: 'Aufgaben, Routinen, Haushalt' },
+  { value: 'geld', label: '💶 Geld', hint: 'Taschengeld und Spartöpfe' }, { value: 'ferien', label: '🏖️ Ferien', hint: 'Ferien und Feiertage' },
+  { value: 'kalender', label: '📅 Kalender', hint: 'Handy-Kalender, WebUntis, Abo', cloud: true }, { value: 'geraete', label: '📱 Geräte', hint: 'Partner einladen, Kindergeräte', cloud: true },
 ];
 
 function Root() {
@@ -112,10 +113,13 @@ function Root() {
   const scroller = useRef<any>(null);
   const [board, setBoardState] = useState(wantsWall());
   const [section, setSection] = useState<Section>('familie');
+  const [menu, setMenu] = useState(true); // Handy: erst Liste der Bereiche, dann ein Bereich
   const [askOut, setAskOut] = useState(false);
   // Zurück von der Google-Kalender-Freigabe: nach der Eltern-PIN direkt zu Einstellungen › Kalender
-  useEffect(() => { if (profile?.kind === 'eltern' && googleReturn) { setTab('aufgaben'); setSection('kalender'); } }, [profile]);
+  useEffect(() => { if (profile?.kind === 'eltern' && googleReturn) { setTab('aufgaben'); setSection('kalender'); setMenu(false); } }, [profile]);
   const { width: winW } = useWindowDimensions();
+  const narrowSet = winW < 700;
+  const showSec = !narrowSet || !menu;
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
   useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
   // Ferien für Kinder mit eigenem Bundesland nachladen
@@ -146,12 +150,13 @@ function Root() {
   // Admin = volle Rechte. Andere Erwachsene (z. B. Oma, Opa) sehen alles, haken ab und tragen Termine ein, aber keine Einstellungen, Geld und Punkte.
   const admin = parent && isAdmin(parentsOf(data).find(p => p.id === profile?.id) ?? parentsOf(data)[0]);
   if (!profile) {
-    const tryPin = () => {
-      if (askPin === '__out') { if (pin === data.family.parentPin) { setAskPin(null); setPin(''); cloud?.unlink(); } else setPinErr(true); return; }
+    const tryPin = (pin_ = pin) => {
+      const pin = pin_;
+      if (askPin === '__out') { if (pin === data.family.parentPin) { setAskPin(null); setPin(''); cloud?.unlink(); } else { setPinErr(true); setPin(''); } return; }
       const who = parentsOf(data).find(p => p.id === askPin);
       const ok = isAdmin(who) ? pin === data.family.parentPin : !!who?.pin && pin === who.pin;
       if (ok) { setProfile({ kind: 'eltern', id: askPin! }); setAskPin(null); setPin(''); setTab('heute'); }
-      else setPinErr(true);
+      else { setPinErr(true); setPin(''); }
     };
     const hour = new Date().getHours();
     const hello = hour < 11 ? 'Guten Morgen' : hour < 17 ? 'Hallo' : hour < 22 ? 'Guten Abend' : 'Gute Nacht';
@@ -186,21 +191,6 @@ function Root() {
               );
             })}
           </View>
-          {(asking || askPin === '__out') && (
-            <View style={[s.card, { maxWidth: 380, alignSelf: 'center', width: '100%', ...SHADOW.lg, alignItems: 'center' }]}>
-              {asking ? <Avatar name={asking.name} color={asking.color} photo={asking.photo} size={52} /> : null}
-              <Text style={s.h2}>{asking ? `PIN für ${asking.name}` : 'Gerät abmelden'}</Text>
-              {!asking && <Text style={[s.muted, { textAlign: 'center' }]}>Mit der Eltern-PIN bestätigen. Eure Daten bleiben gespeichert.</Text>}
-              <TextInput autoFocus style={[s.input, { fontSize: 28, letterSpacing: 14, textAlign: 'center', width: '100%', fontWeight: '800' }]} value={pin} secureTextEntry keyboardType="number-pad"
-                onSubmitEditing={tryPin} placeholder="••••"
-                onChangeText={t => { setPin(t.replace(/\D/g, '').slice(0, 4)); setPinErr(false); }} />
-              {pinErr && <Text style={{ color: C.danger, textAlign: 'center' }}>{(() => { const w = parentsOf(data).find(p => p.id === askPin); return w && !isAdmin(w) && !w.pin ? 'Für diese Person ist noch keine PIN festgelegt. Mama oder Papa legt sie unter ⚙️ › Familie fest.' : 'PIN stimmt nicht.'; })()}</Text>}
-              <View style={[s.row, { width: '100%' }]}>
-                <Button title="Weiter" disabled={pin.length !== 4} onPress={tryPin} style={{ flex: 1 }} />
-                <Button ghost title="Abbrechen" onPress={() => setAskPin(null)} />
-              </View>
-            </View>
-          )}
           {!ownChild && (
             <Pressable accessibilityRole="button" accessibilityLabel="Wandansicht" onPress={() => setBoard(true)}
               style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, maxWidth: 480, alignSelf: 'center', width: '100%', padding: 16, borderRadius: 22, backgroundColor: '#ffffff26', borderWidth: 1, borderColor: '#ffffff55', opacity: pressed ? 0.8 : 1 }]}>
@@ -218,6 +208,24 @@ function Root() {
             </Pressable>
           )}
         </ScrollView>
+        {(asking || askPin === '__out') && (
+          <Pressable onPress={() => setAskPin(null)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#1a1530aa', paddingTop: 70, paddingHorizontal: 16 }}>
+            <Pressable onPress={() => {}} style={{ cursor: 'auto' } as any}>
+                <View style={[s.card, { maxWidth: 380, alignSelf: 'center', width: '100%', ...SHADOW.lg, alignItems: 'center' }]}>
+                  {asking ? <Avatar name={asking.name} color={asking.color} photo={asking.photo} size={52} /> : null}
+                  <Text style={s.h2}>{asking ? `PIN für ${asking.name}` : 'Gerät abmelden'}</Text>
+                  {!asking && <Text style={[s.muted, { textAlign: 'center' }]}>Mit der Eltern-PIN bestätigen. Eure Daten bleiben gespeichert.</Text>}
+                  <TextInput autoFocus style={[s.input, { fontSize: 28, letterSpacing: 14, textAlign: 'center', width: '100%', fontWeight: '800' }]} value={pin} secureTextEntry keyboardType="number-pad"
+                    onSubmitEditing={() => tryPin()} placeholder="••••"
+                    onChangeText={t => { const v = t.replace(/\D/g, '').slice(0, 4); setPin(v); setPinErr(false); if (v.length === 4) tryPin(v); }} />
+                  {pinErr && <Text style={{ color: C.danger, textAlign: 'center' }}>{(() => { const w = parentsOf(data).find(p => p.id === askPin); return w && !isAdmin(w) && !w.pin ? 'Für diese Person ist noch keine PIN festgelegt. Mama oder Papa legt sie unter ⚙️ › Familie fest.' : 'PIN stimmt nicht.'; })()}</Text>}
+                  <View style={[s.row, { width: '100%' }]}>
+                    <Button ghost title="Abbrechen" onPress={() => setAskPin(null)} style={{ flex: 1 }} />
+                  </View>
+                </View>
+            </Pressable>
+          </Pressable>
+        )}
       </SafeAreaView>
     );
   }
@@ -247,7 +255,7 @@ function Root() {
             <Text style={[s.h1, { fontSize: wide ? 28 : 24 }]} numberOfLines={1}>{tab === 'aufgaben' ? 'Einstellungen' : wide ? `${greet}, ${me.name}` : `Hallo ${me.name} 👋`}</Text>
           </View>
           {admin && (
-            <Pressable accessibilityRole="button" accessibilityLabel="Verwalten" onPress={() => setTab(tab === 'aufgaben' ? 'heute' : 'aufgaben')}
+            <Pressable accessibilityRole="button" accessibilityLabel="Verwalten" onPress={() => { setMenu(true); setTab(tab === 'aufgaben' ? 'heute' : 'aufgaben'); }}
               style={{ width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: tab === 'aufgaben' ? C.accent : C.surface, ...SHADOW.sm }}>
               <Text style={{ fontSize: 20 }}>{tab === 'aufgaben' ? '✕' : '⚙️'}</Text>
             </Pressable>
@@ -270,7 +278,7 @@ function Root() {
         {tab === 'punkte' && <Points childIds={childIds} parent={parent} admin={admin} />}
         {tab === 'geld' && <MoneyTab childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'essen' && <Food who={me.name} meId={profile.id} parent={parent} />}
-        {tab === 'aufgaben' && admin && (
+        {tab === 'aufgaben' && admin && !narrowSet && (
           <View style={[s.row, { gap: 8 }]} accessibilityRole="tablist">
             {SETTINGS.filter(x => cloud || !x.cloud).map(x => (
               <Pressable key={x.value} accessibilityRole="tab" accessibilityState={{ selected: section === x.value }} onPress={() => setSection(x.value)}
@@ -280,16 +288,38 @@ function Root() {
             ))}
           </View>
         )}
-        {tab === 'aufgaben' && admin && section === 'familie' && <Family />}
-        {tab === 'aufgaben' && admin && section === 'familie' && <ParentPin />}
-        {tab === 'aufgaben' && admin && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
-        {tab === 'aufgaben' && admin && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
-        {tab === 'aufgaben' && admin && section === 'geld' && <MoneySettings />}
-        {tab === 'aufgaben' && admin && section === 'ferien' && <Holiday />}
-        {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <IcloudSetup />}
-        {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <UntisSetup />}
-        {tab === 'aufgaben' && admin && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
-        {tab === 'aufgaben' && admin && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
+        {tab === 'aufgaben' && admin && narrowSet && menu && (
+          <View style={[s.card, { padding: 0, gap: 0, overflow: 'hidden' }]}>
+            {SETTINGS.filter(x => cloud || !x.cloud).map((x, i) => (
+              <Pressable key={x.value} accessibilityRole="button" onPress={() => { setSection(x.value); setMenu(false); scroller.current?.scrollTo?.({ y: 0, animated: false }); }}
+                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 18, gap: 12, backgroundColor: pressed ? C.surface2 : 'transparent', borderTopWidth: i ? 1 : 0, borderTopColor: C.line }]}>
+                <Text style={{ fontSize: 26 }}>{x.label.split(' ')[0]}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.text, { fontWeight: '800', fontSize: 17 }]}>{x.label.split(' ').slice(1).join(' ')}</Text>
+                  <Text style={[s.muted, { fontSize: 13 }]}>{x.hint}</Text>
+                </View>
+                <Text style={{ fontSize: 22, color: C.muted }}>›</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        {tab === 'aufgaben' && admin && narrowSet && !menu && (
+          <Pressable accessibilityRole="button" onPress={() => setMenu(true)} style={[s.row, { gap: 6, paddingVertical: 6 }]}>
+            <Text style={{ color: C.accent, fontSize: 22, fontWeight: '800' }}>‹</Text>
+            <Text style={{ color: C.accent, fontWeight: '800', fontSize: 16 }}>Einstellungen</Text>
+            <Text style={[s.h2, { marginLeft: 8 }]}>{SETTINGS.find(x => x.value === section)?.label}</Text>
+          </Pressable>
+        )}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Family />}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <ParentPin />}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
+        {tab === 'aufgaben' && admin && showSec && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
+        {tab === 'aufgaben' && admin && showSec && section === 'geld' && <MoneySettings />}
+        {tab === 'aufgaben' && admin && showSec && section === 'ferien' && <Holiday />}
+        {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <IcloudSetup />}
+        {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <UntisSetup />}
+        {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
+        {tab === 'aufgaben' && admin && showSec && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
         {tab === 'aufgaben' && admin && cloud && (
           <View style={{ marginTop: 18, alignItems: 'center', gap: 8 }}>
             {!askOut ? <Pressable accessibilityRole="button" onPress={() => setAskOut(true)} style={{ paddingVertical: 10, paddingHorizontal: 18 }}>
