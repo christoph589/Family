@@ -176,7 +176,7 @@ export interface FamilyData {
   events?: CalEvent[];
   gifts?: Gift[];
   giftOccasions?: GiftOccasion[];
-  settings?: { /** Einwilligung der Eltern zur KI-Verarbeitung von Fotos */ aiConsent?: { at: string; by?: string }; /** Bundesland, z. B. DE-NW (wenn keine automatischen Ferien gesetzt sind) */ region?: string; googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
+  settings?: { /** Einwilligung der Eltern zur KI-Verarbeitung von Fotos. provider: für welchen Anbieter (fehlt = claude) */ aiConsent?: { at: string; by?: string; provider?: 'claude' | 'mistral' }; /** KI-Anbieter der Familie, Standard claude. mistral = nur EU */ aiProvider?: 'claude' | 'mistral'; /** Ergebnisse des KI-Vergleichs (Eltern) */ aiCompare?: { at: string; task: string; win: 'claude' | 'mistral' | 'gleich'; ms: Record<string, number> }[]; /** Bundesland, z. B. DE-NW (wenn keine automatischen Ferien gesetzt sind) */ region?: string; googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
     /** Automatische Ferien und Feiertage nach Bundesland */
     /** Eingebundene fremde Kalender (iCal-Links von iCloud, Google, Outlook, WebUntis) */
     feeds?: Feed[];
