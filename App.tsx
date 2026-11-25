@@ -20,7 +20,8 @@ import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import { Kiosk, wantsWall } from './src/ui/Kiosk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { birthdaysOn, extraStates, isAdmin, parentsOf, payAllowances, peopleOf, pruneAiPhotos, today } from './src/data/logic';
+import { birthdaysOn, extraStates, isAdmin, parentsOf, payAllowances, peopleOf, pruneAiPhotos, ensurePackTasks, today } from './src/data/logic';
+import { PackSetup } from './src/screens/PackSetup';
 import { AiConsent } from './src/ui/AiConsent';
 import { loadHolidays } from './src/data/holidays';
 import { MoneyTab } from './src/screens/Gifts';
@@ -124,6 +125,7 @@ function Root() {
   const showSec = !narrowSet || !menu;
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
   useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
+  useEffect(() => { if (data && ensurePackTasks(data) !== data) update(d => ensurePackTasks(d)); }, [data?.children]);
   useEffect(() => { if (data && pruneAiPhotos(data) !== data) update(d => pruneAiPhotos(d)); }, [data?.exams, data?.topics, data && today()]);
   // Ferien für Kinder mit eigenem Bundesland nachladen
   const needStates = data ? extraStates(data).filter(st => { const x = data.settings?.autoHoliday?.extra?.[st]; const soon = new Date(); soon.setDate(soon.getDate() + 200); return data.settings?.autoHoliday?.on && (!x || x.validTo < today(soon)); }).join(',') : '';
@@ -319,6 +321,7 @@ function Root() {
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
         {tab === 'aufgaben' && admin && showSec && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
         {tab === 'aufgaben' && admin && showSec && section === 'schule' && <Timetable childIds={childIds} parent />}
+        {tab === 'aufgaben' && admin && showSec && section === 'schule' && <PackSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'schule' && cloud && <UntisSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'geld' && <MoneySettings />}
         {tab === 'aufgaben' && admin && showSec && section === 'ferien' && <Holiday />}

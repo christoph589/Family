@@ -1,7 +1,7 @@
 export type TaskKind = 'routine' | 'hausaufgabe' | 'pflicht'; // pflicht = Haushalt
 export type DayTime = 'morgens' | 'mittags' | 'abends';
 /** vorSchultag = abends vor einem Schultag (So bis Do) */
-export type Repeat = 'einmal' | 'taeglich' | 'werktags' | 'vorSchultag';
+export type Repeat = 'einmal' | 'taeglich' | 'werktags' | 'vorSchultag' | 'vorFach';
 
 /** Ein Schultag im Stundenplan. Zeiten als HH:MM. */
 export interface SchoolDay { from?: string; to?: string; lessons?: string[] }
@@ -18,6 +18,8 @@ export interface Child {
   birthday?: string; // YYYY-MM-DD
   gender?: Gender;
   timetable?: Timetable;
+  /** Fächer, für die schon automatisch eine „Sachen richten“-Aufgabe angelegt wurde (nicht erneut anlegen, wenn gelöscht) */
+  packAuto?: string[];
   /** Stundenraster: Ende jeder Stunde (HH:MM), Index 0 = 1. Stunde. Damit passt sich das Schulende an. */
   bells?: string[];
   /** Abweichung vom Stundenplan an einem Tag (YYYY-MM-DD): früher aus oder ganz frei */
@@ -64,6 +66,10 @@ export interface Task {
   selfCheck?: boolean;
   /** Gehört zur Schule: nur an Schultagen, pausiert in den Ferien. Hausaufgaben zählen immer dazu. */
   school?: boolean;
+  /** Nur bei repeat 'vorFach': Abend vor einem Schultag mit diesem Fach (Suchwort, z. B. 'sport', 'schwimm') */
+  subject?: string;
+  /** Nur in geraden oder ungeraden Kalenderwochen (z. B. Schwimmen abwechselnd Mädchen/Jungs) */
+  weeks?: 'gerade' | 'ungerade';
 }
 export interface Completion { id: string; taskId: string; childId: string; date: string; status: 'wartet' | 'bestaetigt' }
 export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string; /** Einzahlung in einen Gemeinschaftstopf */ potId?: string }

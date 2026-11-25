@@ -61,13 +61,54 @@ export function isDueOn(t: Task, date: string, d?: FamilyData): boolean {
   if (!t.active) return false;
   if (t.repeat === 'einmal') return t.date === date;
   if (t.repeat === 'vorSchultag') return schoolDay(d, plusDays(date, 1), t.childId);
+  if (t.repeat === 'vorFach') {
+    const next = plusDays(date, 1);
+    if (!schoolDay(d, next, t.childId) || d?.children.find(c => c.id === t.childId)?.schoolChange?.[next]?.off) return false;
+    if (t.weeks && (isoWeek(next) % 2 === 0) !== (t.weeks === 'gerade')) return false;
+    return hasSubject(d, t.childId, next, t.subject ?? '');
+  }
   if (isSchoolTask(t)) return schoolDay(d, date, t.childId);
   if (t.repeat === 'taeglich') return true;
   const wd = weekday(date);
   return wd >= 1 && wd <= 5;
 }
 
-export const REPEAT_LABEL: Record<string, string> = { einmal: 'Nur heute', werktags: 'Mo bis Fr', taeglich: 'Täglich', vorSchultag: 'Vor Schultagen (So bis Do)' };
+export const REPEAT_LABEL: Record<string, string> = { einmal: 'Nur heute', werktags: 'Mo bis Fr', taeglich: 'Täglich', vorSchultag: 'Vor Schultagen (So bis Do)', vorFach: 'Abend vor dem Fach' };
+
+/** Kalenderwoche nach ISO 8601 */
+export function isoWeek(date: string): number {
+  const x = new Date(date + 'T12:00:00Z');
+  const day = (x.getUTCDay() + 6) % 7;
+  x.setUTCDate(x.getUTCDate() - day + 3);
+  const firstThu = new Date(Date.UTC(x.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((x.getTime() - firstThu.getTime()) / 864e5 - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7);
+}
+/** Steht das Fach (Suchwort) an diesem Tag im Stundenplan des Kindes? */
+export function hasSubject(d: FamilyData | undefined, childId: string, date: string, key: string): boolean {
+  const wd = String(weekday(date)) as '1' | '2' | '3' | '4' | '5';
+  const c = d?.children.find(x => x.id === childId);
+  return !!key && !!c?.timetable?.[wd]?.lessons?.some(l => subjectMatch(l, key));
+}
+/** Auch WebUntis-Kürzel: SP/Spo = Sport, SW/Schw = Schwimmen */
+const ALIAS: Record<string, RegExp> = { sport: /^(sp|spo|spw|spm)$/i, schwimm: /^(sw|schw)$/i };
+export const subjectMatch = (lesson: string, key: string) => lesson.toLowerCase().includes(key) || !!ALIAS[key]?.test(lesson.trim());
+export const PACK_SUBJECTS = [
+  { key: 'schwimm', title: 'Schwimmsachen richten', icon: '🩱' },
+  { key: 'sport', title: 'Sportsachen richten', icon: '👟' },
+];
+/** Legt für Sport und Schwimmen im Stundenplan automatisch eine Abend-Aufgabe an (einmal je Fach und Kind). */
+export function ensurePackTasks(d: FamilyData): FamilyData {
+  let next = d;
+  for (const c of d.children) {
+    const lessons = Object.values(c.timetable ?? {}).flatMap(x => x?.lessons ?? []);
+    for (const p of PACK_SUBJECTS) {
+      if (c.packAuto?.includes(p.key) || !lessons.some(l => subjectMatch(l, p.key))) continue;
+      const task: Task = { id: uid(), childId: c.id, title: p.title, icon: p.icon, kind: 'routine', time: 'abends', repeat: 'vorFach', subject: p.key, points: 2, selfCheck: true, active: true };
+      next = { ...next, tasks: [...next.tasks, task], children: next.children.map(k => (k.id === c.id ? { ...k, packAuto: [...(k.packAuto ?? []), p.key] } : k)) };
+    }
+  }
+  return next;
+}
 
 export function tasksFor(data: FamilyData, childId: string, date: string) {
   return data.tasks
