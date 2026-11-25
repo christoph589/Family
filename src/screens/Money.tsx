@@ -142,7 +142,7 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
               <Segmented value={from} onChange={v => { setFrom(v); if (v === to) setTo(POTS.find(p => p.id !== v)!.id); }} options={POTS.map(p => ({ value: p.id, label: `${p.icon} ${p.name}` }))} />
               <Text style={s.label}>Nach</Text>
               <Segmented value={to} onChange={setTo} options={POTS.filter(p => p.id !== from).map(p => ({ value: p.id, label: `${p.icon} ${p.name}` }))} />
-              {!parent && from !== 'aus' && <Text style={[s.muted, { fontSize: 13 }]}>Aus {potName(from).name} geht es nur mit Eltern-OK. Deine Anfrage landet bei Mama oder Papa.</Text>}
+              {!parent && <Text style={[s.muted, { fontSize: 13 }]}>Umbuchen geht nur mit Eltern-OK. Deine Anfrage landet bei Mama oder Papa.</Text>}
             </>
           )}
           {mode === 'regel' && (
@@ -159,12 +159,12 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
           {mode === 'ausgabe' && cents !== null && cents > bals[pot === 'split' ? 'aus' : pot] && <Text style={{ color: C.warn }}>Das ist mehr, als in {potName(pot === 'split' ? 'aus' : pot).name} ist.</Text>}
           {mode === 'umbuchen' && cents !== null && cents > bals[from] && <Text style={{ color: C.warn }}>Das ist mehr, als in {potName(from).name} ist.</Text>}
           <View style={s.row}>
-            <Button title={mode === 'umbuchen' && !parent && from !== 'aus' ? 'Anfragen' : 'Speichern'} disabled={cents === null || (mode !== 'regel' && mode !== 'umbuchen' && !note.trim()) || (mode === 'umbuchen' && cents > bals[from])} onPress={() => {
+            <Button title={mode === 'umbuchen' && !parent ? 'Anfragen' : 'Speichern'} disabled={cents === null || (mode !== 'regel' && mode !== 'umbuchen' && !note.trim()) || (mode === 'umbuchen' && cents > bals[from])} onPress={() => {
               if (cents === null) return;
               if (mode === 'ausgabe') update(d => addTx(d, child.id, -cents, note.trim(), 'ausgabe', today(), pot === 'split' ? 'aus' : pot));
               if (mode === 'plus') update(d => (pot === 'split' ? addSplitTx(d, child.id, cents, note.trim(), plusKind) : addTx(d, child.id, cents, note.trim(), plusKind, today(), pot)));
               if (mode === 'umbuchen') {
-                if (!parent && from !== 'aus') update(d => setAccount(d, child.id, a => ({ ...a, requests: [...(a.requests ?? []), { id: uid(), cents, from, to, note: note.trim(), at: today() }] })));
+                if (!parent) update(d => setAccount(d, child.id, a => ({ ...a, requests: [...(a.requests ?? []), { id: uid(), cents, from, to, note: note.trim(), at: today() }] })));
                 else update(d => movePot(d, child.id, cents, from, to, note.trim() || 'Umbuchung'));
               }
               if (mode === 'ziel') update(d => setAccount(d, child.id, a => ({ ...a, goal: { title: note.trim(), cents } })));
