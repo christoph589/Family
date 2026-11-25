@@ -30,6 +30,7 @@ import { Setup } from './src/screens/Setup';
 import { Today } from './src/screens/Today';
 import { Button } from './src/ui/Button';
 import { LogoMark } from './src/ui/Logo';
+import { BRAND } from './src/brand';
 import { C, grad, installWebStyles, s, SHADOW } from './src/ui/theme';
 
 installWebStyles();
@@ -136,6 +137,7 @@ function Root() {
   const admin = parent && isAdmin(parentsOf(data).find(p => p.id === profile?.id) ?? parentsOf(data)[0]);
   if (!profile) {
     const tryPin = () => {
+      if (askPin === '__out') { if (pin === data.family.parentPin) { setAskPin(null); setPin(''); cloud?.unlink(); } else setPinErr(true); return; }
       const who = parentsOf(data).find(p => p.id === askPin);
       const ok = isAdmin(who) ? pin === data.family.parentPin : !!who?.pin && pin === who.pin;
       if (ok) { setProfile({ kind: 'eltern', id: askPin! }); setAskPin(null); setPin(''); setTab('heute'); }
@@ -148,6 +150,7 @@ function Root() {
       <SafeAreaView style={[s.screen, grad('#5b4cf0', '#ff6a5c', 150)]}>
         <ScrollView contentContainerStyle={[s.pad, { maxWidth: 820, paddingTop: 48, paddingBottom: 48, gap: 26 }]}>
           <View style={{ alignItems: 'center', gap: 6 }}>
+            <View style={[s.row, { gap: 8, marginBottom: 6 }]}><LogoMark size={36} /><Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>{BRAND.name}</Text></View>
             <Text style={{ color: '#ffffffcc', fontSize: 15, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }}>{hello}</Text>
             <Text style={{ color: '#fff', fontSize: 38, fontWeight: '800', letterSpacing: -1, textAlign: 'center' }}>{data.family.name}</Text>
             <Text style={{ color: '#ffffffd9', fontSize: 18, fontWeight: '600' }}>Wer bist du?</Text>
@@ -173,10 +176,11 @@ function Root() {
               );
             })}
           </View>
-          {asking && (
+          {(asking || askPin === '__out') && (
             <View style={[s.card, { maxWidth: 380, alignSelf: 'center', width: '100%', ...SHADOW.lg, alignItems: 'center' }]}>
-              <Avatar name={asking.name} color={asking.color} photo={asking.photo} size={52} />
-              <Text style={s.h2}>PIN für {asking.name}</Text>
+              {asking ? <Avatar name={asking.name} color={asking.color} photo={asking.photo} size={52} /> : null}
+              <Text style={s.h2}>{asking ? `PIN für ${asking.name}` : 'Gerät abmelden'}</Text>
+              {!asking && <Text style={[s.muted, { textAlign: 'center' }]}>Mit der Eltern-PIN bestätigen. Eure Daten bleiben gespeichert.</Text>}
               <TextInput autoFocus style={[s.input, { fontSize: 28, letterSpacing: 14, textAlign: 'center', width: '100%', fontWeight: '800' }]} value={pin} secureTextEntry keyboardType="number-pad"
                 onSubmitEditing={tryPin} placeholder="••••"
                 onChangeText={t => { setPin(t.replace(/\D/g, '').slice(0, 4)); setPinErr(false); }} />
@@ -196,6 +200,11 @@ function Root() {
                 <Text style={{ color: '#ffffffcc', fontSize: 13 }}>Alles auf einen Blick fürs Tablet an der Wand. Beenden mit PIN.</Text>
               </View>
               <Text style={{ color: '#fff', fontSize: 22 }}>›</Text>
+            </Pressable>
+          )}
+          {cloud && (
+            <Pressable accessibilityRole="button" onPress={() => { setPin(''); setPinErr(false); setAskPin('__out'); }} style={{ alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 }}>
+              <Text style={{ color: '#ffffffcc', fontWeight: '700' }}>Abmelden</Text>
             </Pressable>
           )}
         </ScrollView>
