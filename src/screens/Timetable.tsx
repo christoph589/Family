@@ -1,10 +1,48 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { Avatar, PersonHead } from '../ui/Avatar';
 import { Child, SchoolDay, Timetable as TT } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { C, grad, s } from '../ui/theme';
+import { AI_ERROR, readTimetable } from '../ai/generate';
+
+/** Foto oder PDF wählen. Fotos werden auf höchstens 1800 px verkleinert. */
+function pickPlanFile(): Promise<{ src?: string; error?: string } | null> {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return Promise.resolve({ error: 'Hochladen geht bisher nur im Browser.' });
+  return new Promise(resolve => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,application/pdf';
+    input.style.position = 'fixed'; input.style.left = '-9999px'; input.style.opacity = '0';
+    document.body.appendChild(input);
+    const done = (v: { src?: string; error?: string } | null) => { input.remove(); resolve(v); };
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return done(null);
+      if (file.size > 4_000_000 && file.type === 'application/pdf') return done({ error: 'Das PDF ist zu groß (über 4 MB). Bitte ein Foto oder Bildschirmfoto nehmen.' });
+      const r = new FileReader();
+      r.onerror = () => done({ error: 'Datei konnte nicht gelesen werden.' });
+      r.onload = () => {
+        const src = String(r.result);
+        if (file.type === 'application/pdf') return done({ src });
+        const img = new window.Image();
+        img.onload = () => {
+          const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+          c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+          done({ src: c.toDataURL('image/jpeg', 0.8) });
+        };
+        img.onerror = () => done({ error: /heic|heif/i.test(file.type + file.name) ? 'Dieses Foto ist im iPhone-Format HEIC. Bitte ein Bildschirmfoto davon nehmen.' : 'Dieses Bild konnte nicht geöffnet werden.' });
+        img.src = src;
+      };
+      r.readAsDataURL(file);
+    });
+    input.addEventListener('cancel', () => done(null));
+    input.click();
+  });
+}
 
 const DAYS = [['1', 'Mo'], ['2', 'Di'], ['3', 'Mi'], ['4', 'Do'], ['5', 'Fr']] as const;
 const ROWS = 8;
@@ -19,6 +57,8 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
   const [childId, setChildId] = useState(kids[0]?.id ?? '');
   const [edit, setEdit] = useState<TT | null>(null);
   const [w, setW] = useState(0);
+  const [reading, setReading] = useState(false);
+  const [aiMsg, setAiMsg] = useState('');
   if (!data || !kids.length) return null;
   const child = kids.find(k => k.id === childId) ?? kids[0];
   const tt = edit ?? child.timetable ?? {};
@@ -31,6 +71,21 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
     lessons[i] = v;
     return { ...(e ?? {}), [k]: { ...day, lessons } };
   });
+  const editRows = Math.max(ROWS, ...DAYS.map(([k]) => tt[k]?.lessons?.length ?? 0));
+  async function upload() {
+    setAiMsg('');
+    const f = await pickPlanFile();
+    if (!f) return;
+    if (f.error || !f.src) { setAiMsg(f.error ?? 'Datei konnte nicht gelesen werden.'); return; }
+    setReading(true);
+    try {
+      const plan = await readTimetable(f.src, child.name, child.grade);
+      setEdit(plan);
+      setAiMsg('✅ Eingelesen. Bitte kurz prüfen, Zeiten ergänzen und dann speichern.');
+    } catch (e: any) {
+      setAiMsg(AI_ERROR[e?.code] ?? 'Das Einlesen hat nicht geklappt. Bitte nochmal versuchen.');
+    } finally { setReading(false); }
+  }
   const valid = DAYS.every(([k]) => timeOk(tt[k]?.from) && timeOk(tt[k]?.to));
   const save = () => {
     const clean: TT = {};
@@ -74,13 +129,22 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
           {parent && !edit && <View style={[s.row, { justifyContent: 'flex-end' }]}><Button ghost title={empty ? 'Eintragen' : 'Bearbeiten'} onPress={() => setEdit(child.timetable ?? {})} /></View>}
         </>
       )}
+      {parent && (edit || empty) && (
+        <View style={{ gap: 6, backgroundColor: C.bg, borderRadius: 12, padding: 12 }}>
+          <View style={[s.row, { gap: 10 }]}>
+            <Button ghost title="📷 Foto oder PDF einlesen" disabled={reading} onPress={upload} style={{ paddingVertical: 8 }} />
+            {reading && <ActivityIndicator color={child.color} />}
+          </View>
+          <Text style={[s.muted, { fontSize: 13 }]}>{reading ? 'Die KI liest den Stundenplan, das dauert etwa 20 Sekunden …' : aiMsg || 'Foto vom Stundenplan, Bildschirmfoto oder PDF. Die KI trägt die Fächer ein, du prüfst vor dem Speichern.'}</Text>
+        </View>
+      )}
       {empty && !edit ? (
         <Text style={s.muted}>{parent ? 'Noch leer. Trag Schulbeginn und Schulende ein, dann zeigt „Heute“ und der Kalender, wann Schule ist. Fächer sind optional.' : 'Noch kein Stundenplan eingetragen.'}</Text>
       ) : (
         <ScrollView horizontal onLayout={e => setW(e.nativeEvent.layout.width)} contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
           <View style={{ gap: 6, paddingTop: 30, width: 30 }}>
             <Text style={[s.muted, { height: edit ? 84 : 40, fontSize: 12 }]}>Zeit</Text>
-            {Array.from({ length: edit ? ROWS : rows }, (_, i) => <Text key={i} style={[s.muted, { height: edit ? 40 : 30, fontSize: 12 }]}>{i + 1}.</Text>)}
+            {Array.from({ length: edit ? editRows : rows }, (_, i) => <Text key={i} style={[s.muted, { height: edit ? 40 : 30, fontSize: 12 }]}>{i + 1}.</Text>)}
           </View>
           {DAYS.map(([k, label]) => {
             const d = tt[k] ?? {};
@@ -92,7 +156,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
                   <>
                     <TextInput style={[s.input, { paddingHorizontal: 6, fontSize: 14 }, !timeOk(d.from) && { borderColor: C.danger }]} value={d.from ?? ''} placeholder="7:55" accessibilityLabel={`${label} Beginn`} onChangeText={t => setDay(k, { from: t })} />
                     <TextInput style={[s.input, { paddingHorizontal: 6, fontSize: 14 }, !timeOk(d.to) && { borderColor: C.danger }]} value={d.to ?? ''} placeholder="13:10" accessibilityLabel={`${label} Ende`} onChangeText={t => setDay(k, { to: t })} />
-                    {Array.from({ length: ROWS }, (_, i) => (
+                    {Array.from({ length: editRows }, (_, i) => (
                       <TextInput key={i} style={[s.input, { paddingHorizontal: 6, fontSize: 14, height: 40 }]} value={d.lessons?.[i] ?? ''} placeholder="Fach" accessibilityLabel={`${label} ${i + 1}. Stunde`} onChangeText={t => setLesson(k, i, t)} />
                     ))}
                   </>

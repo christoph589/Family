@@ -86,6 +86,8 @@ export const AI_ERROR: Record<string, string> = {
   not_member: 'Dieses Gerät ist mit keiner Familie verbunden.',
   not_signed_in: 'Dieses Gerät ist nicht angemeldet.',
   ai_down: 'Die KI ist gerade nicht erreichbar. Bitte gleich nochmal versuchen.',
+  no_timetable: 'Auf dem Bild war kein Stundenplan zu erkennen. Bitte ein schärferes Foto nehmen.',
+  unavailable: 'Die KI ist auf diesem Gerät nicht verfügbar. Bitte das Gerät mit der Familie verbinden.',
 };
 
 export interface QA { q: string; a: string }
@@ -321,4 +323,40 @@ Antworte nur mit JSON: {"summary":"...","events":[{"title":"...","date":"YYYY-MM
     .filter(e => e.title && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
     .slice(0, 20);
   return { summary: str(res?.summary, 200), events };
+}
+
+/** Stundenplan aus Foto oder PDF lesen. Ergebnis landet im Bearbeiten-Modus, die Eltern prüfen vor dem Speichern. */
+export async function readTimetable(file: string, childName: string, grade?: string): Promise<import('../data/types').Timetable> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const blob = dataUrlToBlob(file);
+  if (!blob) throw { code: 'image_rejected' };
+  const prompt = `Das Bild oder PDF zeigt den Stundenplan von ${childName}${grade ? ` (Klasse ${grade})` : ''}.
+Lies für Montag bis Freitag die Fächer in der Reihenfolge der Stunden aus.
+
+Regeln:
+- Fächer so kurz, wie sie im Plan stehen (z. B. "Mathe", "D", "Sport"). Bei Doppelstunden das Fach zweimal eintragen.
+- Freistunden oder Pausen zwischen Fächern als "" eintragen, damit die Stundennummern stimmen. Pausen selbst nicht als Stunde zählen.
+- Stehen in einer Zelle mehrere Fächer (Gruppen, A/B-Woche), schreib sie mit "/" zusammen, z. B. "Reli/Ethik".
+- from = Beginn der ersten Stunde, to = Ende der letzten Stunde an diesem Tag, im Format HH:MM. Wenn keine Uhrzeiten zu sehen sind, lass from und to weg.
+- Tage ohne Unterricht weglassen. Nichts erfinden, was nicht im Plan steht.
+- Ist es erkennbar kein Stundenplan, antworte {"error":"kein_stundenplan"}.
+
+Antwortformat:
+{"days":{"1":{"from":"07:55","to":"13:10","lessons":["Mathe","Mathe","Deutsch","","Sport"]},"2":{...}}}
+Schlüssel: 1 = Montag bis 5 = Freitag.`;
+  const res = await sample.json<{ days?: Record<string, { from?: string; to?: string; lessons?: string[] }>; error?: string }>(prompt, { images: [blob], cache: false });
+  if (res?.error || !res?.days) throw { code: 'no_timetable' };
+  const time = (t?: string) => (t && /^\d{1,2}:\d{2}$/.test(t.trim()) ? t.trim().padStart(5, '0') : undefined);
+  const out: import('../data/types').Timetable = {};
+  for (const k of ['1', '2', '3', '4', '5'] as const) {
+    const d = res.days[k];
+    if (!d) continue;
+    const lessons = (Array.isArray(d.lessons) ? d.lessons : []).slice(0, 12).map(l => String(l ?? '').trim().slice(0, 30));
+    while (lessons.length && !lessons[lessons.length - 1]) lessons.pop();
+    if (!lessons.length && !d.from) continue;
+    out[k] = { from: time(d.from), to: time(d.to), lessons: lessons.length ? lessons : undefined };
+  }
+  if (!Object.keys(out).length) throw { code: 'no_timetable' };
+  return out;
 }
