@@ -66,10 +66,10 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
       </View>
 
       <View style={[s.row, { gap: 8 }]}>
-        <Button title="🛒 Ausgabe" onPress={() => setMode('ausgabe')} style={{ paddingVertical: 8 }} />
-        {parent && <Button ghost title="➕ Geld dazu" onPress={() => setMode('plus')} style={{ paddingVertical: 8 }} />}
-        {!goal && <Button ghost title="🐷 Sparziel" onPress={() => setMode('ziel')} style={{ paddingVertical: 8 }} />}
-        {parent && <Button ghost title="⚙️ Taschengeld" onPress={() => { setMode('regel'); setEvery(acc.allowance?.every ?? ((age ?? 9) >= 10 ? 'monat' : 'woche')); setAmount(acc.allowance ? String(acc.allowance.cents / 100).replace('.', ',') : ''); }} style={{ paddingVertical: 8 }} />}
+        <Button ghost={mode !== 'ausgabe'} title="🛒 Ausgabe" onPress={() => setMode('ausgabe')} style={{ paddingVertical: 8 }} />
+        {parent && <Button ghost={mode !== 'plus'} title="➕ Geld dazu" onPress={() => setMode('plus')} style={{ paddingVertical: 8 }} />}
+        {!goal && <Button ghost={mode !== 'ziel'} title="🐷 Sparziel" onPress={() => setMode('ziel')} style={{ paddingVertical: 8 }} />}
+        {parent && <Button ghost={mode !== 'regel'} title="⚙️ Taschengeld" onPress={() => { setMode('regel'); setEvery(acc.allowance?.every ?? ((age ?? 9) >= 10 ? 'monat' : 'woche')); setAmount(acc.allowance ? String(acc.allowance.cents / 100).replace('.', ',') : ''); }} style={{ paddingVertical: 8 }} />}
       </View>
 
       {mode !== '' && (
