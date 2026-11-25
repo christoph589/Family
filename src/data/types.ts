@@ -117,6 +117,8 @@ export interface Worksheet {
   exam?: { prepId: string; minutes: number; points: number[]; skills: string[] };
   /** Auf Papier geschrieben: von den Eltern eingetragene Punkte je Aufgabe */
   paperScore?: number[];
+  /** Auf Papier geschrieben und abfotografiert: KI macht eine Vorkorrektur, Eltern bestätigen */
+  scan?: { photos: string[]; at: string; by?: string; ai?: { pts: number[]; notes: string[]; unsure: boolean[]; summary?: string }; error?: string };
 }
 
 /** Klassenarbeit-Vorbereitung: alle Inhalte zum Thema, daraus macht die KI eine Probe-Arbeit. */

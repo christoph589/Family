@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { examScore, finishCheck, selfBonus, EXAM_PREP_POINTS, setSheet, today, uid, understandingOf, UNDERSTANDING_LABEL } from '../data/logic';
 import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
@@ -7,7 +7,9 @@ import { Button } from '../ui/Button';
 import { MathText } from '../ui/Math';
 import { AnswerView, isAnswered, isCorrect, QuestionInput } from './QuestionViews';
 import { C, s } from '../ui/theme';
-import { ResultLine } from './Exam';
+import { PaperScore, ResultLine, scanAndGrade } from './Exam';
+import { printHtml, sheetHtml } from '../ui/Print';
+import { currentGrade } from '../data/logic';
 
 
 /** Eltern legen eine Arbeit an. Später schlägt die KI Fragen und Lösungen vor. */
@@ -105,8 +107,15 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
   const scroller = useRef<any>(null);
   const go = (i: number) => { setCur(Math.max(0, Math.min(n - 1, i))); scroller.current?.scrollTo({ y: 0, animated: false }); };
   const card = (q: Question, i: number) => (
-    <View key={i} style={[s.card, { gap: 8 }, step && { padding: 16 }]}>
-      <Text style={s.label}>{sheet.exam ? `Aufgabe ${i + 1} · ${sheet.exam.points[i] ?? 1} ${(sheet.exam.points[i] ?? 1) === 1 ? 'Punkt' : 'Punkte'}` : `Frage ${i + 1}`}</Text>
+    <View key={i} style={[s.card, { gap: 12 }, step && { padding: 16 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: C.line }}>
+        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{i + 1}</Text>
+        </View>
+        <Text style={[s.text, { flex: 1, fontWeight: '800', fontSize: 15 }]}>{sheet.exam ? 'Aufgabe' : 'Frage'} {i + 1}<Text style={{ color: C.muted, fontWeight: '600' }}> von {n}</Text></Text>
+        {sheet.exam && <Text style={{ fontSize: 12, fontWeight: '800', color: C.accent, backgroundColor: C.accentSoft, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, overflow: 'hidden' }}>{sheet.exam.points[i] ?? 1} {(sheet.exam.points[i] ?? 1) === 1 ? 'Punkt' : 'Punkte'}</Text>}
+        {sheet.exam?.skills[i] && !step ? <Text style={[s.muted, { fontSize: 12 }]}>{sheet.exam.skills[i]}</Text> : null}
+      </View>
       <QuestionInput q={q} value={answers[i] ?? ''} onChange={t => setAnswers(a => a.map((x, j) => (j === i ? t : x)))} />
     </View>
   );
@@ -123,6 +132,7 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
           <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={1}>{done}/{n} beantwortet{sheet.exam ? ` · ⏱ ${clock(sheet)}/${sheet.exam.minutes} Min` : ''}</Text>
         </View>
       </View>
+      <View style={{ height: 4, backgroundColor: C.line }}><View style={{ height: 4, width: `${Math.round((done / Math.max(1, n)) * 100)}%`, backgroundColor: complete ? C.ok : C.accent }} /></View>
       {step && n > 1 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.line }}>
           {sheet.questions.map((q, i) => {
@@ -167,7 +177,61 @@ export function ReviewSheets({ childIds }: { childIds: string[] }) {
   );
 }
 
+/** Auf Papier geschrieben und fotografiert: Fotos, KI-Vorschlag und Punkte zum Bestätigen. */
+function ScanReview({ sheet, name }: { sheet: Worksheet; name: string }) {
+  const { data, update } = useFamily();
+  const [big, setBig] = useState<string | null>(null);
+  const scan = sheet.scan!;
+  const child = data?.children.find(c => c.id === sheet.childId);
+  const prep = (data?.exams ?? []).find(e => e.id === sheet.exam?.prepId);
+  const subject = prep?.subject ?? sheet.title.split(':')[0];
+  const who = { name: child?.name ?? name, grade: child ? currentGrade(child) : undefined };
+  const pending = !scan.ai && !scan.error && Date.now() - new Date(scan.at).getTime() < 4 * 60000;
+  return (
+    <View style={{ gap: 10, backgroundColor: C.bg, padding: 12, borderRadius: 14 }}>
+      <View>
+        <Text style={[s.text, { fontWeight: '800' }]}>{name}: {sheet.title}</Text>
+        <Text style={[s.muted, { fontSize: 13 }]}>Auf Papier geschrieben · {scan.photos.length} {scan.photos.length === 1 ? 'Foto' : 'Fotos'}</Text>
+      </View>
+      {scan.photos.length > 0 && (
+        <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+          {scan.photos.map((p, i) => (
+            <Pressable key={i} onPress={() => setBig(p)} accessibilityLabel={`Seite ${i + 1} groß ansehen`}>
+              <Image source={{ uri: p }} style={{ width: 96, height: 128, borderRadius: 10, backgroundColor: C.line }} />
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+      <Modal visible={!!big} transparent animationType="fade" onRequestClose={() => setBig(null)}>
+        <Pressable onPress={() => setBig(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', padding: 12 }}>
+          {big && <Image source={{ uri: big }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />}
+        </Pressable>
+      </Modal>
+      {pending && <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI korrigiert vor. Das dauert etwa eine Minute.</Text></View>}
+      {!scan.ai && !pending && (
+        <View style={{ gap: 6 }}>
+          {!!scan.error && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{scan.error}</Text>}
+          <View style={s.row}>
+            {scan.photos.length > 0 && <Button title="🤖 KI-Vorkorrektur starten" onPress={() => scanAndGrade(sheet, scan.photos, who, update as any, scan.by)} style={{ paddingVertical: 8, minHeight: 40 }} />}
+          </View>
+        </View>
+      )}
+      {scan.ai?.summary ? <Text style={[s.text, { fontSize: 14 }]}>🤖 {scan.ai.summary}</Text> : null}
+      <View style={s.row}>
+        <Button ghost title="🔑 Lösungsblatt" onPress={() => printHtml(sheetHtml(sheet, { name: who.name, grade: who.grade, subject, solutions: true })).catch(() => {})} style={{ paddingVertical: 8, minHeight: 40 }} />
+      </View>
+      {!pending && <PaperScore key={scan.ai ? 'ai' : 'leer'} sheet={sheet} />}
+      <Text style={[s.muted, { fontSize: 12 }]}>Die KI kann Handschrift und Zeichnungen falsch lesen. Die Note zählt erst, wenn du auf „Fertig“ tippst.</Text>
+    </View>
+  );
+}
+
 function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
+  if (sheet.scan) return <ScanReview sheet={sheet} name={name} />;
+  return <ReviewDigital sheet={sheet} name={name} />;
+}
+
+function ReviewDigital({ sheet, name }: { sheet: Worksheet; name: string }) {
   const { data, update } = useFamily();
   const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '')));
   const bonus = data ? selfBonus(data, sheet, understandingOf(res.filter(Boolean).length, sheet.questions.length)) : 0;

@@ -228,6 +228,41 @@ Antworte nur mit JSON: {"title":"...","minutes":45,"questions":[...]}`;
   return { title: str(res?.title, 80) || e.title, minutes, questions: out.map(x => x.q!), points: out.map(x => x.pts), skills: out.map(x => x.skill) };
 }
 
+export interface PaperGrade { pts: number[]; notes: string[]; unsure: boolean[]; summary: string }
+/** Vorkorrektur einer auf Papier geschriebenen Probe-Arbeit aus Fotos. Nur ein Vorschlag, die Eltern bestätigen. */
+export async function gradePaper(sheet: { title: string; questions: Question[]; exam?: { points: number[] } }, photos: string[], who: { name: string; grade?: string }, signal?: AbortSignal): Promise<PaperGrade> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  if (!images.length) throw { code: 'unavailable' };
+  const pts = sheet.exam?.points ?? sheet.questions.map(() => 1);
+  const list = sheet.questions.map((q, i) => `Aufgabe ${i + 1} (${pts[i]} P.): ${q.q}${q.type === 'table' && q.table ? ` [Tabelle: ${q.table.header.join(' | ')}]` : ''}${q.options ? ` [Auswahl: ${q.options.join(' / ')}]` : ''}\n  Erwartete Lösung: ${q.solution}${q.paper ? '\n  (Zeichnung: Maße und Messergebnis prüfen, 1 bis 2 mm oder 1 bis 2 Grad Abweichung sind ok)' : ''}`).join('\n');
+  const prompt = `Du bist eine faire, freundliche Lehrkraft und korrigierst eine Probe-Klassenarbeit von ${who.name}${who.grade ? ` (Klasse ${who.grade})` : ''}: ${sheet.title}.
+Auf den ${images.length} Foto(s) ist das handschriftlich ausgefüllte Blatt.
+
+Die Aufgaben mit Musterlösung:
+${list}
+
+So korrigierst du:
+- Vergib je Aufgabe Punkte von 0 bis zur Höchstpunktzahl, halbe Punkte erlaubt. Richtiger Weg mit kleinem Rechenfehler gibt Teilpunkte.
+- Andere richtige Schreibweisen zählen (z. B. 0,75 statt 3/4, wenn nicht ausdrücklich gekürzt verlangt).
+- "note": ein kurzer Satz, was richtig oder falsch ist, an die Eltern gerichtet. Ohne Namen von anderen Personen.
+- "unsure": true, wenn die Schrift schwer lesbar ist, die Aufgabe nicht auf dem Foto zu sehen ist oder du die Zeichnung nicht sicher prüfen kannst.
+- Nicht lesbar oder fehlend: 0 Punkte, unsure true.
+
+Antworte nur mit JSON: {"tasks":[{"pts":2,"note":"...","unsure":false}],"summary":"ein bis zwei Sätze zum Gesamteindruck"} mit genau ${sheet.questions.length} Einträgen in der Reihenfolge der Aufgaben.`;
+  const res = await sample.json<any>(prompt, { images, signal, cache: false });
+  const tasks: any[] = Array.isArray(res?.tasks) ? res.tasks : [];
+  if (!tasks.length) throw { code: 'invalid_json' };
+  return {
+    pts: pts.map((max, i) => Math.min(max, Math.max(0, Math.round((Number(tasks[i]?.pts) || 0) * 2) / 2))),
+    notes: pts.map((_, i) => str(tasks[i]?.note, 200)),
+    unsure: pts.map((_, i) => !tasks[i] || tasks[i]?.unsure === true),
+    summary: str(res?.summary, 300),
+  };
+}
+
 const str = (v: unknown, max = 500) => String(v ?? '').trim().slice(0, max);
 
 /** Prüft eine Aufgabe der KI und wirft unbrauchbare Teile weg. */

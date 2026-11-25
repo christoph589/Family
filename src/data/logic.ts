@@ -552,5 +552,11 @@ export function pruneAiPhotos(d: FamilyData, date = today(), all = false): Famil
     if (all || t.date < topicCut) { changed = true; return { ...t, photos: undefined, photo: undefined }; }
     return t;
   });
-  return changed ? { ...d, exams, topics } : d;
+  const scanCut = addDaysIso(date, -14);
+  const worksheets = (d.worksheets ?? []).map(w => {
+    if (!w.scan?.photos.length) return w;
+    if (all || w.scan.at.slice(0, 10) < scanCut) { changed = true; return { ...w, scan: { ...w.scan, photos: [] } }; }
+    return w;
+  });
+  return changed ? { ...d, exams, topics, worksheets } : d;
 }
