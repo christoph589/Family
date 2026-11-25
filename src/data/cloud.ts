@@ -123,6 +123,7 @@ export function cloudStore(fid: string): DataStore {
 export interface OpFamily { id: string; name: string; created_at: string; parents: number; kids: number; children: number; updated_at: string | null; ai_today: number; support_until: string | null; mine: boolean; done7: number; features: string[] | null }
 const rpcErr = (e: { message?: string } | null) => {
   const m = e?.message ?? '';
+  if (/Could not find the function|PGRST202|does not exist/i.test(m)) return new Error('Funktion fehlt in der Datenbank: bitte fix-08-operator-verwalten.sql im SQL Editor ausführen.');
   if (/not_operator/.test(m)) return new Error('Dieses Konto ist kein Operator.');
   if (/no_support_access/.test(m)) return new Error('Diese Familie hat den Support-Zugang nicht freigegeben.');
   if (/name_mismatch/.test(m)) return new Error('Der Name stimmt nicht genau.');
