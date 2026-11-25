@@ -57,11 +57,11 @@ export function IcloudSetup() {
         <View style={{ gap: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.line }}>
           <Text style={[s.text, { fontWeight: '800' }]}>Neue Termine eintragen in</Text>
           <Segmented value={eventTarget(data.settings)} onChange={v => update(d => ({ ...d, settings: { ...d.settings, newEvents: v } }))}
-            options={[{ value: 'icloud', label: '🍎 iCloud' }, { value: 'app', label: '🏠 Nestwerk' }, { value: 'both', label: 'Beides zur Wahl' }]} />
+            options={[{ value: 'icloud', label: '🍎 iCloud' }, { value: 'app', label: '🏠 Famelio' }, { value: 'both', label: 'Beides zur Wahl' }]} />
           <Text style={[s.muted, { fontSize: 13 }]}>
             {eventTarget(data.settings) === 'icloud' ? 'Alle neuen Termine landen in eurem Apple-Kalender und damit auf allen iPhones. Am einfachsten, wenn ihr sowieso mit dem iPhone-Kalender plant.'
-              : eventTarget(data.settings) === 'app' ? 'Neue Termine bleiben in Nestwerk. Auf dem iPhone erscheinen sie nur über das Familienkalender-Abo (nur lesen).'
-              : 'Beim Anlegen gibt es zwei Knöpfe: „+ Termin“ für Nestwerk und „🍎 + iCloud“ für den Apple-Kalender.'}
+              : eventTarget(data.settings) === 'app' ? 'Neue Termine bleiben in Famelio. Auf dem iPhone erscheinen sie nur über das Familienkalender-Abo (nur lesen).'
+              : 'Beim Anlegen gibt es zwei Knöpfe: „+ Termin“ für Famelio und „🍎 + iCloud“ für den Apple-Kalender.'}
           </Text>
         </View>
       )}
