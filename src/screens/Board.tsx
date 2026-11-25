@@ -102,8 +102,9 @@ export function Board({ onExit }: { onExit: () => void }) {
           })}
         </View>
         {!ask ? (
-          <Pressable accessibilityRole="button" onPress={() => setAsk(true)} style={{ padding: 8 }}>
-            <Text style={{ color: C.muted, fontWeight: '700' }}>Wandansicht beenden</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Wandansicht beenden (Eltern-PIN)" onPress={() => setAsk(true)}
+            style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.55 }}>
+            <Text style={{ fontSize: 20 }}>⚙️</Text>
           </Pressable>
         ) : (
           <View style={[s.row, { flexWrap: 'nowrap' }]}>
