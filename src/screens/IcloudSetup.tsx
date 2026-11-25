@@ -39,15 +39,15 @@ export function IcloudSetup() {
   const all = list ?? chosen.map(c => ({ ...c, readOnly: false }));
   if (conn && !conn.connected) return (
     <View style={s.card}>
-      <Text style={s.h2}>🍎 iCloud-Kalender verbinden</Text>
-      <Text style={s.muted}>Termine aus euren iPhone-Kalendern direkt in Famelio sehen und bearbeiten. Dafür braucht es eure Apple-ID und ein app-spezifisches Passwort (nicht euer normales Apple-Passwort).</Text>
-      <Text style={[s.text, { fontSize: 14 }]}>So bekommst du das Passwort:{'\n'}1. appleid.apple.com öffnen und anmelden{'\n'}2. „Anmelden und Sicherheit“ › „App-spezifische Passwörter“{'\n'}3. Name „Famelio“ eingeben, Passwort kopieren (xxxx-xxxx-xxxx-xxxx)</Text>
-      <Pressable onPress={() => Linking.openURL('https://appleid.apple.com')}><Text style={{ color: C.accent, fontWeight: '700' }}>Apple-ID-Seite öffnen ↗</Text></Pressable>
-      <TextInput style={s.input} placeholder="Apple-ID (E-Mail)" autoCapitalize="none" keyboardType="email-address" autoComplete="off" value={form.user} onChangeText={v => setForm(f => ({ ...f, user: v }))} />
-      <TextInput style={s.input} placeholder="App-spezifisches Passwort" autoCapitalize="none" autoComplete="off" secureTextEntry value={form.pass} onChangeText={v => setForm(f => ({ ...f, pass: v }))} />
+      <Text style={s.h2}>🍎 iPhone-Kalender verbinden</Text>
+      <Text style={s.muted}>Dann siehst du deine iPhone-Termine hier und kannst sie auch hier ändern. Dauert etwa 2 Minuten.</Text>
+      <Text style={[s.text, { fontSize: 15 }]}>Apple braucht dafür ein eigenes Passwort nur für Famelio. So geht's:{'\n'}1. Unten auf „Passwort bei Apple holen“ tippen und anmelden{'\n'}2. „App-spezifische Passwörter“ wählen, als Name „Famelio“ eingeben{'\n'}3. Das angezeigte Passwort kopieren und hier einfügen</Text>
+      <Pressable onPress={() => Linking.openURL('https://appleid.apple.com')}><Text style={{ color: C.accent, fontWeight: '700' }}>Passwort bei Apple holen ↗</Text></Pressable>
+      <TextInput style={s.input} placeholder="Deine Apple-E-Mail" autoCapitalize="none" keyboardType="email-address" autoComplete="off" value={form.user} onChangeText={v => setForm(f => ({ ...f, user: v }))} />
+      <TextInput style={s.input} placeholder="Passwort von Apple (abcd-efgh-ijkl-mnop)" autoCapitalize="none" autoComplete="off" secureTextEntry value={form.pass} onChangeText={v => setForm(f => ({ ...f, pass: v }))} />
       {!!err && <Text style={{ color: C.danger, fontWeight: '700' }}>{err}</Text>}
       <View style={s.row}><Button title={busy ? 'Prüfe …' : 'Verbinden'} disabled={busy || !form.user || !form.pass} onPress={connect} /></View>
-      <Text style={[s.muted, { fontSize: 12 }]}>Das Passwort wird verschlüsselt auf dem Server gespeichert und nie wieder angezeigt. Du kannst es jederzeit bei Apple widerrufen.</Text>
+      <Text style={[s.muted, { fontSize: 12 }]}>Dein normales Apple-Passwort bleibt geheim. Dieses Famelio-Passwort speichern wir verschlüsselt und du kannst es bei Apple jederzeit löschen.</Text>
     </View>
   );
   return (
