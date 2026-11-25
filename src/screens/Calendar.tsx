@@ -78,7 +78,7 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
 
   return (
     <View style={{ gap: 16 }}>
-      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} />{target === 'both' && <Button ghost title="🍎 + iCloud" onPress={() => setIcEdit({ date: anchor })} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
+      <CalNav mode={mode} anchor={anchor} onMode={setMode} onAnchor={setAnchor} right={parent ? <View style={[s.row, { gap: 8, flexShrink: 1 }]}><Button ghost title="📄 Elternbrief" onPress={() => setLetter(true)} />{target === 'both' && <Button ghost title="📱 + Handy-Kalender" onPress={() => setIcEdit({ date: anchor })} />}<Button title="+ Termin" onPress={() => (target === 'icloud' ? setIcEdit({ date: anchor }) : setAdding(true))} /></View> : undefined} />
 
       {adding && <EventForm meId={meId} people={people} days={daysOf('woche', anchor)} onCancel={() => setAdding(false)} onSave={ev => { update(d => ({ ...d, events: [...(d.events ?? []), ev] })); setAdding(false); setAnchor(ev.date); }} />}
 
@@ -353,7 +353,7 @@ export function IcloudForm({ initial, cals, onSave, onCancel }: { initial: Parti
   }
   return (
     <View style={[s.card, { gap: 10 }]}>
-      <Text style={s.h2}>🍎 {!editing ? 'Neuer iCloud-Termin' : initial.scope === 'all' ? 'Ganze Serie ändern' : initial.recurring ? 'Nur diesen Termin ändern' : 'iCloud-Termin ändern'}</Text>
+      <Text style={s.h2}>🍎 {!editing ? 'Neuer Termin im Handy-Kalender' : initial.scope === 'all' ? 'Ganze Serie ändern' : initial.recurring ? 'Nur diesen Termin ändern' : 'Termin ändern'}</Text>
       <Text style={s.muted}>Wird direkt in deinem Apple-Kalender gespeichert und erscheint auch auf dem iPhone.</Text>
       <Text style={s.label}>Was</Text>
       <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="z. B. Zahnarzt" accessibilityLabel="Titel" />

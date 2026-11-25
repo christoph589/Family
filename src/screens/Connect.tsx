@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { createFamily, DeviceLink, joinFamily, myParentFamily, parentSignIn, parentSignUp, sb, setLink } from '../data/cloud';
+import { createFamily, DeviceLink, finishOAuth, joinFamily, oauthProviders, myParentFamily, parentOAuth, parentSignIn, parentSignUp, sb, setLink } from '../data/cloud';
 import { localStore } from '../data/store';
 import { FamilyData } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { Setup } from './Setup';
 import { Landing } from './Landing';
+
+const sso = { borderRadius: 14, paddingVertical: 14, alignItems: 'center' as const };
+const ssoT = { fontSize: 16, fontWeight: '700' as const };
 
 type Step = 'start' | 'eltern' | 'neu' | 'kind' | 'kindWahl';
 
@@ -23,7 +26,15 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
   const [local, setLocal] = useState<FamilyData | null>(null);
   const [kidFam, setKidFam] = useState<{ fid: string; data: FamilyData } | null>(null);
 
+  const [prov, setProv] = useState({ google: false, apple: false });
+  useEffect(() => { oauthProviders().then(setProv); }, []);
   useEffect(() => { localStore.load().then(r => setLocal(r.data), () => {}); }, []);
+  // Rückkehr von „Mit Google/Apple anmelden“
+  useEffect(() => {
+    setBusy(true);
+    finishOAuth().then(ok => { if (ok) { setStep('eltern'); return afterParentLogin(); } })
+      .catch(e => { setStep('eltern'); setErr(e.message); }).finally(() => setBusy(false));
+  }, []);
 
   const run = (f: () => Promise<void>) => { setBusy(true); setErr(''); f().catch(e => setErr(e.message)).finally(() => setBusy(false)); };
   const link = async (l: DeviceLink) => { await setLink(l); onLinked(l); };
@@ -44,6 +55,11 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
 
   if (step === 'eltern') return box(<>
     <Text style={s.h1}>Eltern-Anmeldung</Text>
+    {(prov.apple || prov.google) && <View style={{ gap: 10 }}>
+      {prov.apple && <Pressable disabled={busy} onPress={() => run(() => parentOAuth('apple'))} style={[sso, { backgroundColor: '#000' }]}><Text style={[ssoT, { color: '#fff' }]}>Mit Apple fortfahren</Text></Pressable>}
+      {prov.google && <Pressable disabled={busy} onPress={() => run(() => parentOAuth('google'))} style={[sso, { backgroundColor: '#fff', borderWidth: 1, borderColor: '#dadce0' }]}><Text style={[ssoT, { color: '#1f1f1f' }]}><Text style={{ color: '#4285f4', fontWeight: '900' }}>G</Text>  Mit Google fortfahren</Text></Pressable>}
+      <Text style={[s.muted, { textAlign: 'center' }]}>oder mit E-Mail</Text>
+    </View>}
     <Segmented value={mode} onChange={setMode} options={[{ value: 'login', label: 'Anmelden' }, { value: 'neu', label: 'Neues Konto' }]} />
     <View style={s.card}>
       <Text style={s.label}>E-Mail</Text>

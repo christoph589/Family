@@ -11,7 +11,7 @@ let client: SupabaseClient | null = null;
 export function sb(): SupabaseClient {
   if (!cloudEnabled) throw new Error('Supabase nicht eingerichtet');
   if (!client) client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { storage: AsyncStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+    auth: { storage: AsyncStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce' },
   });
   return client;
 }
@@ -47,6 +47,33 @@ export async function parentSignUp(email: string, password: string): Promise<boo
   const { data, error } = await sb().auth.signUp({ email, password });
   if (error) throw friendly(error);
   return !data.session;
+}
+/** Welche Anmeldewege im Server eingeschaltet sind (Supabase › Authentication › Providers). */
+export async function oauthProviders(): Promise<{ google: boolean; apple: boolean }> {
+  try {
+    const r = await fetch(SUPABASE_URL + '/auth/v1/settings', { headers: { apikey: SUPABASE_ANON_KEY } });
+    const j = await r.json();
+    return { google: !!j.external?.google, apple: !!j.external?.apple };
+  } catch { return { google: false, apple: false }; }
+}
+/** Anmelden mit Google oder Apple. Die Seite wird verlassen und kommt mit ?code=… zurück. */
+export async function parentOAuth(provider: 'google' | 'apple') {
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await sb().auth.signInWithOAuth({ provider, options: { redirectTo } });
+  if (error) throw friendly(error);
+}
+/** Nach der Rückkehr von Google/Apple: Code gegen Sitzung tauschen. true = angemeldet. */
+export async function finishOAuth(): Promise<boolean> {
+  if (!cloudEnabled || typeof window === 'undefined' || !window.location?.search) return false;
+  const q = new URLSearchParams(window.location.search);
+  const code = q.get('code'), err = q.get('error_description');
+  if (!code && !err) return false;
+  q.delete('code'); q.delete('error'); q.delete('error_code'); q.delete('error_description');
+  window.history.replaceState(null, '', window.location.pathname + (q.toString() ? '?' + q : '') + window.location.hash);
+  if (err) throw new Error('Anmeldung abgebrochen: ' + err);
+  const { error } = await sb().auth.exchangeCodeForSession(code!);
+  if (error) throw friendly(error);
+  return true;
 }
 export async function signOut() { await sb().auth.signOut(); await setLink(null); }
 

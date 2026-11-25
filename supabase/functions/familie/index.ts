@@ -598,6 +598,35 @@ async function icloudAction(body: any, userId: string, admin: any) {
   const { data: sec } = await admin.from('family_secrets').select('value').eq('family_id', fid).eq('kind', 'icloud').maybeSingle();
   const cred: IcCred | null = sec ? await unseal(sec.value) : null;
   if (body.action === 'icloud_status') return json({ connected: !!cred, user: cred?.u });
+  const g = await googleLoad(admin, fid);
+  // Google-Kalender laufen über dieselben Aktionen; erkannt an der Adresse (googleapis.com)
+  try {
+    if (body.action === 'icloud_calendars') {
+      if (!parent) return json({ error: 'parents_only' }, 403);
+      if (!cred && !g) return json({ error: 'icloud_not_set' }, 503);
+      const ic = cred ? await icCtx.run(cred, () => icloudCalendars()) : [];
+      const gc = g ? await googleCalendars(g) : [];
+      return json({ calendars: [...ic, ...gc] });
+    }
+    if (body.action === 'icloud_events') {
+      const from = String(body.from ?? ''), to = String(body.to ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return json({ error: 'bad_request' }, 400);
+      const cals: string[] = (Array.isArray(body.cals) ? body.cals : []).slice(0, 16).map(String);
+      const gcals = cals.filter(isGoogle), icals = cals.filter(c => !isGoogle(c));
+      const ge = g ? (await Promise.all(gcals.map(c => googleEvents(g, c, from, to).catch(() => [])))).flat() : [];
+      const ie = cred && icals.length ? await icCtx.run(cred, async () => (await Promise.all(icals.map(c => icloudEvents(c, from, to).catch(e => { if ((e as Error).message === 'icloud_auth') throw e; return []; })))).flat()) : [];
+      return json({ events: [...ie, ...ge] });
+    }
+    if (isGoogle(String(body.href ?? body.cal ?? ''))) {
+      if (!parent) return json({ error: 'parents_only' }, 403);
+      if (!g) return json({ error: 'google_not_set' }, 503);
+      if (body.action === 'icloud_save') return await googleSave(g, body);
+      if (body.action === 'icloud_delete') return await googleDelete(g, body);
+    }
+  } catch (e) {
+    const m = (e as Error).message;
+    return json({ error: ['icloud_auth', 'icloud_discovery', 'google_auth'].includes(m) ? m : 'icloud_failed' }, 502);
+  }
   if (!cred) return json({ error: 'icloud_not_set' }, 503);
   return await icCtx.run(cred, () => icloudInner(body, parent));
 }
@@ -628,6 +657,171 @@ async function icloudInner(body: any, parent: boolean) {
     return json({ error: m === 'icloud_auth' ? 'icloud_auth' : m === 'icloud_discovery' ? 'icloud_discovery' : 'icloud_failed' }, 502);
   }
   return json({ error: 'unknown_action' }, 400);
+}
+
+
+// ---------- Google-Kalender (OAuth, lesen und schreiben) ----------
+// Braucht Secrets GOOGLE_CLIENT_ID und GOOGLE_CLIENT_SECRET (Google Cloud › OAuth-Client „Webanwendung“).
+// Weiterleitungs-URI dort: <SUPABASE_URL>/functions/v1/familie
+// Gespeichert wird nur der Refresh-Token, verschlüsselt in family_secrets (kind 'google').
+const G_ID = Deno.env.get('GOOGLE_CLIENT_ID')?.trim();
+const G_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET')?.trim();
+const G_API = 'https://www.googleapis.com/calendar/v3';
+const G_SCOPE = 'openid email https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events';
+const G_BACK = /^https:\/\/(christoph589\.github\.io|(www\.)?famelio\.de)(\/|$)|^http:\/\/localhost(:\d+)?(\/|$)/;
+type GCred = { rt: string; email?: string; fid: string };
+const isGoogle = (u: string) => u.startsWith(G_API + '/');
+const gRedirect = () => URL_.replace(/\/$/, '') + '/functions/v1/familie';
+const gTokens = new Map<string, { at: string; exp: number }>();
+
+async function googleLoad(admin: any, fid: string): Promise<GCred | null> {
+  const { data } = await admin.from('family_secrets').select('value').eq('family_id', fid).eq('kind', 'google').maybeSingle();
+  return data ? { ...(await unseal(data.value)), fid } : null;
+}
+async function gToken(c: GCred): Promise<string> {
+  const t = gTokens.get(c.fid);
+  if (t && t.exp > Date.now() + 60_000) return t.at;
+  const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: G_ID ?? '', client_secret: G_SECRET ?? '', refresh_token: c.rt, grant_type: 'refresh_token' }) });
+  if (!r.ok) throw new Error('google_auth');
+  const j = await r.json();
+  gTokens.set(c.fid, { at: j.access_token, exp: Date.now() + (j.expires_in ?? 3600) * 1000 });
+  return j.access_token;
+}
+async function gFetch(c: GCred, url: string, init: RequestInit = {}) {
+  const r = await fetch(url, { ...init, headers: { Authorization: 'Bearer ' + await gToken(c), 'content-type': 'application/json', ...(init.headers ?? {}) } });
+  if (r.status === 401) { gTokens.delete(c.fid); throw new Error('google_auth'); }
+  return r;
+}
+async function googleCalendars(c: GCred) {
+  const r = await gFetch(c, G_API + '/users/me/calendarList?minAccessRole=reader&maxResults=100');
+  if (!r.ok) throw new Error('google_auth');
+  const j = await r.json();
+  return (j.items ?? []).map((x: any) => ({ href: G_API + '/calendars/' + encodeURIComponent(x.id), name: (x.summaryOverride ?? x.summary ?? 'Kalender') + ' (Google)', color: x.backgroundColor ?? '#4285f4', readOnly: !['owner', 'writer'].includes(x.accessRole) }));
+}
+const gLocal = (iso: string) => { // RFC3339 -> Berliner Datum + Uhrzeit
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(iso)).map(x => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+};
+const addDay = (d: string, n: number) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+async function googleEvents(c: GCred, cal: string, from: string, to: string) {
+  const out: any[] = [];
+  let page = '';
+  for (let i = 0; i < 5; i++) {
+    const q = new URLSearchParams({ singleEvents: 'true', orderBy: 'startTime', timeMin: from + 'T00:00:00Z', timeMax: to + 'T00:00:00Z', maxResults: '2500', timeZone: TZ, ...(page ? { pageToken: page } : {}) });
+    const r = await gFetch(c, cal + '/events?' + q);
+    if (!r.ok) throw new Error('google_failed');
+    const j = await r.json();
+    for (const e of j.items ?? []) {
+      if (e.status === 'cancelled') continue;
+      const base = { title: e.summary ?? '(ohne Titel)', href: cal + '/events/' + encodeURIComponent(e.id), etag: e.etag ?? '', cal, recurring: !!e.recurringEventId, rid: e.recurringEventId, note: e.description ? String(e.description).replace(/<[^>]+>/g, '').slice(0, 500) : undefined };
+      if (e.start?.date) {
+        const last = addDay(e.end?.date ?? addDay(e.start.date, 1), -1);
+        const multi = last > e.start.date;
+        for (let d = e.start.date, k = 0; d <= last && k < 31; d = addDay(d, 1), k++) out.push({ ...base, uid: e.id + (multi ? ':' + d : ''), date: d, allDay: true, editable: !multi });
+      } else if (e.start?.dateTime) {
+        const a = gLocal(e.start.dateTime), b = e.end?.dateTime ? gLocal(e.end.dateTime) : null;
+        out.push({ ...base, uid: e.id, date: a.date, time: a.time, end: b && b.date === a.date ? b.time : undefined, allDay: false, editable: true });
+      }
+    }
+    page = j.nextPageToken ?? '';
+    if (!page) break;
+  }
+  return out;
+}
+const gTimes = (date: string, time?: string, end?: string) => {
+  if (!time) return { start: { date }, end: { date: addDay(date, 1) } };
+  const iso = (t: string) => { const u = berlinUtc(date, t); return `${u.slice(0, 4)}-${u.slice(4, 6)}-${u.slice(6, 8)}T${u.slice(9, 11)}:${u.slice(11, 13)}:00Z`; };
+  const e = end && end > time ? end : `${String(Math.min(23, +time.slice(0, 2) + 1)).padStart(2, '0')}:${time.slice(3)}`;
+  return { start: { dateTime: iso(time), timeZone: TZ }, end: { dateTime: iso(e), timeZone: TZ } };
+};
+async function googleSave(c: GCred, b: any) {
+  const ev = { title: String(b.title ?? '').slice(0, 200), date: String(b.date ?? ''), time: b.time ? String(b.time) : undefined, end: b.end ? String(b.end) : undefined, note: b.note ? String(b.note).slice(0, 2000) : undefined };
+  if (!ev.title || !/^\d{4}-\d{2}-\d{2}$/.test(ev.date) || (ev.time && !/^\d{2}:\d{2}$/.test(ev.time)) || (ev.end && !/^\d{2}:\d{2}$/.test(ev.end))) return json({ error: 'bad_request' }, 400);
+  const body: any = { summary: ev.title, description: ev.note ?? '', ...gTimes(ev.date, ev.time, ev.end) };
+  if (b.href) {
+    let href = String(b.href);
+    if (!isGoogle(href)) return json({ error: 'bad_calendar' }, 400);
+    const ifm: Record<string, string> = b.etag ? { 'If-Match': String(b.etag) } : {};
+    if (b.rid && b.scope === 'all') {
+      // Ganze Serie: Titel, Notiz und Uhrzeit an der Serie ändern, Datum der Serie bleibt
+      href = href.replace(/\/events\/[^/]+$/, '/events/' + encodeURIComponent(String(b.rid)));
+      const m = await gFetch(c, href);
+      if (!m.ok) return json({ error: 'not_found' }, 404);
+      const master = await m.json();
+      const d0 = master.start?.date ?? gLocal(master.start.dateTime).date;
+      Object.assign(body, gTimes(d0, ev.time, ev.end));
+      if (master.start?.timeZone && body.start.dateTime) { body.start.timeZone = master.start.timeZone; body.end.timeZone = master.start.timeZone; }
+      const r = await gFetch(c, href, { method: 'PATCH', body: JSON.stringify(body) });
+      if (!r.ok) return json({ error: 'save_failed', status: r.status }, 502);
+      return json({ ok: true, href });
+    }
+    const r = await gFetch(c, href, { method: 'PATCH', body: JSON.stringify(body), headers: ifm });
+    if (r.status === 412) return json({ error: 'changed' }, 409);
+    if (!r.ok) return json({ error: 'save_failed', status: r.status }, 502);
+    return json({ ok: true, href });
+  }
+  const cal = String(b.cal ?? '');
+  if (!isGoogle(cal)) return json({ error: 'bad_calendar' }, 400);
+  const r = await gFetch(c, cal + '/events', { method: 'POST', body: JSON.stringify(body) });
+  if (!r.ok) return json({ error: 'save_failed', status: r.status }, 502);
+  const j = await r.json();
+  return json({ ok: true, href: cal + '/events/' + encodeURIComponent(j.id) });
+}
+async function googleDelete(c: GCred, b: any) {
+  let href = String(b.href ?? '');
+  if (!isGoogle(href)) return json({ error: 'bad_calendar' }, 400);
+  const all = b.rid && b.scope === 'all';
+  if (all) href = href.replace(/\/events\/[^/]+$/, '/events/' + encodeURIComponent(String(b.rid)));
+  const r = await gFetch(c, href, { method: 'DELETE', headers: !all && b.etag ? { 'If-Match': String(b.etag) } : {} });
+  if (r.status === 412) return json({ error: 'changed' }, 409);
+  if (!r.ok && r.status !== 404 && r.status !== 410) return json({ error: 'delete_failed', status: r.status }, 502);
+  return json({ ok: true });
+}
+
+async function googleAction(body: any, userId: string, admin: any) {
+  const { data: mem } = await admin.from('members').select('family_id, role').eq('user_id', userId).limit(1);
+  if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const fid = mem[0].family_id, parent = mem[0].role === 'eltern';
+  if (body.action === 'google_status') { const g = await googleLoad(admin, fid); return json({ connected: !!g, email: g?.email, ready: !!(G_ID && G_SECRET) }); }
+  if (!parent) return json({ error: 'parents_only' }, 403);
+  if (body.action === 'google_auth_url') {
+    if (!G_ID || !G_SECRET) return json({ error: 'google_not_ready' }, 503);
+    const back = String(body.back ?? '');
+    if (!G_BACK.test(back)) return json({ error: 'bad_request' }, 400);
+    const state = await seal({ fid, back, t: Date.now() });
+    const q = new URLSearchParams({ client_id: G_ID, redirect_uri: gRedirect(), response_type: 'code', scope: G_SCOPE, access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true', state, ...(body.hint ? { login_hint: String(body.hint) } : {}) });
+    return json({ url: 'https://accounts.google.com/o/oauth2/v2/auth?' + q });
+  }
+  if (body.action === 'google_disconnect') {
+    const g = await googleLoad(admin, fid);
+    if (g) await fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(g.rt), { method: 'POST' }).catch(() => {});
+    await admin.from('family_secrets').delete().eq('family_id', fid).eq('kind', 'google');
+    gTokens.delete(fid);
+    return json({ ok: true });
+  }
+  return json({ error: 'unknown_action' }, 400);
+}
+
+/** Google leitet nach der Freigabe hierher zurück (GET ?code=…&state=…). */
+async function googleCallback(u: URL, admin: any) {
+  let st: { fid: string; back: string; t: number };
+  try { st = await unseal(u.searchParams.get('state') ?? ''); } catch { return new Response('Ungültiger Link', { status: 400 }); }
+  if (!G_BACK.test(st.back) || Date.now() - st.t > 30 * 60_000) return new Response('Link abgelaufen', { status: 400 });
+  const go = (res: string) => Response.redirect(st.back + (st.back.includes('?') ? '&' : '?') + 'google=' + res, 302);
+  const code = u.searchParams.get('code');
+  if (!code) return go('abgebrochen');
+  const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ code, client_id: G_ID ?? '', client_secret: G_SECRET ?? '', redirect_uri: gRedirect(), grant_type: 'authorization_code' }) });
+  if (!r.ok) return go('fehler');
+  const j = await r.json();
+  if (!j.refresh_token) return go('fehler');
+  let email: string | undefined;
+  try { email = JSON.parse(atob(String(j.id_token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).email; } catch { /* egal */ }
+  const { error } = await admin.from('family_secrets').upsert({ family_id: st.fid, kind: 'google', value: await seal({ rt: j.refresh_token, email }), updated_at: new Date().toISOString() });
+  if (error) return go('fehler');
+  gTokens.set(st.fid, { at: j.access_token, exp: Date.now() + (j.expires_in ?? 3600) * 1000 });
+  return go('ok');
 }
 
 // ---------- WebUntis über den Zugang aus „Freigaben › Zugriff über Untis Mobile“ ----------
@@ -770,6 +964,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
   const admin = createClient(URL_, SERVICE, { auth: { persistSession: false } });
   try {
     const u = new URL(req.url);
+    if (req.method === 'GET' && u.searchParams.has('state') && (u.searchParams.has('code') || u.searchParams.has('error'))) return await googleCallback(u, admin);
     const token = u.searchParams.get('ics');
     if (req.method === 'GET' && token) {
       if (!/^[a-f0-9]{32,64}$/.test(token)) return new Response('Not found', { status: 404 });
@@ -796,6 +991,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       if (body.action === 'ai') return await runAi(body, user.user.id, admin);
       if (String(body.action).startsWith('push_')) return await pushAction(body, user.user.id, admin);
       if (String(body.action).startsWith('icloud_')) return await icloudAction(body, user.user.id, admin);
+      if (String(body.action).startsWith('google_')) return await googleAction(body, user.user.id, admin);
       if (String(body.action).startsWith('untis_')) return await untisAction(body, user.user.id, admin);
       if (body.action === 'import') {
         let url = String(body.url ?? '').trim().replace(/^webcals?:\/\//i, 'https://');

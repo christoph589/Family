@@ -14,6 +14,9 @@ const ERR: Record<string, string> = {
   icloud_discovery: 'iCloud-Kalender wurden nicht gefunden.',
   icloud_failed: 'iCloud ist gerade nicht erreichbar.',
   parents_only: 'Das dürfen nur Eltern.',
+  google_not_set: 'Google ist nicht mehr verbunden. Bitte unter Einstellungen › Kalender neu verbinden.',
+  google_auth: 'Google hat den Zugriff entzogen. Bitte unter Einstellungen › Kalender neu verbinden.',
+  google_not_ready: 'Google ist auf dem Server noch nicht eingerichtet (GOOGLE_CLIENT_ID fehlt).',
   changed: 'Der Termin wurde inzwischen auf dem iPhone geändert. Bitte neu laden und nochmal versuchen.',
   recurring: 'Serientermine bitte am iPhone ändern.',
   save_failed: 'Speichern bei iCloud hat nicht geklappt.',
@@ -36,6 +39,23 @@ async function call<T>(body: object): Promise<T> {
 export const icloudConnStatus = () => call<{ connected: boolean; user?: string }>({ action: 'icloud_status' });
 export const icloudConnect = (user: string, pass: string) => call<{ ok: true; user: string }>({ action: 'icloud_connect', user, pass });
 export const icloudDisconnect = () => call<{ ok: true }>({ action: 'icloud_disconnect' });
+export const googleStatus = () => call<{ connected: boolean; email?: string; ready: boolean }>({ action: 'google_status' });
+export const googleDisconnect = () => call<{ ok: true }>({ action: 'google_disconnect' });
+/** Öffnet die Google-Freigabe. Google leitet danach mit ?google=ok zurück in die App. */
+export async function googleConnect() {
+  const back = window.location.origin + window.location.pathname;
+  const { url } = await call<{ url: string }>({ action: 'google_auth_url', back });
+  window.location.href = url;
+}
+/** Rückkehr von Google (einmal beim Laden gelesen, dann aus der Adresse entfernt). */
+export let googleReturn: string | null = null;
+if (typeof window !== 'undefined' && window.location?.search) {
+  const q = new URLSearchParams(window.location.search);
+  googleReturn = q.get('google');
+  if (googleReturn) { q.delete('google'); window.history.replaceState(null, '', window.location.pathname + (q.toString() ? '?' + q : '') + window.location.hash); }
+}
+export const consumeGoogleReturn = () => { const r = googleReturn; googleReturn = null; return r; };
+export const isGoogleCal = (href: string) => href.startsWith('https://www.googleapis.com/');
 export const icloudCalendars = () => call<{ calendars: IcloudCal[] }>({ action: 'icloud_calendars' }).then(r => r.calendars);
 
 // Gemeinsamer Zwischenspeicher: ein Zeitfenster um heute, alle 10 Minuten neu
@@ -78,7 +98,7 @@ export function useIcloudItems(cals: Cfg, people: { id: string; name: string; co
     const person = people.find(p => p.id === c?.who);
     return {
       key: 'i' + e.href + '#' + e.date, time: e.allDay ? undefined : e.time, end: e.allDay ? undefined : e.end, title: e.title, color: person?.color ?? c?.color ?? '#4285f4',
-      tag: person ? `${person.name} · ${c?.name ?? 'iCloud'}` : c?.name ?? 'iCloud', who: c?.who ? [c.who] : [],
+      tag: person ? `${person.name} · ${c?.name ?? 'Kalender'}` : c?.name ?? 'Kalender', who: c?.who ? [c.who] : [],
       people: person ? [{ id: person.id, name: person.name, color: person.color, photo: person.photo }] : undefined, note: e.note,
     };
   });

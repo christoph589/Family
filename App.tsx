@@ -3,6 +3,7 @@ import { IcloudSetup } from './src/screens/IcloudSetup';
 import { UntisSetup } from './src/screens/UntisSetup';
 import { MoneySettings } from './src/screens/MoneySettings';
 import { useUntisSync } from './src/data/untis';
+import { googleReturn } from './src/data/icloud';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { cloudEnabled, cloudStore, DeviceLink, getLink, leaveSupport, signOut, supportBack } from './src/data/cloud';
@@ -112,6 +113,8 @@ function Root() {
   const [board, setBoardState] = useState(wantsWall());
   const [section, setSection] = useState<Section>('familie');
   const [askOut, setAskOut] = useState(false);
+  // Zurück von der Google-Kalender-Freigabe: nach der Eltern-PIN direkt zu Einstellungen › Kalender
+  useEffect(() => { if (profile?.kind === 'eltern' && googleReturn) { setTab('aufgaben'); setSection('kalender'); } }, [profile]);
   const { width: winW } = useWindowDimensions();
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
   useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
