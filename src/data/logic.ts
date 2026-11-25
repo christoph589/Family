@@ -213,7 +213,10 @@ export const EXAM_PREP_POINTS = 25;
 /** Ergebnis einer Probe-Klassenarbeit: Punkte, ungefähre Note (gängiger Schlüssel), schwache Teilkompetenzen */
 export function examScore(sheet: Worksheet, results: boolean[]) {
   const pts = sheet.exam?.points ?? sheet.questions.map(() => 1);
-  const total = pts.reduce((a, b) => a + b, 0), got = pts.reduce((a, b, i) => a + (results[i] ? b : 0), 0);
+  const ps = sheet.paperScore;
+  // Auf Papier: die Punkte, die die Eltern eingetragen haben (auch halbe)
+  const one = (b: number, i: number) => (ps ? Math.min(b, ps[i] ?? 0) : results[i] ? b : 0);
+  const total = pts.reduce((a, b) => a + b, 0), got = pts.reduce((a, b, i) => a + one(b, i), 0);
   const pct = total ? got / total : 0;
   const note = pct >= 0.92 ? 1 : pct >= 0.81 ? 2 : pct >= 0.67 ? 3 : pct >= 0.5 ? 4 : pct >= 0.3 ? 5 : 6;
   const weak = [...new Set((sheet.exam?.skills ?? []).filter((_, i) => !results[i]))];

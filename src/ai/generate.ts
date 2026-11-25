@@ -180,6 +180,11 @@ Aufgabentypen wie bei einem Test:
 "table": {"type":"table","q":"...","table":{"header":["..."],"rows":[["12","?"]]},"solution":"Wert1 | Wert2","pts":3,"skill":"..."} ("?" = leeres Feld, solution zeilenweise mit " | ")
 Optional "figure" als einfache SVG (viewBox 0 0 400 220, nur rect, circle, line, path, polygon, polyline, text, g, Schrift Arial 14 bis 18), nur wenn das Thema Bilder braucht.
 
+Die Arbeit wird auch ausgedruckt und auf Papier geschrieben. Gib deshalb jeder Aufgabe:
+- "space": Platz auf dem Blatt: "lines" (Linien zum Schreiben), "grid" (Kästchen zum Rechnen), "blank" (frei zum Zeichnen)
+- "size": wie viel Platz, 1 bis 12 (eine Zeile oder ein Zentimeter je Stufe)
+${/geometr|mathe/i.test(e.subject + ' ' + e.title) ? `- Bei Geometrie gehören 2 bis 4 Aufgaben zum Zeichnen, Messen oder Konstruieren dazu (Geodreieck, Zirkel), wie in der echten Arbeit. Diese bekommen "paper":true, "space":"blank" und genaue Maße (z. B. "Zeichne ein Dreieck mit a = 5 cm, b = 4 cm, γ = 60°. Miss c."). Am Ende steht immer etwas Messbares, damit es auch digital geht: "solution" ist das Messergebnis mit Einheit (z. B. "c ≈ 4,6 cm").
+` : ''}
 Antworte nur mit JSON: {"title":"...","minutes":45,"questions":[...]}`;
   const res = await sample.json<any>(prompt, { images: images.length ? images : undefined, signal, cache: false });
   const raw: any[] = Array.isArray(res?.questions) ? res.questions : [];
@@ -198,15 +203,22 @@ function cleanQuestion(x: any): Question | null {
   const figure = typeof x?.figure === 'string' && x.figure.trim().startsWith('<svg') ? x.figure.slice(0, 20000) : undefined;
   if (x?.type === 'choice' && Array.isArray(x.options)) {
     const options = x.options.map((o: unknown) => str(o, 120)).filter(Boolean).slice(0, 5);
-    if (options.length >= 2 && options.includes(solution)) return { type: 'choice', q, solution, options, figure };
+    if (options.length >= 2 && options.includes(solution)) return { type: 'choice', q, solution, options, figure, ...paperOf(x) };
   }
   if (x?.type === 'table' && Array.isArray(x?.table?.rows)) {
     const header = (Array.isArray(x.table.header) ? x.table.header : []).map((h: unknown) => str(h, 40)).slice(0, 8);
     const rows: string[][] = x.table.rows.slice(0, 10).map((r: unknown) => (Array.isArray(r) ? r.map(c => str(c, 40)).slice(0, 8) : []));
     const blanks = rows.flat().filter(c => c === '?').length;
-    if (blanks > 0 && solution.split('|').length === blanks) return { type: 'table', q, solution, table: { header, rows }, figure };
+    if (blanks > 0 && solution.split('|').length === blanks) return { type: 'table', q, solution, table: { header, rows }, figure, ...paperOf(x) };
   }
-  return { type: 'text', q, solution, figure };
+  return { type: 'text', q, solution, figure, ...paperOf(x) };
+}
+
+/** Angaben für die Druckversion */
+function paperOf(x: any): Pick<Question, 'space' | 'size' | 'paper'> {
+  const space = ['lines', 'grid', 'blank'].includes(x?.space) ? x.space : undefined;
+  const size = Number(x?.size) > 0 ? Math.min(12, Math.round(Number(x.size))) : undefined;
+  return { ...(space ? { space } : {}), ...(size ? { size } : {}), ...(x?.paper === true ? { paper: true } : {}) };
 }
 
 export interface ExtractedVocab { title: string; lang: string; cards: { front: string; back: string }[] }

@@ -39,6 +39,7 @@ export function QuestionInput({ q, value, onChange }: { q: Question; value: stri
     <View style={{ gap: 10 }}>
       <MathText text={qText(q)} style={{ ...s.text, fontWeight: '700', fontSize: 18 }} />
       <Figure svg={q.figure} />
+      {q.paper && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 14 }}>✏️ Zeichne das auf Papier mit Geodreieck und Zirkel. Hier trägst du nur dein Messergebnis ein.</Text>}
       {q.type === 'choice' && q.options?.length ? (
         <View style={{ gap: 8 }}>
           {q.options.map((o, i) => (

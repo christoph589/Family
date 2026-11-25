@@ -82,6 +82,10 @@ export interface Question {
   figure?: string;
   /** Tabelle: "?" markiert ein Feld zum Ausfüllen. */
   table?: { header: string[]; rows: string[][] };
+  /** Druckversion: Platz zum Rechnen oder Zeichnen (Linien, Kästchen, frei) und wie groß (1 bis 12) */
+  space?: 'lines' | 'grid' | 'blank'; size?: number;
+  /** Nur auf Papier lösbar, z. B. konstruieren mit Geodreieck und Zirkel */
+  paper?: boolean;
 }
 export interface Worksheet {
   id: string; childId: string; topicId?: string; title: string; date: string;
@@ -93,6 +97,8 @@ export interface Worksheet {
   retryOf?: string;
   /** Probe-Klassenarbeit: Punkte und Teilkompetenz je Aufgabe, Bearbeitungszeit */
   exam?: { prepId: string; minutes: number; points: number[]; skills: string[] };
+  /** Auf Papier geschrieben: von den Eltern eingetragene Punkte je Aufgabe */
+  paperScore?: number[];
 }
 
 /** Klassenarbeit-Vorbereitung: alle Inhalte zum Thema, daraus macht die KI eine Probe-Arbeit. */
@@ -163,7 +169,12 @@ export const PRACTICE_POINTS = 10;
 export type MealSlot = 'fruehstueck' | 'mittag' | 'abend';
 export interface Meal { id: string; date: string; slot: MealSlot; title: string }
 /** Gericht mit Zutaten, wird aus dem Essensplan gemerkt */
-export interface Recipe { id: string; title: string; ingredients: string[] }
+export interface Recipe {
+  id: string; title: string; ingredients: string[];
+  /** Bewertung je Person: 2 = Lieblingsessen, 1 = mag ich, -1 = lieber nicht */
+  votes?: Record<string, number>;
+  /** Wer das Gericht vorgeschlagen hat (Person-ID) und wann */ by?: string; at?: string;
+}
 export interface ShopItem {
   id: string; title: string; done: boolean; at: string; by?: string;
   /** Für wen (Personen-ID) */ forWho?: string;

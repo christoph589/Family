@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import * as Print from 'expo-print';
+import { printHtml } from '../ui/Print';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
@@ -151,7 +151,7 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
   const by = byP ? { id: byP.id, name: (byP as any).title ? `${byP.name} (${(byP as any).title})` : byP.name } : undefined;
 
   async function print() {
-    try { await Print.printAsync({ html: worksheetHtml(topic, childName, date, latest?.questions ?? []) }); }
+    try { await printHtml(worksheetHtml(topic, childName, date, latest?.questions ?? [])); }
     catch { onMsg('Drucken geht in dieser Vorschau nicht. In der App oder im normalen Browser klappt es.'); }
   }
 

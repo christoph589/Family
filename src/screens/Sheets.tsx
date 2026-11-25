@@ -147,7 +147,7 @@ function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
       {sheet.questions.map((q, i) => (
         <View key={i} style={[s.row, { flexWrap: 'nowrap', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }]}>
           <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-            <Text style={s.label}>Frage {i + 1}</Text>
+            <Text style={s.label}>{sheet.exam ? `Aufgabe ${i + 1}` : `Frage ${i + 1}`}</Text>
             <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} />
           </View>
           <Pressable accessibilityRole="switch" accessibilityState={{ checked: res[i] }} onPress={() => setRes(r => r.map((x, j) => (j === i ? !x : x)))}

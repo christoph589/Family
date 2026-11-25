@@ -2,9 +2,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { currentGrade, examScore, regionOf, setSheet, today, uid, EXAM_PREP_POINTS } from '../data/logic';
+import { currentGrade, examScore, finishCheck, regionOf, setSheet, today, uid, EXAM_PREP_POINTS } from '../data/logic';
 import { STATES } from '../data/holidays';
 import { AI_ERROR, generateExam, getSample } from '../ai/generate';
+import { printHtml, sheetHtml } from '../ui/Print';
 import { CalEvent, ExamPrep, SCHOOL_TYPES, Worksheet } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { DateField } from '../ui/DateField';
@@ -127,6 +128,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [ask, setAsk] = useState(false);
+  const [scoring, setScoring] = useState(false);
   const ctl = useRef<AbortController | null>(null);
   useEffect(() => { let on = true; getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, []);
   const d = data!;
@@ -151,6 +153,14 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
       if (onSolve) onSolve(id); else setMsg(`Probe-Arbeit mit ${ex.questions.length} Aufgaben liegt bei ${child?.name}.`);
     } catch (e: any) { if (e?.code !== 'cancelled') setMsg(AI_ERROR[e?.code] ?? 'Die KI ist gerade nicht erreichbar. Bitte nochmal versuchen.'); }
     setBusy(false);
+  }
+  // Auf Papier: Druckversion und Rückweg per Foto
+  const paperSheet = open ?? waiting ?? sheets[sheets.length - 1];
+  function print(solutions: boolean) {
+    if (!paperSheet) return;
+    const html = sheetHtml(paperSheet, { name: child?.name ?? '', grade: child ? currentGrade(child) : undefined, subject: prep.subject, solutions });
+    setMsg('');
+    printHtml(html).catch(() => setMsg('Drucken geht hier gerade nicht. Bitte im normalen Browser versuchen.'));
   }
   const remove = () => update(x => ({ ...x, exams: (x.exams ?? []).filter(e => e.id !== prep.id), events: (x.events ?? []).filter(e => e.id !== prep.eventId) }));
   const last = sheets.find(w => w.status === 'geprueft');
@@ -181,7 +191,19 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
         {prep.photos.length < MAX && !busy && <Button ghost title="+ Fotos" onPress={addPhotos} />}
         {!busy && (ask ? <Button title="Ja, löschen" color={C.danger} onPress={remove} /> : <Button ghost title="Löschen" onPress={() => setAsk(true)} />)}
       </View>
-      {!!msg && <Text style={{ color: msg.startsWith('Probe') ? C.ok : C.danger, fontWeight: '700', fontSize: 13 }}>{msg}</Text>}
+      {paperSheet && !busy && (
+        <View style={{ gap: 8, backgroundColor: C.bg, borderRadius: 14, padding: 10 }}>
+          <Text style={[s.label]}>Auf Papier</Text>
+          <View style={[s.row, { gap: 8 }]}>
+            <Button ghost title="🖨️ Arbeit drucken" onPress={() => print(false)} style={{ paddingVertical: 8, minHeight: 40 }} />
+            {parent && <Button ghost title="🔑 Lösungen" onPress={() => print(true)} style={{ paddingVertical: 8, minHeight: 40 }} />}
+            {open && parent && !scoring && <Button title="✍️ Punkte eintragen" onPress={() => setScoring(true)} style={{ paddingVertical: 8, minHeight: 40 }} />}
+          </View>
+          {open && !scoring && <Text style={[s.muted, { fontSize: 12 }]}>{parent ? 'Ausdrucken, schreiben lassen wie in der Schule, mit dem Lösungsblatt korrigieren und hier die Punkte je Aufgabe eintragen. Die App rechnet Note und Schwachstellen aus.' : 'Ausdrucken und wie in der Schule auf dem Blatt schreiben. Danach gibst du es Mama oder Papa zum Korrigieren.'}</Text>}
+        </View>
+      )}
+      {scoring && open && <PaperScore sheet={open} onDone={() => setScoring(false)} />}
+      {!!msg && <Text style={{ color: /^(Probe|Eingetragen)/.test(msg) ? C.ok : C.danger, fontWeight: '700', fontSize: 13 }}>{msg}</Text>}
       {!sheets.length && <Text style={[s.muted, { fontSize: 12 }]}>Gibt nach dem Prüfen {EXAM_PREP_POINTS} Punkte. Am besten 3 bis 5 Tage vorher schreiben, dann bleibt Zeit für die Schwachstellen.</Text>}
     </View>
   );
@@ -191,8 +213,55 @@ export function ResultLine({ sheet }: { sheet: Worksheet }) {
   const r = examScore(sheet, sheet.results ?? []);
   return (
     <View style={{ backgroundColor: C.bg, borderRadius: 12, padding: 10, gap: 4 }}>
-      <Text style={[s.text, { fontWeight: '800' }]}>Letzte Probe: {r.got} von {r.total} Punkten · ungefähr Note {r.note}</Text>
+      <Text style={[s.text, { fontWeight: '800' }]}>Letzte Probe: {String(r.got).replace('.', ',')} von {r.total} Punkten · ungefähr Note {r.note}</Text>
       {r.weak.length ? <Text style={[s.text, { fontSize: 14 }]}>Noch üben: <Text style={{ fontWeight: '700', color: C.danger }}>{r.weak.join(', ')}</Text></Text> : <Text style={{ color: C.ok, fontWeight: '700' }}>Keine Schwachstellen, super vorbereitet!</Text>}
     </View>
   );
 }
+
+const fmtP = (n: number) => String(n).replace('.', ',');
+
+/** Eltern haben das Papier selbst korrigiert und tragen die Punkte je Aufgabe ein. */
+function PaperScore({ sheet, onDone }: { sheet: Worksheet; onDone: () => void }) {
+  const { update } = useFamily();
+  const pts = sheet.exam?.points ?? sheet.questions.map(() => 1);
+  const [got, setGot] = useState<(number | null)[]>(sheet.questions.map(() => null));
+  const set = (i: number, v: number) => setGot(g => g.map((x, j) => (j === i ? Math.min(pts[i], Math.max(0, v)) : x)));
+  const all = got.every(x => x !== null);
+  const vals = got.map(x => x ?? 0);
+  const results = vals.map((v, i) => v >= pts[i] / 2);
+  const score = examScore({ ...sheet, paperScore: vals }, results);
+  const save = (retry: boolean) => {
+    update(d => finishCheck(d, { ...sheet, paperScore: vals, answers: sheet.questions.map(() => 'auf Papier') }, results, retry));
+    onDone();
+  };
+  return (
+    <View style={{ gap: 8, borderWidth: 2, borderColor: C.accent, borderRadius: 16, padding: 12 }}>
+      <Text style={s.h2}>Punkte eintragen</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>Pro Aufgabe die erreichten Punkte, halbe gehen auch. „Voll“ setzt die Höchstpunktzahl.</Text>
+      {sheet.questions.map((q, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}>
+          <Text style={[s.text, { flex: 1, minWidth: 0, fontSize: 14 }]} numberOfLines={2}><Text style={{ fontWeight: '800' }}>{i + 1}. </Text>{sheet.exam?.skills[i] ?? q.q}</Text>
+          <Pressable accessibilityLabel={`Aufgabe ${i + 1} weniger`} onPress={() => set(i, (got[i] ?? pts[i]) - 0.5)} style={stepBtn}><Text style={stepTxt}>−</Text></Pressable>
+          <Text style={{ width: 58, textAlign: 'center', fontWeight: '800', fontSize: 15, color: got[i] === null ? C.muted : C.fg }}>{got[i] === null ? '–' : fmtP(got[i]!)} / {pts[i]}</Text>
+          <Pressable accessibilityLabel={`Aufgabe ${i + 1} mehr`} onPress={() => set(i, (got[i] ?? -0.5) + 0.5)} style={stepBtn}><Text style={stepTxt}>+</Text></Pressable>
+          <Pressable accessibilityLabel={`Aufgabe ${i + 1} volle Punkte`} onPress={() => set(i, pts[i])} style={[stepBtn, { width: 50, backgroundColor: got[i] === pts[i] ? C.okSoft : C.surface2 }]}><Text style={{ fontWeight: '700', color: C.ok }}>Voll</Text></Pressable>
+        </View>
+      ))}
+      <View style={{ backgroundColor: C.accentSoft, borderRadius: 12, padding: 10, gap: 2 }}>
+        <Text style={[s.text, { fontWeight: '800' }]}>{fmtP(score.got)} von {score.total} Punkten{all ? ` · ungefähr Note ${score.note}` : ''}</Text>
+        {all && score.weak.length > 0 && <Text style={[s.text, { fontSize: 14 }]}>Schwachstellen: <Text style={{ fontWeight: '700', color: C.danger }}>{score.weak.join(', ')}</Text></Text>}
+        {!all && <Text style={[s.muted, { fontSize: 12 }]}>Noch {got.filter(x => x === null).length} Aufgaben offen.</Text>}
+        {all && <Text style={[s.muted, { fontSize: 12 }]}>Schwachstelle heißt: weniger als die Hälfte der Punkte. Die Note ist ein Richtwert.</Text>}
+      </View>
+      <View style={s.row}>
+        {all && results.some(r => !r) && <Button title="Schwachstellen üben lassen" onPress={() => save(true)} />}
+        <Button title="Fertig" color={C.ok} disabled={!all} onPress={() => save(false)} />
+        <Button ghost title="Abbrechen" onPress={onDone} />
+      </View>
+      <Text style={[s.muted, { fontSize: 12 }]}>Gibt {EXAM_PREP_POINTS} Punkte fürs Üben.</Text>
+    </View>
+  );
+}
+const stepBtn = { width: 36, height: 40, borderRadius: 12, backgroundColor: C.surface2, alignItems: 'center' as const, justifyContent: 'center' as const };
+const stepTxt = { fontSize: 20, fontWeight: '800' as const, color: C.fg };

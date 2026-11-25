@@ -8,6 +8,7 @@ import { DateField } from '../ui/DateField';
 import { Button, Segmented } from '../ui/Button';
 import { addDays, daysOf, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
+import { Recipes, recipeScore } from './Recipes';
 
 const SLOTS: { value: MealSlot; label: string; icon: string }[] = [
   { value: 'mittag', label: 'Mittag', icon: '☀️' }, { value: 'abend', label: 'Abend', icon: '🌙' },
@@ -24,19 +25,26 @@ export function addToShopping(d: FamilyData, items: string[], by?: string): Fami
   return { ...d, shopping: [...unique.map(title => ({ id: uid(), title, done: false, at: new Date().toISOString(), by })), ...(d.shopping ?? [])] };
 }
 
-export function Food({ who, meId }: { who: string; meId?: string }) {
-  const [tab, setTab] = useState<'plan' | 'liste'>('plan');
-  const { data } = useFamily();
+export function Food({ who, meId, parent = true }: { who: string; meId?: string; parent?: boolean }) {
+  const [tab, setTab] = useState<'plan' | 'rezepte' | 'liste'>('plan');
+  const { data, update } = useFamily();
   const open = (data?.shopping ?? []).filter(i => !i.done).length;
+  const narrow = useWindowDimensions().width < 600;
   return (
     <View style={{ gap: 16 }}>
-      <Segmented value={tab} onChange={setTab} options={[{ value: 'plan', label: '🍽️ Essensplan' }, { value: 'liste', label: `🛒 Einkaufsliste${open ? ` (${open})` : ''}` }]} />
-      {tab === 'plan' ? <MealPlan who={who} /> : <Shopping who={who} meId={meId} />}
+      <Segmented value={tab} onChange={setTab} options={[{ value: 'plan', label: narrow ? '🍽️ Plan' : '🍽️ Essensplan' }, { value: 'rezepte', label: narrow ? '❤️ Rezepte' : '❤️ Lieblingsrezepte' }, { value: 'liste', label: `🛒 ${narrow ? 'Liste' : 'Einkaufsliste'}${open ? ` (${open})` : ''}` }]} />
+      {tab === 'plan' && <MealPlan who={who} readOnly={!parent} onWish={() => setTab('rezepte')} />}
+      {tab === 'rezepte' && meId && (
+        <Recipes meId={meId} parent={parent}
+          onShop={r => update(d => addToShopping(d, r.ingredients, who))}
+          onPlan={(r, date, slot) => update(d => ({ ...d, meals: [...(d.meals ?? []).filter(m => !(m.date === date && m.slot === slot)), { id: uid(), date, slot, title: r.title }] }))} />
+      )}
+      {tab === 'liste' && <Shopping who={who} meId={meId} />}
     </View>
   );
 }
 
-export function MealPlan({ who }: { who: string }) {
+export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: boolean; onWish?: () => void }) {
   const { data, update } = useFamily();
   const [anchor, setAnchor] = useState(today());
   const [edit, setEdit] = useState<{ date: string; slot: MealSlot } | null>(null);
@@ -71,10 +79,10 @@ export function MealPlan({ who }: { who: string }) {
                 {SLOTS.map(sl => {
                   const m = (data.meals ?? []).find(x => x.date === d && x.slot === sl.value);
                   return (
-                    <Pressable key={sl.value} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
+                    <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
                       style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent' }}>
                       <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
-                      <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? '+'}</Text>
+                      <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? '–' : '+')}</Text>
                     </Pressable>
                   );
                 })}
@@ -92,10 +100,10 @@ export function MealPlan({ who }: { who: string }) {
               {SLOTS.map(sl => {
                 const m = (data.meals ?? []).find(x => x.date === d && x.slot === sl.value);
                 return (
-                  <Pressable key={sl.value} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
+                  <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
                     style={{ backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, padding: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent', borderStyle: m ? 'solid' : 'dashed' }}>
                     <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
-                    <Text style={{ fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? '+ eintragen'}</Text>
+                    <Text style={{ fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? 'noch offen' : '+ eintragen')}</Text>
                   </Pressable>
                 );
               })}
@@ -104,11 +112,21 @@ export function MealPlan({ who }: { who: string }) {
         })}
       </View>
       )}
-      {weekIngredients.length > 0 && (
+      {readOnly && onWish && (
+        <Pressable onPress={onWish} accessibilityRole="button" style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: C.accentSoft }]}>
+          <Text style={{ fontSize: 26 }}>❤️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.text, { fontWeight: '800' }]}>Worauf hast du Lust?</Text>
+            <Text style={s.muted}>Den Plan machen Mama und Papa. Bewerte Gerichte oder schlag neue vor, dann sehen sie, was du gern isst.</Text>
+          </View>
+          <Text style={{ fontSize: 22, color: C.accent }}>›</Text>
+        </Pressable>
+      )}
+      {!readOnly && weekIngredients.length > 0 && (
         <Button title={`🛒 Zutaten der Woche auf die Einkaufsliste (${weekIngredients.length})`} onPress={() => { update(d => addToShopping(d, weekIngredients, who)); setMsg('Zutaten sind auf der Einkaufsliste. Doppelte habe ich weggelassen.'); }} />
       )}
       {!!msg && <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text>}
-      <Text style={[s.muted, { fontSize: 13 }]}>Tipp: Gerichte mit Zutaten merkt sich die App. Beim nächsten Mal reicht ein Tipp auf das Lieblingsgericht.</Text>
+      {!readOnly && <Text style={[s.muted, { fontSize: 13 }]}>Tipp: Gerichte merkt sich die App unter Lieblingsrezepte. Dort seht ihr auch, was die Kinder am liebsten essen.</Text>}
     </View>
   );
 }
@@ -120,7 +138,7 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
   const known = data?.recipes?.find(r => norm(r.title) === norm(title));
   const [ingredients, setIngredients] = useState((existing && data?.recipes?.find(r => norm(r.title) === norm(existing.title))?.ingredients.join(', ')) ?? '');
   if (!data) return null;
-  const favs = [...(data.recipes ?? [])].sort((a, b) => countUses(data, b) - countUses(data, a)).slice(0, 12);
+  const favs = [...(data.recipes ?? [])].sort((a, b) => recipeScore(b) - recipeScore(a) || countUses(data, b) - countUses(data, a)).slice(0, 12);
   const save = () => {
     const t = title.trim();
     update(d => {
@@ -128,9 +146,9 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
       if (t) meals = [...meals, { id: uid(), date, slot, title: t }];
       const ing = ingredients.split(/[,\n]/).map(x => x.trim()).filter(Boolean);
       let recipes = d.recipes ?? [];
-      if (t && ing.length) {
+      if (t) {
         const r = recipes.find(x => norm(x.title) === norm(t));
-        recipes = r ? recipes.map(x => (x.id === r.id ? { ...x, ingredients: ing } : x)) : [...recipes, { id: uid(), title: t, ingredients: ing } as Recipe];
+        recipes = r ? recipes.map(x => (x.id === r.id ? { ...x, ingredients: ing.length ? ing : x.ingredients } : x)) : [...recipes, { id: uid(), title: t, ingredients: ing } as Recipe];
       }
       return { ...d, meals, recipes };
     });
@@ -144,7 +162,7 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
           {favs.map(r => (
             <Pressable key={r.id} onPress={() => { setTitle(r.title); setIngredients(r.ingredients.join(', ')); }}
               style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: C.accent, backgroundColor: norm(r.title) === norm(title) ? C.accent : C.surface }}>
-              <Text style={{ color: norm(r.title) === norm(title) ? '#fff' : C.fg, fontWeight: '700' }}>{r.title}</Text>
+              <Text style={{ color: norm(r.title) === norm(title) ? '#fff' : C.fg, fontWeight: '700' }}>{r.title}{recipeScore(r) > 0 ? ` ❤️${recipeScore(r)}` : ''}</Text>
             </Pressable>
           ))}
         </View>
