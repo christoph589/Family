@@ -29,3 +29,20 @@ end $$;
 
 grant execute on function public.op_rename(uuid, text) to authenticated;
 grant execute on function public.op_delete_family(uuid, text) to authenticated;
+
+-- Operator darf jede Familie öffnen (Entscheidung 25.11.2026). Zugang gilt 4 Stunden, jeder Besuch wird protokolliert
+-- und der Familie unter Einstellungen › Familie angezeigt.
+create or replace function public.op_enter(fid uuid)
+returns timestamptz
+language plpgsql security definer set search_path = public as $$
+declare
+  t timestamptz := now() + interval '4 hours';
+begin
+  if not public.is_operator() then raise exception 'not_operator'; end if;
+  perform public.support_cleanup();
+  if not exists (select 1 from public.families where id = fid) then raise exception 'unknown_family'; end if;
+  insert into public.members as mm (family_id, user_id, role, until) values (fid, auth.uid(), 'eltern', t)
+  on conflict (family_id, user_id) do update set until = case when mm.until is null then null else excluded.until end;
+  insert into public.support_log (family_id, operator) values (fid, auth.uid());
+  return t;
+end $$;

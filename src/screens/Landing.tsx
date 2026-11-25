@@ -44,7 +44,7 @@ const FAQ: [string, string][] = [
   ['Was kostet das?', `${BRAND.name} ist in der Testphase. Solange zahlt ihr nichts.`],
   ['Brauche ich neue Hardware?', 'Nein. Es läuft im Browser auf Handy, Tablet, Laptop oder einem Bildschirm an der Wand. Ein altes Tablet reicht völlig.'],
   ['Brauchen Kinder ein eigenes Konto?', 'Nein. Kindergeräte werden mit einem Familiencode verbunden, ohne E-Mail und ohne Passwort.'],
-  ['Wo liegen unsere Daten?', 'Auf Servern in der EU. Kalenderzugänge und Schlüssel werden verschlüsselt gespeichert, Fotos für die KI werden nicht zum Training verwendet.'],
+  ['Wo liegen unsere Daten?', 'Auf Servern in der EU. Kalenderzugänge und Schlüssel werden verschlüsselt gespeichert, Fotos für die KI werden nicht zum Training verwendet. Schaut unser Support zur Hilfe in eure Familie, seht ihr jeden Besuch mit Uhrzeit.'],
   ['Funktioniert es auch ohne Kinder in der Schule?', 'Ja. Routinen, Haushalt, Kalender, Essen und Taschengeld funktionieren für jedes Alter.'],
 ];
 

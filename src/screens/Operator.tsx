@@ -60,10 +60,10 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
   };
   const more = (f: OpFamily) => <Pressable accessibilityLabel={`Mehr zu ${f.name}`} onPress={() => setEdit({ f, mode: 'menu', text: '', err: '' })} style={{ paddingHorizontal: 8, paddingVertical: 6 }}><Text style={{ color: C.muted, fontSize: 20, fontWeight: '800' }}>⋯</Text></Pressable>;
   const help = (f: OpFamily) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>{helpBtn(f)}{more(f)}</View>;
-  const helpBtn = (f: OpFamily) => f.mine ? <Text style={[s.muted, { fontSize: 13 }]}>eure Familie</Text> : f.support_until ? (
-    <Button title={busy === f.id ? '…' : 'Helfen →'} disabled={!!busy} style={{ paddingVertical: 8, paddingHorizontal: 14, minHeight: 0 }}
+  const helpBtn = (f: OpFamily) => f.mine ? <Text style={[s.muted, { fontSize: 13 }]}>eure Familie</Text> : (
+    <Button title={busy === f.id ? '…' : 'Öffnen →'} disabled={!!busy} style={{ paddingVertical: 8, paddingHorizontal: 14, minHeight: 0 }}
       onPress={() => { setBusy(f.id); opEnter(f.id).then(onEntered, e => { setErr(e.message); setBusy(''); }); }} />
-  ) : <Text style={[s.muted, { fontSize: 13 }]}>🔒 keine Freigabe</Text>;
+  );
   const Badge = ({ st }: { st: Status }) => <View style={{ alignSelf: 'flex-start', backgroundColor: STATUS[st].bg, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 }}><Text style={{ color: STATUS[st].fg, fontWeight: '800', fontSize: 13 }}>{STATUS[st].label}</Text></View>;
   const COLS: [string, number, 'left' | 'right'][] = [['Familie', 2.2, 'left'], ['Status', 1, 'left'], ['Kinder · Geräte', 1.2, 'right'], ['Erledigt (7 T.)', 1.1, 'right'], ['Funktionen', 1.4, 'left'], ['KI heute', 0.8, 'right'], ['Zuletzt aktiv', 1.2, 'right'], ['', 1.7, 'right']];
 
@@ -83,7 +83,7 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
         <View style={[s.row, { justifyContent: 'space-between' }]}>
           <View style={{ gap: 4, flexShrink: 1 }}>
             <Text style={s.h1}>Familien</Text>
-            <Text style={s.muted}>Nur Namen und Zahlen, keine Inhalte. „Helfen“ geht nur, wenn die Familie den Support-Zugang freigegeben hat.</Text>
+            <Text style={s.muted}>Übersicht ohne Inhalte. „Öffnen“ wechselt für 4 Stunden in die Familie. Jeder Besuch wird der Familie angezeigt.</Text>
           </View>
           <Button title={copied ? 'Link kopiert ✓' : '＋ Familie einladen'} onPress={invite} />
         </View>
@@ -92,7 +92,7 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
         {list && (
           <>
             <View style={[s.row, { gap: 12, alignItems: 'stretch' }]}>
-              {([['Familien', String(all.length)], ['Aktiv (7 Tage)', String(all.filter(f => days(f.updated_at) < 7).length)], ['Kinder', String(all.reduce((a, f) => a + f.children, 0))], ['KI heute', `${aiToday} · ≈ ${(aiToday * AI_EUR).toFixed(2).replace('.', ',')} €`], ['Support offen', String(all.filter(f => f.support_until).length)]] as [string, string][]).map(([l, v]) => (
+              {([['Familien', String(all.length)], ['Aktiv (7 Tage)', String(all.filter(f => days(f.updated_at) < 7).length)], ['Kinder', String(all.reduce((a, f) => a + f.children, 0))], ['KI heute', `${aiToday} · ≈ ${(aiToday * AI_EUR).toFixed(2).replace('.', ',')} €`], ['Kindergeräte', String(all.reduce((a, f) => a + f.kids, 0))]] as [string, string][]).map(([l, v]) => (
                 <View key={l} style={[s.card, { flexGrow: 1, flexBasis: 150, gap: 2, padding: 16 }]}>
                   <Text style={s.label}>{l}</Text><Text style={{ fontSize: 24, fontWeight: '800', color: C.fg }}>{v}</Text>
                 </View>
@@ -119,7 +119,6 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
                       <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.accent, fontWeight: '800' }}>{f.name.replace(/^Familie\s+/i, '').slice(0, 2).toUpperCase()}</Text></View>
                       <View style={{ flexShrink: 1 }}>
                         <Text style={[s.text, { fontWeight: '800' }]} numberOfLines={1}>{f.name}</Text>
-                        {f.support_until && <Text style={{ color: C.ok, fontSize: 12, fontWeight: '700' }}>🛟 bis {time(f.support_until)}</Text>}
                       </View>
                     </View>
                     <View style={{ flex: COLS[1][1] }}><Badge st={statusOf(f)} /></View>
@@ -156,7 +155,6 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
               <>
                 <Button ghost title="✏️ Umbenennen" onPress={() => setEdit({ ...edit, mode: 'rename', text: edit.f.name })} />
                 {!edit.f.mine && <Button ghost title="🗑️ Familie löschen" onPress={() => setEdit({ ...edit, mode: 'delete', text: '' })} />}
-                {!edit.f.mine && !edit.f.support_until && <Text style={[s.muted, { fontSize: 13 }]}>Hineingehen und Inhalte ändern geht nur, wenn die Familie den Support-Zugang freigibt.</Text>}
               </>
             )}
             {edit.mode === 'rename' && (
@@ -182,25 +180,14 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
   );
 }
 
-/** Für Eltern: Support-Zugang für den Betreiber freigeben. */
-export function SupportAccess({ familyId, status, onChange, busy }: { familyId: string; status: { until: string | null; visits: string[] } | null; onChange: (hours: number) => void; busy: boolean }) {
-  const on = !!status?.until;
+/** Für Eltern: Transparenz, wann der Betreiber zur Hilfe in der Familie war. */
+export function SupportAccess({ familyId, status }: { familyId: string; status: { until: string | null; visits: string[] } | null; onChange?: (hours: number) => void; busy?: boolean }) {
   return (
     <View style={[s.card, { gap: 10 }]}>
-      <Text style={s.h2}>🛟 Support-Zugang</Text>
-      <Text style={s.muted}>Wenn etwas nicht klappt, kann der Betreiber von {BRAND.name} für begrenzte Zeit in eure Familie schauen und helfen. Ohne Freigabe sieht er nur euren Familiennamen und Zahlen, keine Inhalte.</Text>
-      {on ? (
-        <>
-          <Text style={{ color: C.ok, fontWeight: '800' }}>Freigegeben bis {time(status!.until!)}</Text>
-          <Button ghost title={busy ? 'Moment …' : 'Jetzt beenden'} disabled={busy} onPress={() => onChange(0)} />
-        </>
-      ) : (
-        <Pressable disabled={busy} onPress={() => onChange(48)}>
-          <Text style={{ color: C.accent, fontWeight: '800' }}>{busy ? 'Moment …' : 'Für 48 Stunden freigeben'}</Text>
-        </Pressable>
-      )}
-      {!!status?.visits?.length && <Text style={[s.muted, { fontSize: 13 }]}>Letzte Besuche: {status.visits.map(time).join(', ')}</Text>}
-      <Text style={[s.muted, { fontSize: 12 }]}>Familien-ID für den Support: {familyId.slice(0, 8)}</Text>
+      <Text style={s.h2}>🛟 Support</Text>
+      <Text style={s.muted}>Bei Problemen kann das {BRAND.name}-Team in eure Familie schauen und helfen. Jeder Besuch wird hier mit Uhrzeit angezeigt.</Text>
+      <Text style={[s.text, { fontSize: 14 }]}>{status?.visits?.length ? `Letzte Besuche: ${status.visits.map(time).join(', ')}` : 'Bisher kein Besuch.'}</Text>
+      <Text style={[s.muted, { fontSize: 12 }]}>Eure Familien-ID für Anfragen: {familyId.slice(0, 8)}</Text>
     </View>
   );
 }
