@@ -32,6 +32,10 @@ export function Board({ onExit }: { onExit: () => void }) {
   const [confirmDel, setConfirmDel] = useState(false);
   const [pane, setPaneState] = useState<Pane>('kalender');
   const setPane = (p: Pane) => { setPaneState(p); AsyncStorage.setItem('familienplaner:boardPane', p).catch(() => {}); };
+  // Pro Gerät: Kinder-Spalten, Punkte und gemeinsames Ziel ausblenden, dann steht der Kalender oben
+  const [kids, setKidsState] = useState(true);
+  const setKids = (v: boolean) => { setKidsState(v); AsyncStorage.setItem('familienplaner:boardKids', v ? '1' : '0').catch(() => {}); };
+  useEffect(() => { AsyncStorage.getItem('familienplaner:boardKids').then(v => v === '0' && setKidsState(false), () => {}); }, []);
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardPane').then(v => v && setPaneState(v as Pane), () => {}); }, []);
   const feedItems = useFeedItems(data?.settings?.feeds, data ? peopleOf(data) : []);
   useEffect(() => { AsyncStorage.getItem('familienplaner:boardView').then(v => v && setMode(v as CalMode), () => {}); }, []);
@@ -106,7 +110,7 @@ export function Board({ onExit }: { onExit: () => void }) {
           <Text style={{ color: '#fff', fontSize: wide ? 30 : 22, fontWeight: '800', flex: 1 }}>Alles Gute zum Geburtstag, {child.name}!{age !== undefined ? ` Heute ${age} Jahre.` : ''}</Text>
         </View>
       ))}
-      <View style={{ flexDirection: wide ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
+      {kids && <View style={{ flexDirection: wide ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
         <View style={[s.card, { width: wide ? 300 : '100%' }]}>
           <Text style={s.label}>Heute</Text>
           <DayEvents data={data} date={date} big filter={filter} />
@@ -121,9 +125,9 @@ export function Board({ onExit }: { onExit: () => void }) {
         <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 16, width: wide ? undefined : '100%' }}>
           {data.children.filter(c => !filter.length || filter.includes(c.id)).map(c => <KidColumn key={c.id} data={data} child={c} date={date} />)}
         </View>
-      </View>
+      </View>}
 
-      {(data.pots ?? []).filter(p => !p.doneAt).map(p => {
+      {kids && (data.pots ?? []).filter(p => !p.doneAt).map(p => {
         const bal = potBalance(data, p.id);
         return (
           <View key={p.id} style={[{ flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 22, padding: 16 }, grad('#5b4cf0', '#ff6a5c', 120), SHADOW.sm]}>
@@ -148,6 +152,13 @@ export function Board({ onExit }: { onExit: () => void }) {
             {x.value === 'einkauf' && open > 0 && <View style={{ backgroundColor: C.accent2, borderRadius: 10, minWidth: 20, paddingHorizontal: 5, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{open}</Text></View>}
           </Pressable>
         ))}
+        <Pressable onPress={() => setKids(!kids)} accessibilityRole="switch" accessibilityState={{ checked: kids }} accessibilityLabel="Aufgaben und Punkte der Kinder anzeigen"
+          style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 18, backgroundColor: C.surface, marginLeft: 'auto' as any }, SHADOW.sm]}>
+          <View style={{ width: 36, height: 22, borderRadius: 11, backgroundColor: kids ? C.ok : C.line, padding: 2, alignItems: kids ? 'flex-end' : 'flex-start' }}>
+            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff' }} />
+          </View>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: C.fg }}>⭐ Kinder & Punkte</Text>
+        </Pressable>
       </View>
       {pane === 'stundenplan' && <WallTimetable data={data} kids={data.children.filter(c => !filter.length || filter.includes(c.id))} date={date} />}
       {pane === 'essen' && <MealPlan who="Wandansicht" />}
