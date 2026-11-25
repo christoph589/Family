@@ -12,7 +12,10 @@ export function AiConsent() {
   const [pin, setPin] = useState('');
   const [err, setErr] = useState(false);
   const wait = useRef<((ok: boolean) => void) | null>(null);
-  const given = !!data?.settings?.aiConsent;
+  const provider = data?.settings?.aiProvider ?? 'claude';
+  const c = data?.settings?.aiConsent;
+  // Eine Zustimmung für Claude (USA) deckt auch Mistral (EU) ab, umgekehrt nicht.
+  const given = !!c && (provider === 'mistral' || (c.provider ?? 'claude') === 'claude');
   useEffect(() => {
     setAiConsentAsker(() => given ? Promise.resolve(true) : new Promise<boolean>(res => { wait.current = res; setPin(''); setErr(false); setOpen(true); }));
     return () => setAiConsentAsker(null);
@@ -21,7 +24,7 @@ export function AiConsent() {
   const done = (ok: boolean) => { setOpen(false); wait.current?.(ok); wait.current = null; };
   const check = (p: string) => {
     if (p !== data.family.parentPin) { setErr(true); setPin(''); return; }
-    update(d => ({ ...d, settings: { ...d.settings, aiConsent: { at: new Date().toISOString() } } }));
+    update(d => ({ ...d, settings: { ...d.settings, aiConsent: { at: new Date().toISOString(), provider } } }));
     done(true);
   };
   return (
@@ -29,7 +32,7 @@ export function AiConsent() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={[s.card, { maxWidth: 480, alignSelf: 'center', width: '100%' }]}>
           <Text style={s.h2}>🤖 Fotos an die KI schicken?</Text>
-          <Text style={s.text}>Damit Famelio Lernkarten, Probe-Arbeiten oder Vokabeln erstellen kann, gehen die Fotos an die KI von Anthropic (Claude, Server in den USA). Die KI nutzt sie nur für diese eine Aufgabe und lernt nicht daraus.</Text>
+          <Text style={s.text}>Damit Famelio Lernkarten, Probe-Arbeiten oder Vokabeln erstellen kann, gehen die Fotos an die KI {provider === 'mistral' ? 'von Mistral AI (Frankreich). Die Daten bleiben in der EU.' : 'von Anthropic (Claude, Server in den USA). Wer das nicht möchte, stellt unter ⚙️ › Familie › KI und Fotos auf „Nur EU“ um.'} Die KI nutzt die Fotos nur für diese eine Aufgabe und lernt nicht daraus.</Text>
           <Text style={[s.text, { fontWeight: '700' }]}>Bitte beachten:</Text>
           <Text style={s.text}>• Nur Unterlagen fotografieren, möglichst ohne Namen, Adressen oder Noten anderer.{'\n'}• Fotos und Lernkarten bleiben in eurer Familie und werden nie mit anderen geteilt.{'\n'}• Famelio löscht die Fotos automatisch, sobald die Klassenarbeit oder das Thema vorbei ist.{'\n'}• Die KI kann Fehler machen. Bitte erzeugte Karten kurz prüfen.</Text>
           <Text style={s.label}>Zustimmen mit Eltern-PIN</Text>

@@ -12,6 +12,8 @@ import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { Avatar, PhotoCropper, pickImageFile } from '../ui/Avatar';
 import { EmergencyEdit } from './Emergency';
+import { AiCompare } from './AiCompare';
+import { AI_PROVIDERS, providerInfo } from '../ai/generate';
 
 /** Familienmitglieder: Namen und Farben von Eltern und Kindern. */
 export function Family() {
@@ -308,13 +310,27 @@ export function AiPrivacy() {
   return (
     <View style={s.card}>
       <Text style={s.h2}>🤖 KI und Fotos</Text>
-      <Text style={s.muted}>{c ? `Zugestimmt am ${new Date(c.at).toLocaleDateString('de-DE')}. Fotos gehen zur Auswertung an die KI von Anthropic (USA) und bleiben in eurer Familie.` : 'Noch nicht zugestimmt. Beim ersten Foto-Upload fragt Famelio nach.'}</Text>
+      <Text style={s.label}>KI-Anbieter</Text>
+      <View style={s.row}>
+        {AI_PROVIDERS.map(p => {
+          const on = (data.settings?.aiProvider ?? 'claude') === p.id;
+          return (
+            <Pressable key={p.id} onPress={() => { update(d => ({ ...d, settings: { ...d.settings, aiProvider: p.id } })); setDone(p.id === 'mistral' ? 'Ab jetzt gehen Fotos nur noch an Mistral in der EU.' : 'Ab jetzt nutzt Famelio Claude. Beim nächsten Foto fragt Famelio einmal neu nach.'); }}
+              style={{ flexGrow: 1, flexBasis: 200, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: on ? C.accent : C.line, backgroundColor: on ? C.accent + '18' : C.surface }}>
+              <Text style={{ fontWeight: '800', color: C.fg }}>{on ? '● ' : '○ '}{p.name}</Text>
+              <Text style={[s.muted, { fontSize: 12 }]}>{p.where}{p.id === 'claude' ? '. Beste Qualität beim Lesen von Fotos.' : '. Keine Übermittlung in die USA, Qualität noch im Test.'}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={s.muted}>{c ? `Zugestimmt am ${new Date(c.at).toLocaleDateString('de-DE')}. Fotos gehen zur Auswertung an ${providerInfo(data.settings?.aiProvider).where} und bleiben in eurer Familie.` : 'Noch nicht zugestimmt. Beim ersten Foto-Upload fragt Famelio nach.'}</Text>
       <Text style={s.muted}>Gespeicherte Fotos: {n}. Sie werden automatisch gelöscht, 7 Tage nach der Klassenarbeit bzw. 14 Tage nach dem Thema. Lernkarten und Ergebnisse bleiben.</Text>
       <View style={s.row}>
         {n > 0 && <Button ghost title="Alle Fotos jetzt löschen" onPress={() => { update(d => pruneAiPhotos(d, undefined, true)); setDone('Fotos gelöscht.'); }} />}
         {c && <Button ghost title="Zustimmung widerrufen" onPress={() => { update(d => ({ ...d, settings: { ...d.settings, aiConsent: undefined } })); setDone('Widerrufen. Ohne neue Zustimmung gehen keine Fotos mehr an die KI.'); }} />}
       </View>
       {!!done && <Text style={{ color: C.accent, fontWeight: '700' }}>{done}</Text>}
+      <AiCompare />
     </View>
   );
 }

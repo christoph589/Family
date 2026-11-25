@@ -40,13 +40,28 @@ function parseJsonLoose<T>(text: string): T {
 let consentAsker: (() => Promise<boolean>) | null = null;
 export const setAiConsentAsker = (f: (() => Promise<boolean>) | null) => { consentAsker = f; };
 
+/** KI-Anbieter. Welcher genutzt wird, entscheidet der Server anhand von settings.aiProvider der Familie. */
+export type AiProvider = 'claude' | 'mistral';
+export const AI_PROVIDERS: { id: AiProvider; name: string; short: string; where: string }[] = [
+  { id: 'claude', name: 'Claude (Anthropic)', short: 'Claude', where: 'Anthropic, Server in den USA' },
+  { id: 'mistral', name: 'Nur EU: Mistral', short: 'Mistral', where: 'Mistral AI, Frankreich, Server in der EU' },
+];
+export const providerInfo = (p?: string) => AI_PROVIDERS.find(x => x.id === p) ?? AI_PROVIDERS[0];
+
+/** Nur für den KI-Vergleich der Eltern: erzwingt für die nächsten Aufrufe einen Anbieter. Läuft der Vergleich, nacheinander aufrufen, nie parallel. */
+let forcedProvider: AiProvider | null = null;
+export const setForcedProvider = (p: AiProvider | null) => { forcedProvider = p; };
+
 function serverSample(): SampleFn {
   const call = async (input: string, opts?: any): Promise<string> => {
-    if (((opts?.images ?? []) as Blob[]).length && consentAsker && !(await consentAsker())) throw { code: 'no_consent' };
+    // Im KI-Vergleich haben die Eltern schon mit PIN bestätigt, dass die Fotos an beide Anbieter gehen.
+    if (!forcedProvider && ((opts?.images ?? []) as Blob[]).length && consentAsker && !(await consentAsker())) throw { code: 'no_consent' };
     const images = await Promise.all(((opts?.images ?? []) as Blob[]).map(blobToDataUrl));
     const signal: AbortSignal | undefined = opts?.signal;
     if (signal?.aborted) throw { code: 'cancelled' };
-    const req = sb().functions.invoke('familie', { body: { action: 'ai', prompt: input, images } }).then(async ({ data, error }) => {
+    const body: Record<string, unknown> = { action: 'ai', prompt: input, images };
+    if (forcedProvider) { body.compare = true; body.provider = forcedProvider; }
+    const req = sb().functions.invoke('familie', { body }).then(async ({ data, error }) => {
       if (error) {
         let code = '';
         try { code = (await (error as any).context?.json?.())?.error ?? ''; } catch { /* egal */ }
@@ -83,11 +98,11 @@ export const AI_ERROR: Record<string, string> = {
   image_rejected: 'Ein Foto konnte nicht gelesen werden. Bitte ein anderes nehmen.',
   invalid_json: 'Die KI hat keine brauchbaren Fragen geliefert. Bitte nochmal versuchen.',
   refused: 'Die KI hat das abgelehnt. Bitte Thema oder Fotos anpassen.',
-  no_key: 'Die KI ist auf dem Server noch nicht eingerichtet: Der API-Schlüssel fehlt (Secret ANTHROPIC_API_KEY).',
+  no_key: 'Für den gewählten KI-Anbieter fehlt auf dem Server der API-Schlüssel (Secret ANTHROPIC_API_KEY bzw. MISTRAL_API_KEY).',
   no_sql: 'Bitte zuerst das SQL „fix-03-ki“ im Supabase SQL Editor ausführen.',
   no_function: 'Die Server-Funktion „familie“ ist noch nicht neu eingespielt.',
   bad_key: 'Der API-Schlüssel wird nicht akzeptiert. Bitte in Supabase prüfen.',
-  no_credit: 'Das Anthropic-Konto hat kein Guthaben mehr. Bitte unter console.anthropic.com aufladen.',
+  no_credit: 'Das Konto beim KI-Anbieter hat kein Guthaben mehr (console.anthropic.com bzw. console.mistral.ai).',
   daily_limit: 'Für heute ist das KI-Limit der Familie erreicht (30 Aufrufe). Morgen geht es weiter.',
   not_member: 'Dieses Gerät ist mit keiner Familie verbunden.',
   not_signed_in: 'Dieses Gerät ist nicht angemeldet.',

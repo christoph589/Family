@@ -6,7 +6,12 @@
 // POST /familie {action:'icloud_calendars' | 'icloud_events' | 'icloud_save' | 'icloud_delete'} iCloud-Kalender lesen und schreiben (Secrets ICLOUD_USER, ICLOUD_APP_PASSWORD)
 // POST /familie {action:'tick', token}  kommt alle 5 Minuten vom Zeitplan aus fix-05 und verschickt fällige Erinnerungen
 // POST /familie {action:'ai', prompt, images} KI-Test und Vokabel-Foto, nur für Mitglieder einer Familie,
-//      höchstens AI_DAILY Aufrufe pro Familie und Tag. Braucht das Secret ANTHROPIC_API_KEY und fix-03-ki.sql.
+//      höchstens AI_DAILY Aufrufe pro Familie und Tag. Braucht fix-03-ki.sql.
+//      Anbieter pro Familie (Einstellungen › Familie › KI und Fotos, settings.aiProvider):
+//        'claude'  (Standard) Anthropic, USA. Secret ANTHROPIC_API_KEY.
+//        'mistral' Nur EU: Mistral AI, Frankreich. Secret MISTRAL_API_KEY, optional MISTRAL_MODEL.
+//      Ist der Schlüssel des gewählten Anbieters nicht gesetzt, gibt es einen Fehler. Es wird nie heimlich
+//      auf einen anderen Anbieter ausgewichen. {compare:true, provider} erzwingt einen Anbieter (KI-Vergleich der Eltern).
 //
 // Einspielen: Supabase Dashboard > Edge Functions > Deploy a new function > Via Editor,
 // Name "familie", diesen Code einfügen, Deploy. Danach bei der Funktion
@@ -175,21 +180,27 @@ export function parseIcs(text: string, fromIso: string, toIso: string): Out[] {
 
 const AI_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const AI_MODEL = 'claude-opus-5-5';
+const MISTRAL_KEY = Deno.env.get('MISTRAL_API_KEY');
+// Mistral Medium 3.1 kann Bilder lesen (laut docs.mistral.ai/capabilities/vision). Über das Secret MISTRAL_MODEL austauschbar, z. B. mistral-large-2512.
+const MISTRAL_MODEL = Deno.env.get('MISTRAL_MODEL') || 'mistral-medium-2508';
 const AI_DAILY = 30;
+const AI_PROVIDERS = ['claude', 'mistral'] as const;
+type AiProvider = typeof AI_PROVIDERS[number];
+const AI_SYSTEM = 'Du hilfst einer Familie beim Lernen. Antworte ausschließlich mit gültigem JSON, ohne Markdown-Codeblock und ohne weiteren Text.';
 const IMG = /^data:(image\/(?:jpeg|png|webp|gif)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/;
 const berlinDay = () => new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(new Date());
 
+type AiFile = { mime: string; data: string };
+type AiResult = { text: string } | { error: string; status: number; message?: string };
+
 async function runAi(body: any, userId: string, admin: any) {
-  if (!AI_KEY) return json({ error: 'no_key' }, 503);
   const prompt = String(body.prompt ?? '');
   if (!prompt || prompt.length > 20000) return json({ error: 'bad_request' }, 400);
-  const images: any[] = [];
+  const files: AiFile[] = [];
   for (const raw of (Array.isArray(body.images) ? body.images : []).slice(0, 20)) {
     const m = IMG.exec(String(raw));
     if (!m || m[2].length > 6_000_000) return json({ error: 'image_rejected' }, 400);
-    images.push(m[1] === 'application/pdf'
-      ? { type: 'document', source: { type: 'base64', media_type: m[1], data: m[2] } }
-      : { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+    files.push({ mime: m[1], data: m[2] });
   }
 
   // Nur Mitglieder einer Familie, mit Tageslimit pro Familie (schützt vor hohen Kosten)
@@ -198,11 +209,29 @@ async function runAi(body: any, userId: string, admin: any) {
   const fid = mem[0].family_id;
   const { data: fam, error: famErr } = await admin.from('families').select('ai_day, ai_count').eq('id', fid).single();
   if (famErr) return json({ error: 'no_sql' }, 500);
+
+  // Anbieter steht in den Familien-Einstellungen. Der Server liest ihn selbst, damit ein "Nur EU" nicht vom Gerät abhängt.
+  const { data: st } = await admin.from('family_state').select('settings:data->settings').eq('family_id', fid).maybeSingle();
+  const chosen: AiProvider = st?.settings?.aiProvider === 'mistral' ? 'mistral' : 'claude';
+  const provider: AiProvider = body.compare === true && AI_PROVIDERS.includes(body.provider) ? body.provider : chosen;
+  if (provider === 'claude' && !AI_KEY) return json({ error: 'no_key', provider }, 503);
+  if (provider === 'mistral' && !MISTRAL_KEY) return json({ error: 'no_key', provider }, 503);
+
   const day = berlinDay();
   const used = fam.ai_day === day ? fam.ai_count : 0;
   if (used >= AI_DAILY) return json({ error: 'daily_limit' }, 429);
   await admin.from('families').update({ ai_day: day, ai_count: used + 1 }).eq('id', fid);
 
+  const t0 = Date.now();
+  const r = provider === 'mistral' ? await askMistral(prompt, files) : await askClaude(prompt, files);
+  if ('error' in r) return json({ error: r.error, provider, message: r.message }, r.status);
+  return json({ text: r.text, left: AI_DAILY - used - 1, provider, ms: Date.now() - t0 });
+}
+
+async function askClaude(prompt: string, files: AiFile[]): Promise<AiResult> {
+  const content = files.map(f => f.mime === 'application/pdf'
+    ? { type: 'document', source: { type: 'base64', media_type: f.mime, data: f.data } }
+    : { type: 'image', source: { type: 'base64', media_type: f.mime, data: f.data } });
   const client = new Anthropic({ apiKey: AI_KEY });
   try {
     const msg = await client.beta.messages.stream({
@@ -211,20 +240,64 @@ async function runAi(body: any, userId: string, admin: any) {
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'medium' },
-      system: 'Du hilfst einer Familie beim Lernen. Antworte ausschließlich mit gültigem JSON, ohne Markdown-Codeblock und ohne weiteren Text.',
-      messages: [{ role: 'user', content: [...images, { type: 'text', text: prompt }] }],
+      system: AI_SYSTEM,
+      messages: [{ role: 'user', content: [...content, { type: 'text', text: prompt }] }],
     } as any).finalMessage();
-    if (msg.stop_reason === 'refusal') return json({ error: 'refused' }, 422);
-    if (msg.stop_reason === 'max_tokens') return json({ error: 'invalid_json' }, 502);
-    const text = msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-    return json({ text, left: AI_DAILY - used - 1 });
+    if (msg.stop_reason === 'refusal') return { error: 'refused', status: 422 };
+    if (msg.stop_reason === 'max_tokens') return { error: 'invalid_json', status: 502 };
+    return { text: msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') };
   } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return json({ error: 'bad_key' }, 502);
-    if (e instanceof Anthropic.RateLimitError) return json({ error: 'rate_limited' }, 429);
-    if (e instanceof Anthropic.BadRequestError) return json({ error: /credit|billing/i.test(e.message) ? 'no_credit' : 'image_rejected', message: e.message }, 400);
-    if (e instanceof Anthropic.APIError) return json({ error: 'ai_down', status: e.status }, 502);
+    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return { error: 'bad_key', status: 502 };
+    if (e instanceof Anthropic.RateLimitError) return { error: 'rate_limited', status: 429 };
+    if (e instanceof Anthropic.BadRequestError) return { error: /credit|billing/i.test(e.message) ? 'no_credit' : 'image_rejected', status: 400, message: e.message };
+    if (e instanceof Anthropic.APIError) return { error: 'ai_down', status: 502 };
     throw e;
   }
+}
+
+/** Fehlercodes von Mistral auf dieselben Codes wie bei Claude abbilden, damit die App gleiche Meldungen zeigt. */
+function mistralError(status: number, text: string): AiResult {
+  if (status === 401 || status === 403) return { error: 'bad_key', status: 502 };
+  if (status === 429) return { error: 'rate_limited', status: 429 };
+  if (status === 402 || /credit|billing|payment|quota/i.test(text)) return { error: 'no_credit', status: 400, message: text.slice(0, 300) };
+  if (status === 400 || status === 422) return { error: 'image_rejected', status: 400, message: text.slice(0, 300) };
+  return { error: 'ai_down', status: 502, message: text.slice(0, 300) };
+}
+
+async function mistralFetch(path: string, payload: unknown) {
+  return await fetch('https://api.mistral.ai/v1/' + path, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${MISTRAL_KEY}`, 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function askMistral(prompt: string, files: AiFile[]): Promise<AiResult> {
+  // PDFs versteht das Chat-Modell nicht direkt. Sie gehen zuerst durch Mistral OCR (ebenfalls EU), der Text kommt dann mit in die Frage.
+  const pdfTexts: string[] = [];
+  for (const f of files.filter(f => f.mime === 'application/pdf')) {
+    const r = await mistralFetch('ocr', { model: 'mistral-ocr-latest', document: { type: 'document_url', document_url: `data:${f.mime};base64,${f.data}` } });
+    if (!r.ok) return mistralError(r.status, await r.text());
+    const o = await r.json();
+    pdfTexts.push((o.pages ?? []).map((p: any) => p.markdown ?? '').join('\n\n'));
+  }
+  const images = files.filter(f => f.mime !== 'application/pdf').map(f => ({ type: 'image_url', image_url: `data:${f.mime};base64,${f.data}` }));
+  const text = pdfTexts.length ? `${prompt}\n\nInhalt des hochgeladenen PDF-Dokuments (per Texterkennung gelesen):\n${pdfTexts.join('\n\n---\n\n').slice(0, 60000)}` : prompt;
+  const r = await mistralFetch('chat/completions', {
+    model: MISTRAL_MODEL,
+    max_tokens: 16000,
+    temperature: 0.3,
+    response_format: { type: 'json_object' },
+    messages: [{ role: 'system', content: AI_SYSTEM }, { role: 'user', content: [...images, { type: 'text', text }] }],
+  });
+  if (!r.ok) return mistralError(r.status, await r.text());
+  const o = await r.json();
+  const ch = o.choices?.[0];
+  if (ch?.finish_reason === 'length') return { error: 'invalid_json', status: 502 };
+  const c = ch?.message?.content;
+  const out = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((x: any) => x.type === 'text').map((x: any) => x.text).join('') : '';
+  if (!out) return { error: 'invalid_json', status: 502 };
+  return { text: out };
 }
 
 // ---------- Erinnerungen (Web-Push) ----------
