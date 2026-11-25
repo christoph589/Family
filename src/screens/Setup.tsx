@@ -53,7 +53,7 @@ export function Setup({ onCreate, note }: { onCreate?: (d: FamilyData) => Promis
       {named.length > 0 && !named.every(kidDraftValid) && <Text style={s.muted}>Für jedes Kind bitte Geburtstag, Geschlecht und Klasse angeben. Daraus richte ich Alter, Geburtstag und Geld-Tipps aus. Die Klasse zählt jedes Schuljahr automatisch hoch.</Text>}
       {!!err && <Text style={{ color: C.danger }}>{err}</Text>}
       <Button title={busy ? 'Moment …' : 'Loslegen'} disabled={!valid || busy} onPress={() => {
-        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined, birthday: k.birthday || undefined, gender: k.gender })), parents);
+        const d = newFamily(name.trim(), pin, kids.filter(k => k.name.trim()).map(k => ({ name: k.name.trim(), grade: k.grade.trim() || undefined, birthday: k.birthday || undefined, gender: k.gender, schoolType: k.schoolType })), parents);
         if (!onCreate) return replace(d);
         setBusy(true); setErr('');
         onCreate(d).catch(e => { setErr(e.message); setBusy(false); });

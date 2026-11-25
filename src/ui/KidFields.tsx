@@ -1,10 +1,10 @@
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { today } from '../data/logic';
 import { DateField } from './DateField';
-import { Gender } from '../data/types';
+import { Gender, SCHOOL_TYPES } from '../data/types';
 import { C, s } from './theme';
 
-export interface KidDraft { birthday: string; gender?: Gender; grade: string }
+export interface KidDraft { birthday: string; gender?: Gender; grade: string; schoolType?: string }
 export const kidDraftValid = (k: KidDraft) => /^\d{4}-\d{2}-\d{2}$/.test(k.birthday) && !!k.gender && !!k.grade.trim();
 const GENDERS: { value: Gender; label: string }[] = [{ value: 'maedchen', label: 'Mädchen' }, { value: 'junge', label: 'Junge' }, { value: 'divers', label: 'Divers' }];
 
@@ -25,6 +25,18 @@ export function KidFields({ value, onChange, name }: { value: KidDraft; onChange
             <Pressable key={g.value} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => onChange({ gender: g.value })}
               style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: C.accent, backgroundColor: on ? C.accent : C.surface }}>
               <Text style={{ color: on ? '#fff' : C.fg, fontWeight: '700' }}>{g.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={[s.muted, { fontSize: 13 }]}>Schulform</Text>
+      <View style={[s.row, { gap: 6 }]}>
+        {SCHOOL_TYPES.map(t => {
+          const on = value.schoolType === t;
+          return (
+            <Pressable key={t} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`Schulform ${t}${name ? ' für ' + name : ''}`} onPress={() => onChange({ schoolType: on ? undefined : t })}
+              style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, borderWidth: 1, borderColor: C.line, backgroundColor: on ? C.fg : C.surface }}>
+              <Text style={{ color: on ? '#fff' : C.fg, fontWeight: '600', fontSize: 13 }}>{t}</Text>
             </Pressable>
           );
         })}

@@ -228,7 +228,7 @@ export function Holiday() {
 
 function KidProfileEdit({ child }: { child: Child }) {
   const { update } = useFamily();
-  const [draft, setDraft] = useState<KidDraft>({ birthday: child.birthday ?? '', gender: child.gender, grade: child.grade ?? '' });
+  const [draft, setDraft] = useState<KidDraft>({ birthday: child.birthday ?? '', gender: child.gender, grade: child.grade ?? '', schoolType: child.schoolType });
   const save = (patch: Partial<Child>) => update(d => ({ ...d, children: d.children.map(c => (c.id === child.id ? { ...c, ...patch } : c)) }));
   const age = ageOf(child);
   const missing = !child.birthday || !child.gender || !child.grade;
@@ -238,6 +238,7 @@ function KidProfileEdit({ child }: { child: Child }) {
         const next = { ...draft, ...v };
         setDraft(next);
         if (v.gender) save({ gender: v.gender });
+        if ('schoolType' in v) save({ schoolType: v.schoolType });
         if (v.grade !== undefined) save({ grade: v.grade.trim() || undefined, gradeYear: schoolYearOf(today()) });
         if (v.birthday !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(v.birthday)) save({ birthday: v.birthday });
       }} />

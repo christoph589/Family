@@ -142,8 +142,8 @@ export function peopleOf(d: FamilyData): Person[] {
   return [...parentsOf(d).map(p => ({ id: p.id, name: p.name, color: p.color, photo: p.photo, title: p.title, admin: isAdmin(p), role: 'eltern' as const })), ...d.children.map(c => ({ id: c.id, name: c.name, color: c.color, photo: c.photo, role: 'kind' as const }))];
 }
 
-export function newFamily(name: string, pin: string, kids: { name: string; grade?: string; birthday?: string; gender?: Child['gender'] }[], parentNames: string[] = ['Mama', 'Papa']): FamilyData {
-  const children: Child[] = kids.map((k, i) => ({ id: uid(), name: k.name, grade: k.grade, gradeYear: k.grade ? schoolYearOf(today()) : undefined, birthday: k.birthday, gender: k.gender, color: CHILD_COLORS[i % CHILD_COLORS.length] }));
+export function newFamily(name: string, pin: string, kids: { name: string; grade?: string; birthday?: string; gender?: Child['gender']; schoolType?: string }[], parentNames: string[] = ['Mama', 'Papa']): FamilyData {
+  const children: Child[] = kids.map((k, i) => ({ id: uid(), name: k.name, grade: k.grade, gradeYear: k.grade ? schoolYearOf(today()) : undefined, birthday: k.birthday, gender: k.gender, schoolType: k.schoolType, color: CHILD_COLORS[i % CHILD_COLORS.length] }));
   return {
     version: 1,
     family: { id: uid(), name, parentPin: pin },

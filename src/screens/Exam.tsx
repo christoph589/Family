@@ -91,9 +91,13 @@ function PrepForm({ childIds, meId, onDone }: { childIds: string[]; meId?: strin
       <TextInput style={[s.input, { minHeight: 70, textAlignVertical: 'top' }]} multiline value={title} onChangeText={setTitle} placeholder="Was kommt dran? z. B. Brüche: erweitern, kürzen, addieren" accessibilityLabel="Thema der Klassenarbeit" />
       <Text style={s.label}>Termin der Klassenarbeit (optional, kommt in den Kalender)</Text>
       <View style={s.row}><DateField value={date} onChange={setDate} label="Datum der Klassenarbeit" min={today()} clearable /></View>
-      <Text style={s.label}>Schulform{child ? ` von ${child.name}` : ''}</Text>
-      <View style={[s.row, { gap: 6 }]}>{SCHOOL_TYPES.map(t => <Chip key={t} on={schoolType === t} label={t} onPress={() => setSchoolType(t)} />)}</View>
-      {!data!.settings?.autoHoliday?.state && (
+      {!child?.schoolType && (
+        <>
+          <Text style={s.label}>Schulform{child ? ` von ${child.name}` : ''} (einmalig, steht danach im Profil)</Text>
+          <View style={[s.row, { gap: 6 }]}>{SCHOOL_TYPES.map(t => <Chip key={t} on={schoolType === t} label={t} onPress={() => setSchoolType(t)} />)}</View>
+        </>
+      )}
+      {!regionOf(data!) && (
         <>
           <Text style={s.label}>Bundesland (Lehrplan)</Text>
           <View style={[s.row, { gap: 6 }]}>{STATES.map(x => <Chip key={x.code} on={region === x.code} label={x.name} onPress={() => setRegion(x.code)} />)}</View>
