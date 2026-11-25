@@ -48,6 +48,25 @@ const DAYS = [['1', 'Mo'], ['2', 'Di'], ['3', 'Mi'], ['4', 'Do'], ['5', 'Fr']] a
 const ROWS = 8;
 const COL = 96;
 const timeOk = (t?: string) => !t || /^([01]?\d|2[0-3]):[0-5]\d$/.test(t);
+const toMin = (t?: string) => (t && /^\d{1,2}:\d{2}$/.test(t) ? +t.split(':')[0] * 60 + +t.split(':')[1] : null);
+const fromMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+/** Stundenraster aus dem vorhandenen Plan schätzen: Tage mit n Stunden enden um X, dazwischen gleichmäßig verteilt. */
+export function guessBells(tt: TT): string[] {
+  const known: Record<number, number> = {};
+  const slots: number[] = [];
+  const starts: number[] = [];
+  for (const [k] of DAYS) {
+    const d = tt[k]; const f = toMin(d?.from), e = toMin(d?.to);
+    const n = (() => { const l = d?.lessons ?? []; let i = l.length - 1; while (i >= 0 && !l[i]?.trim()) i--; return i + 1; })();
+    if (f !== null) starts.push(f);
+    if (e !== null && n > 0) { known[n - 1] = e; if (f !== null) slots.push((e - f) / n); }
+  }
+  if (!slots.length || !starts.length) return [];
+  const start = starts.sort((a, b) => a - b)[Math.floor(starts.length / 2)];
+  const slot = slots.sort((a, b) => a - b)[Math.floor(slots.length / 2)];
+  const max = Math.max(ROWS, ...Object.keys(known).map(Number).map(x => x + 1));
+  return Array.from({ length: max }, (_, i) => fromMin(known[i] ?? Math.round((start + slot * (i + 1)) / 5) * 5));
+}
 const fixTime = (t?: string) => (t && timeOk(t) ? t.padStart(5, '0') : undefined);
 
 /** Stundenplan je Kind: Schulbeginn, Schulende und Fächer pro Stunde. */
@@ -76,7 +95,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
     return { ...(e ?? {}), [k]: { ...day, lessons, ...(to ? { to } : {}) } };
   });
   const setBell = (i: number, v: string) => setEb(b => { const x = [...b]; while (x.length <= i) x.push(''); x[i] = v; return x; });
-  const startEdit = () => { setEb(child.bells ?? []); setEdit(child.timetable ?? {}); };
+  const startEdit = () => { setEb(child.bells?.length ? child.bells : guessBells(child.timetable ?? {})); setEdit(child.timetable ?? {}); };
   const editRows = Math.max(ROWS, ...DAYS.map(([k]) => tt[k]?.lessons?.length ?? 0));
   async function upload() {
     setAiMsg('');
