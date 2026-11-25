@@ -7,7 +7,9 @@ export interface IcloudCal { href: string; name: string; color: string; readOnly
 export interface IcloudEvent { uid: string; title: string; date: string; time?: string; end?: string; allDay: boolean; href: string; etag: string; cal: string; recurring: boolean; editable: boolean; note?: string; rid?: string }
 
 const ERR: Record<string, string> = {
-  icloud_not_set: 'Auf dem Server fehlen noch Apple-ID und app-spezifisches Passwort (Supabase › Edge Functions › Secrets).',
+  icloud_not_set: 'iCloud ist noch nicht verbunden. Bitte unter Einstellungen › Kalender Apple-ID und app-spezifisches Passwort eingeben.',
+  icloud_bad_input: 'Bitte Apple-ID (E-Mail) und das 16-stellige app-spezifische Passwort eingeben.',
+  icloud_sql: 'Speichern hat nicht geklappt (Tabelle family_secrets fehlt?).',
   icloud_auth: 'iCloud lehnt die Anmeldung ab. Bitte das app-spezifische Passwort prüfen.',
   icloud_discovery: 'iCloud-Kalender wurden nicht gefunden.',
   icloud_failed: 'iCloud ist gerade nicht erreichbar.',
@@ -31,6 +33,9 @@ async function call<T>(body: object): Promise<T> {
   return data as T;
 }
 
+export const icloudConnStatus = () => call<{ connected: boolean; user?: string }>({ action: 'icloud_status' });
+export const icloudConnect = (user: string, pass: string) => call<{ ok: true; user: string }>({ action: 'icloud_connect', user, pass });
+export const icloudDisconnect = () => call<{ ok: true }>({ action: 'icloud_disconnect' });
 export const icloudCalendars = () => call<{ calendars: IcloudCal[] }>({ action: 'icloud_calendars' }).then(r => r.calendars);
 
 // Gemeinsamer Zwischenspeicher: ein Zeitfenster um heute, alle 10 Minuten neu

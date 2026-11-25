@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Linking, Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { eventTarget, icloudCalendars, icloudStatus, IcloudCal, reloadIcloud } from '../data/icloud';
+import { eventTarget, icloudCalendars, icloudConnect, icloudConnStatus, icloudDisconnect, icloudStatus, IcloudCal, reloadIcloud } from '../data/icloud';
 import { peopleOf } from '../data/logic';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
@@ -12,6 +12,9 @@ export function IcloudSetup() {
   const [list, setList] = useState<IcloudCal[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [conn, setConn] = useState<{ connected: boolean; user?: string } | null>(null);
+  const [form, setForm] = useState({ user: '', pass: '' });
+  useEffect(() => { icloudConnStatus().then(setConn).catch(e => { setConn({ connected: false }); setErr((e as Error).message); }); }, []);
   if (!data) return null;
   const chosen = data.settings?.icloud ?? [];
   const people = peopleOf(data);
@@ -22,7 +25,31 @@ export function IcloudSetup() {
     try { setList(await icloudCalendars()); } catch (e) { setErr((e as Error).message); }
     setBusy(false);
   }
+  async function connect() {
+    setBusy(true); setErr('');
+    try { const r = await icloudConnect(form.user, form.pass); setConn({ connected: true, user: r.user }); setForm({ user: '', pass: '' }); setList(await icloudCalendars()); }
+    catch (e) { setErr((e as Error).message); }
+    setBusy(false);
+  }
+  async function disconnect() {
+    setBusy(true); setErr('');
+    try { await icloudDisconnect(); setConn({ connected: false }); setList(null); setCals([]); } catch (e) { setErr((e as Error).message); }
+    setBusy(false);
+  }
   const all = list ?? chosen.map(c => ({ ...c, readOnly: false }));
+  if (conn && !conn.connected) return (
+    <View style={s.card}>
+      <Text style={s.h2}>🍎 iCloud-Kalender verbinden</Text>
+      <Text style={s.muted}>Termine aus euren iPhone-Kalendern direkt in Famelio sehen und bearbeiten. Dafür braucht es eure Apple-ID und ein app-spezifisches Passwort (nicht euer normales Apple-Passwort).</Text>
+      <Text style={[s.text, { fontSize: 14 }]}>So bekommst du das Passwort:{'\n'}1. appleid.apple.com öffnen und anmelden{'\n'}2. „Anmelden und Sicherheit“ › „App-spezifische Passwörter“{'\n'}3. Name „Famelio“ eingeben, Passwort kopieren (xxxx-xxxx-xxxx-xxxx)</Text>
+      <Pressable onPress={() => Linking.openURL('https://appleid.apple.com')}><Text style={{ color: C.accent, fontWeight: '700' }}>Apple-ID-Seite öffnen ↗</Text></Pressable>
+      <TextInput style={s.input} placeholder="Apple-ID (E-Mail)" autoCapitalize="none" keyboardType="email-address" autoComplete="off" value={form.user} onChangeText={v => setForm(f => ({ ...f, user: v }))} />
+      <TextInput style={s.input} placeholder="App-spezifisches Passwort" autoCapitalize="none" autoComplete="off" secureTextEntry value={form.pass} onChangeText={v => setForm(f => ({ ...f, pass: v }))} />
+      {!!err && <Text style={{ color: C.danger, fontWeight: '700' }}>{err}</Text>}
+      <View style={s.row}><Button title={busy ? 'Prüfe …' : 'Verbinden'} disabled={busy || !form.user || !form.pass} onPress={connect} /></View>
+      <Text style={[s.muted, { fontSize: 12 }]}>Das Passwort wird verschlüsselt auf dem Server gespeichert und nie wieder angezeigt. Du kannst es jederzeit bei Apple widerrufen.</Text>
+    </View>
+  );
   return (
     <View style={s.card}>
       <Text style={s.h2}>🍎 iCloud-Kalender (lesen und bearbeiten)</Text>
@@ -69,7 +96,9 @@ export function IcloudSetup() {
       <View style={s.row}>
         <Button title={busy ? 'Verbinde …' : list ? 'Liste neu laden' : chosen.length ? 'Weitere Kalender wählen' : 'iCloud verbinden'} disabled={busy} onPress={load} />
         {chosen.length > 0 && <Button ghost title="Termine neu laden" onPress={() => reloadIcloud(chosen.map(c => c.href))} />}
+        {conn?.connected && <Button ghost title="Trennen" disabled={busy} onPress={disconnect} />}
       </View>
+      {!!conn?.user && <Text style={[s.muted, { fontSize: 12 }]}>Verbunden als {conn.user}</Text>}
       <Text style={[s.muted, { fontSize: 12 }]}>Tipp: Kalender, die du hier wählst, unter „Fremde Kalender“ entfernen, sonst erscheinen die Termine doppelt.</Text>
     </View>
   );

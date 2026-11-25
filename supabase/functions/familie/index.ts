@@ -17,6 +17,7 @@ import ICAL from 'npm:ical.js@1.5.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.119.2';
 import Anthropic from 'npm:@anthropic-ai/sdk@1.7.0';
 import webpush from 'npm:web-push@3.6.7';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 const URL_ = Deno.env.get('SUPABASE_URL')!;
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -339,17 +340,16 @@ async function pushAction(body: any, userId: string, admin: any) {
 
 
 // ---------- iCloud-Kalender (CalDAV, lesen und schreiben) ----------
-// Braucht zwei Geheimnisse in Supabase (Edge Functions > Secrets):
-//   ICLOUD_USER          = Apple-ID (E-Mail)
-//   ICLOUD_APP_PASSWORD  = app-spezifisches Passwort von appleid.apple.com (nicht das normale Apple-Passwort)
-const IC_USER = Deno.env.get('ICLOUD_USER')?.trim();
-const IC_PASS = Deno.env.get('ICLOUD_APP_PASSWORD')?.replace(/\s/g, '');
+// Zugang pro Familie: Apple-ID + app-spezifisches Passwort, in der App eingegeben, verschlüsselt in family_secrets (kind 'icloud').
+// Bewusst kein globaler Zugang mehr: sonst sähe jede Familie denselben Apple-Kalender.
+type IcCred = { u: string; p: string };
+const icCtx = new AsyncLocalStorage<IcCred>();
 const IC_ROOT = 'https://caldav.icloud.com';
 
 async function dav(url: string, method: string, body?: string, headers: Record<string, string> = {}) {
   return await fetch(url, {
     method, body,
-    headers: { Authorization: 'Basic ' + btoa(`${IC_USER}:${IC_PASS}`), 'Content-Type': 'application/xml; charset=utf-8', ...headers },
+    headers: { Authorization: 'Basic ' + btoa(`${icCtx.getStore()?.u}:${icCtx.getStore()?.p}`), 'Content-Type': 'application/xml; charset=utf-8', ...headers },
   });
 }
 const unxml = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#13;|&#x[dD];/g, '\r').replace(/&#10;|&#x[aA];/g, '\n').replace(/&amp;/g, '&');
@@ -357,9 +357,10 @@ const tag = (xml: string, name: string) => { const m = new RegExp(`<(?:[\\w-]+:)
 const responses = (xml: string) => xml.match(/<(?:[\w-]+:)?response[\s>][\s\S]*?<\/(?:[\w-]+:)?response>/gi) ?? [];
 const abs = (base: string, href: string) => new URL(href.trim(), base).toString();
 
-let icHome: string | null = null;
+const icHomes = new Map<string, string>();
 async function icloudHome(): Promise<string> {
-  if (icHome) return icHome;
+  const who = icCtx.getStore()?.u ?? '';
+  if (icHomes.has(who)) return icHomes.get(who)!;
   const p1 = await dav(IC_ROOT + '/', 'PROPFIND', '<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>', { Depth: '0' });
   if (p1.status === 401) throw new Error('icloud_auth');
   const x1 = await p1.text();
@@ -370,8 +371,8 @@ async function icloudHome(): Promise<string> {
   const x2 = await p2.text();
   const home = tag(tag(x2, 'calendar-home-set') ?? '', 'href');
   if (!home) throw new Error('icloud_discovery');
-  icHome = abs(purl, home);
-  return icHome;
+  icHomes.set(who, abs(purl, home));
+  return icHomes.get(who)!;
 }
 
 async function icloudCalendars() {
@@ -576,10 +577,32 @@ async function icloudSeries(b: any, op: 'save' | 'delete') {
 }
 
 async function icloudAction(body: any, userId: string, admin: any) {
-  if (!IC_USER || !IC_PASS) return json({ error: 'icloud_not_set' }, 503);
-  const { data: mem } = await admin.from('members').select('role').eq('user_id', userId).limit(1);
+  const { data: mem } = await admin.from('members').select('family_id, role').eq('user_id', userId).limit(1);
   if (!mem?.length) return json({ error: 'not_member' }, 403);
-  const parent = mem[0].role === 'eltern';
+  const fid = mem[0].family_id, parent = mem[0].role === 'eltern';
+  if (body.action === 'icloud_connect') {
+    if (!parent) return json({ error: 'parents_only' }, 403);
+    const c = { u: String(body.user ?? '').trim(), p: String(body.pass ?? '').replace(/\s|-/g, '') };
+    if (!/^\S+@\S+\.\S+$/.test(c.u) || c.p.length !== 16) return json({ error: 'icloud_bad_input' }, 400);
+    try { await icCtx.run(c, () => icloudHome()); }
+    catch (e) { const m = (e as Error).message; return json({ error: m === 'icloud_auth' ? 'icloud_auth' : m === 'icloud_discovery' ? 'icloud_discovery' : 'icloud_failed' }, 502); }
+    const { error } = await admin.from('family_secrets').upsert({ family_id: fid, kind: 'icloud', value: await seal(c), updated_at: new Date().toISOString() });
+    if (error) return json({ error: 'icloud_sql', detail: error.message }, 500);
+    return json({ ok: true, user: c.u });
+  }
+  if (body.action === 'icloud_disconnect') {
+    if (!parent) return json({ error: 'parents_only' }, 403);
+    await admin.from('family_secrets').delete().eq('family_id', fid).eq('kind', 'icloud');
+    return json({ ok: true });
+  }
+  const { data: sec } = await admin.from('family_secrets').select('value').eq('family_id', fid).eq('kind', 'icloud').maybeSingle();
+  const cred: IcCred | null = sec ? await unseal(sec.value) : null;
+  if (body.action === 'icloud_status') return json({ connected: !!cred, user: cred?.u });
+  if (!cred) return json({ error: 'icloud_not_set' }, 503);
+  return await icCtx.run(cred, () => icloudInner(body, parent));
+}
+
+async function icloudInner(body: any, parent: boolean) {
   try {
     if (body.action === 'icloud_calendars') { if (!parent) return json({ error: 'parents_only' }, 403); return json({ calendars: await icloudCalendars() }); }
     if (body.action === 'icloud_events') {
