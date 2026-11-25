@@ -47,7 +47,7 @@ export function rangeLabel(mode: CalMode, anchor: string) {
 }
 
 /** Alle Einträge eines Tages aus den Familiendaten. childIds = null zeigt alles (Eltern, Wandansicht). */
-export function baseItems(data: FamilyData, date: string, childIds: string[] | null): CalItem[] {
+export function baseItems(data: FamilyData, date: string, childIds: string[] | null, onlyOwn = false): CalItem[] {
   const people = peopleOf(data);
   const kids = data.children.filter(k => !childIds || childIds.includes(k.id));
   // Kürzel: erster Buchstabe, bei gleichem Anfangsbuchstaben zwei (Mia/Mama -> Mi/Ma)
@@ -57,7 +57,7 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
     const sd = schoolOn(data, k.id, date);
     return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, end: sd.to, title: `🏫 ${k.name}`, color: k.color, tag: 'Schule', who: [k.id], people: [{ id: k.id, name: k.name, color: k.color, photo: k.photo }] }] : [];
   });
-  const ev = eventsOn(data, date, childIds).map(e => {
+  const ev = eventsOn(data, date, childIds, onlyOwn).map(e => {
     const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
     const nm = (id?: string) => people.find(p => p.id === id)?.name;
     const b = nm(e.bring), pk = nm(e.pick);

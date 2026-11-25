@@ -4,7 +4,7 @@ import { useFamily } from '../data/FamilyContext';
 import { GCal, GEvent, getMcp, GOOGLE_ERROR, listCalendars, listWeek } from '../data/google';
 import { peopleOf, Person, today, uid } from '../data/logic';
 import { CalEvent } from '../data/types';
-import { Button } from '../ui/Button';
+import { Button, Segmented } from '../ui/Button';
 import { DateField } from '../ui/DateField';
 import { guessIcon, IconPicker } from '../ui/IconPicker';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf } from '../ui/CalViews';
@@ -29,6 +29,8 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<CalEvent | null>(null);
   const [letter, setLetter] = useState(false);
+  // Kinder sehen zuerst nur ihre eigenen Termine und die der ganzen Familie
+  const [all, setAll] = useState(false);
   const days = daysOf(mode, anchor);
   const calId = data?.settings?.googleCalendarId;
 
@@ -49,12 +51,13 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
   const personInTitle = (t: string) => people.find(k => t.toLowerCase().split(/[^\p{L}]+/u).includes(k.name.toLowerCase()));
 
   function itemsFor(date: string): Item[] {
+    const mine = !parent && !all;
     const g: Item[] = google.filter(e => e.date === date).map(e => {
       const kid = personInTitle(e.title);
-      return { key: 'g' + e.id, time: e.time, title: e.title, color: kid?.color ?? '#4285f4', tag: 'Google' };
-    });
-    const base = baseItems(data!, date, parent ? null : childIds);
-    const ext = feedItems(date).filter(i => parent || !i.who?.length || i.who.some(w => childIds.includes(w) || people.some(p => p.id === w && p.role === 'eltern')));
+      return { key: 'g' + e.id, time: e.time, title: e.title, color: kid?.color ?? '#4285f4', tag: 'Google', kid: kid?.id };
+    }).filter(e => !mine || (e.kid && childIds.includes(e.kid))).map(({ kid, ...e }) => e);
+    const base = baseItems(data!, date, parent || all ? null : childIds, mine);
+    const ext = feedItems(date).filter(i => !mine || !i.who?.length || i.who.some(w => childIds.includes(w)));
     const tasks = base.filter(i => i.key.startsWith('t'));
     return [...base.filter(i => !i.key.startsWith('t')), ...g, ...ext].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).concat(tasks);
   }
@@ -89,6 +92,9 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
             <Button ghost title="Schließen" onPress={() => setSel(null)} />
           </View>
         </View>
+      )}
+      {!parent && (
+        <Segmented value={all ? 'alle' : 'meine'} onChange={v => setAll(v === 'alle')} options={[{ value: 'meine', label: '👤 Meine Termine' }, { value: 'alle', label: '👨‍👩‍👧 Ganze Familie' }]} />
       )}
       <CalViews mode={mode} anchor={anchor} itemsFor={itemsFor} onItemPress={(it, date) => setSel({ it, date })} onPickDay={d => { setAnchor(d); setMode('tag'); }}
         renderItem={it => <EventRow key={it.key} item={it} canDelete={parent && !/^[gtsb]/.test(it.key)} onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />} />

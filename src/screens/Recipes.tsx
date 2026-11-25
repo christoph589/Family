@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
 import { FamilyData, MealSlot, Recipe } from '../data/types';
@@ -7,6 +7,8 @@ import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { addDays, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
+import { AI_ERROR, extractRecipe, getSample } from '../ai/generate';
+import { pickPhotos } from './Exam';
 
 const norm = (t: string) => t.trim().toLowerCase();
 export const VOTES = [{ v: 2, icon: '❤️', label: 'Lieblingsessen' }, { v: 1, icon: '👍', label: 'Mag ich' }, { v: -1, icon: '👎', label: 'Lieber nicht' }];
@@ -26,6 +28,7 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
   const [adding, setAdding] = useState(false);
   const [edit, setEdit] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
+  const [show, setShow] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   if (!data) return null;
   const list = ranked(data);
@@ -99,6 +102,14 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
                 onPress={() => { onShop(r); setMsg(`Zutaten für ${r.title} stehen auf der Einkaufsliste.`); }} />}
               {(parent || r.by === meId) && <Button ghost title="✏️" accessibilityLabel={`${r.title} bearbeiten`} style={{ paddingVertical: 8, minHeight: 40, paddingHorizontal: 14 }} onPress={() => { setEdit(r.id); setAdding(false); }} />}
             </View>
+            {(r.steps || r.link) && (show === r.id ? (
+              <View style={{ gap: 6, backgroundColor: C.surface2, borderRadius: 14, padding: 12 }}>
+                {r.ingredients.length > 0 && <Text style={s.text}><Text style={{ fontWeight: '800' }}>Zutaten{'\n'}</Text>{r.ingredients.map(x => `• ${x}`).join('\n')}</Text>}
+                {r.steps && <Text style={s.text}><Text style={{ fontWeight: '800' }}>Zubereitung{'\n'}</Text>{r.steps}</Text>}
+                {r.link && <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => Linking.openURL(r.link!)}>🔗 Originalrezept öffnen</Text>}
+                <Text style={{ color: C.muted, fontWeight: '700' }} onPress={() => setShow(null)}>Zuklappen</Text>
+              </View>
+            ) : <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => setShow(r.id)}>📖 Rezept ansehen</Text>)}
             {plan === r.id && <PlanPicker onPick={(date, slot) => { onPlan(r, date, slot); setPlan(null); setMsg(`${r.title} steht am ${parse(date).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'numeric' })} im Plan.`); }} />}
           </View>
         );
@@ -141,26 +152,61 @@ function PlanPicker({ onPick }: { onPick: (date: string, slot: MealSlot) => void
 function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: boolean; recipe?: Recipe; onDone: () => void }) {
   const { data, update } = useFamily();
   const [title, setTitle] = useState(recipe?.title ?? '');
-  const [ing, setIng] = useState(recipe?.ingredients.join(', ') ?? '');
+  const [ing, setIng] = useState(recipe?.ingredients.join('\n') ?? '');
+  const [steps, setSteps] = useState(recipe?.steps ?? '');
+  const [link, setLink] = useState(recipe?.link ?? '');
   const dup = !recipe && data?.recipes?.find(r => norm(r.title) === norm(title));
+  const [ai, setAi] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { let on = true; if (parent) getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, [parent]);
+  async function fromPhoto() {
+    const p = await pickPhotos(6).catch(() => []);
+    if (!p.length) return;
+    setReading(true); setErr('');
+    try {
+      const r = await extractRecipe(p);
+      if (r.title && !title.trim()) setTitle(r.title);
+      if (r.ingredients.length) setIng(r.ingredients.join('\n'));
+      if (r.steps) setSteps(r.steps);
+    } catch (e: any) { setErr(AI_ERROR[e?.code] ?? 'Das Rezept konnte nicht gelesen werden.'); }
+    setReading(false);
+  }
   const save = () => {
     const t = title.trim();
     if (!t) return;
     const ingredients = ing.split(/[,\n]/).map(x => x.trim()).filter(Boolean);
+    const extra = { steps: steps.trim() || undefined, link: /^https?:\/\/\S+$/i.test(link.trim()) ? link.trim() : undefined };
     update(d => {
       const rs = d.recipes ?? [];
-      if (recipe) return { ...d, recipes: rs.map(x => (x.id === recipe.id ? { ...x, title: t, ingredients } : x)) };
+      if (recipe) return { ...d, recipes: rs.map(x => (x.id === recipe.id ? { ...x, title: t, ingredients, ...extra } : x)) };
       const ex = rs.find(x => norm(x.title) === norm(t));
       if (ex) return { ...d, recipes: rs.map(x => (x.id === ex.id ? { ...x, votes: { ...(x.votes ?? {}), [meId]: 2 } } : x)) };
-      return { ...d, recipes: [...rs, { id: uid(), title: t, ingredients, by: meId, at: new Date().toISOString(), votes: { [meId]: 2 } }] };
+      return { ...d, recipes: [...rs, parent ? { id: uid(), title: t, ingredients, ...extra } : { id: uid(), title: t, ingredients, ...extra, by: meId, at: new Date().toISOString(), votes: { [meId]: 2 } }] };
     });
     onDone();
   };
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
       <Text style={s.h2}>{recipe ? 'Gericht bearbeiten' : parent ? 'Neues Gericht' : 'Was möchtest du gern mal essen?'}</Text>
-      <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="z. B. Pfannkuchen mit Apfelmus" autoFocus />
-      <TextInput style={[s.input, { minHeight: 60 }]} multiline value={ing} onChangeText={setIng} placeholder={parent ? 'Zutaten, mit Komma getrennt' : 'Was braucht man dafür? (wenn du es weißt)'} />
+      {parent && ai && (
+        <View style={{ gap: 4 }}>
+          <Button ghost title={reading ? 'Lese Rezept …' : '📷 Aus Foto oder Screenshot übernehmen'} disabled={reading} onPress={fromPhoto} />
+          {reading && <ActivityIndicator color={C.accent} />}
+          <Text style={[s.muted, { fontSize: 12 }]}>Kochbuchseite fotografieren oder Screenshot aus Cookidoo, Chefkoch und Co. Die KI füllt Zutaten und Zubereitung aus.</Text>
+          {!!err && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{err}</Text>}
+        </View>
+      )}
+      <Text style={s.label}>Gericht</Text>
+      <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="z. B. Pfannkuchen mit Apfelmus" autoFocus={!recipe} />
+      <Text style={s.label}>Zutaten{parent ? ' (eine pro Zeile, mit Menge)' : ''}</Text>
+      <TextInput style={[s.input, { minHeight: 90 }]} multiline value={ing} onChangeText={setIng} placeholder={parent ? '250 g Mehl\n3 Eier\n500 ml Milch' : 'Was braucht man dafür? (wenn du es weißt)'} />
+      {parent && <>
+        <Text style={s.label}>Zubereitung</Text>
+        <TextInput style={[s.input, { minHeight: 120 }]} multiline value={steps} onChangeText={setSteps} placeholder={'1. Mehl, Eier und Milch glatt rühren\n2. 10 Minuten quellen lassen\n3. In der Pfanne goldbraun backen'} />
+        <Text style={s.label}>Link zum Rezept (optional)</Text>
+        <TextInput style={s.input} value={link} onChangeText={setLink} placeholder="https://cookidoo.de/... oder https://www.chefkoch.de/..." autoCapitalize="none" keyboardType="url" />
+      </>}
       {dup && <Text style={[s.muted, { fontSize: 13 }]}>Das gibt es schon in der Sammlung. Speichern zählt es als dein Lieblingsessen.</Text>}
       <View style={s.row}>
         <Button title={recipe ? 'Speichern' : parent ? 'Hinzufügen' : 'Vorschlagen'} disabled={!title.trim()} onPress={save} />

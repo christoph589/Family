@@ -248,8 +248,9 @@ export function topicUnderstanding(data: FamilyData, topicId: string): Understan
 }
 
 /** Eigene Termine an einem Tag. childIds = null zeigt alle (Eltern). Kinder sehen keine Termine der Geschwister. */
-export function eventsOn(d: FamilyData, date: string, childIds: string[] | null) {
-  const parentIds = parentsOf(d).map(p => p.id);
+/** childIds null = alle Termine. onlyOwn: nur Termine der Kinder selbst und der ganzen Familie, ohne reine Eltern-Termine. */
+export function eventsOn(d: FamilyData, date: string, childIds: string[] | null, onlyOwn = false) {
+  const parentIds = onlyOwn ? [] : parentsOf(d).map(p => p.id);
   const wd = new Date(date + 'T12:00:00').getDay();
   return (d.events ?? [])
     .filter(e => (e.weekly ? new Date(e.date + 'T12:00:00').getDay() === wd && e.date <= date : e.date === date))

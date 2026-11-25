@@ -247,6 +247,26 @@ Antworte nur mit JSON: {"cards":[{"unit":"Unit 1","front":"...","back":"..."}]}`
   return cards;
 }
 
+/** Rezept aus Fotos oder Screenshots (Kochbuch, Cookidoo, Webseite) abschreiben. */
+export async function extractRecipe(photos: string[], signal?: AbortSignal): Promise<{ title: string; ingredients: string[]; steps: string }> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = photos.slice(0, Math.min(6, limits.images?.maxCount ?? 0)).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  if (!images.length) throw { code: 'image_rejected' };
+  const prompt = `Auf den Bildern ist ein Kochrezept (Foto aus einem Kochbuch oder Screenshot einer App oder Webseite, z. B. Cookidoo/Thermomix).
+Schreib es vollständig ab, nichts erfinden:
+- "title": Name des Gerichts
+- "ingredients": Zutaten mit Menge, eine pro Eintrag, z. B. "250 g Mehl"
+- "steps": Zubereitung als nummerierte Schritte, je Schritt eine Zeile. Thermomix-Angaben (Zeit, Temperatur, Stufe) übernehmen.
+Antworte nur mit JSON: {"title":"...","ingredients":["..."],"steps":"1. ...\\n2. ..."}`;
+  const res = await sample.json<any>(prompt, { images, signal, cache: false });
+  const ingredients = (Array.isArray(res?.ingredients) ? res.ingredients : []).map((x: unknown) => str(x, 120)).filter(Boolean).slice(0, 60);
+  const title = str(res?.title, 80);
+  if (!title && !ingredients.length) throw { code: 'invalid_json' };
+  return { title, ingredients, steps: str(res?.steps, 4000) };
+}
+
 export async function extractVocab(photos: string[], langHint: string, signal?: AbortSignal): Promise<ExtractedVocab> {
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };

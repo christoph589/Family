@@ -174,6 +174,7 @@ export interface Recipe {
   /** Bewertung je Person: 2 = Lieblingsessen, 1 = mag ich, -1 = lieber nicht */
   votes?: Record<string, number>;
   /** Wer das Gericht vorgeschlagen hat (Person-ID) und wann */ by?: string; at?: string;
+  /** Zubereitung als Text und Link zum Originalrezept */ steps?: string; link?: string;
 }
 export interface ShopItem {
   id: string; title: string; done: boolean; at: string; by?: string;

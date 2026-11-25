@@ -17,7 +17,7 @@ export function Today({ childIds, parent }: { childIds: string[]; parent: boolea
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const people = peopleOf(data);
-  const events = eventsOn(data, today(), parent ? null : childIds);
+  const events = eventsOn(data, today(), parent ? null : childIds, true);
   const holiday = holidayLabel(data, today());
   const bdays = birthdaysOn(data, today()).filter(b => parent || childIds.includes(b.child.id));
   const year = Number(today().slice(0, 4));
