@@ -44,7 +44,8 @@ export async function parentSignIn(email: string, password: string) {
 }
 /** Gibt true zurück, wenn eine Bestätigungs-Mail nötig ist. */
 export async function parentSignUp(email: string, password: string): Promise<boolean> {
-  const { data, error } = await sb().auth.signUp({ email, password });
+  const emailRedirectTo = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : undefined;
+  const { data, error } = await sb().auth.signUp({ email, password, options: { emailRedirectTo } });
   if (error) throw friendly(error);
   return !data.session;
 }
