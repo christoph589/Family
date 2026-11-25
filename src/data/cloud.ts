@@ -125,6 +125,9 @@ const rpcErr = (e: { message?: string } | null) => {
   const m = e?.message ?? '';
   if (/not_operator/.test(m)) return new Error('Dieses Konto ist kein Operator.');
   if (/no_support_access/.test(m)) return new Error('Diese Familie hat den Support-Zugang nicht freigegeben.');
+  if (/name_mismatch/.test(m)) return new Error('Der Name stimmt nicht genau.');
+  if (/own_family/.test(m)) return new Error('Die eigene Familie kann hier nicht gelöscht werden.');
+  if (/op_rename|op_delete_family/.test(m) && /does not exist|Could not find/i.test(m)) return new Error('Bitte zuerst das SQL „fix-08-operator-verwalten“ ausführen.');
   if (/not_parent/.test(m)) return new Error('Nur Eltern können den Support-Zugang ändern.');
   if (/function .* does not exist|Could not find the function/i.test(m)) return new Error('Bitte zuerst das SQL „fix-07-operator“ in Supabase ausführen.');
   return friendly(e);
@@ -161,4 +164,12 @@ export async function supportStatus(fid: string): Promise<{ until: string | null
   const { data, error } = await sb().rpc('support_status', { fid });
   if (error) throw rpcErr(error);
   return (data as { until: string | null; visits: string[] } | null) ?? null;
+}
+export async function opRename(fid: string, name: string): Promise<void> {
+  const { error } = await sb().rpc('op_rename', { fid, new_name: name });
+  if (error) throw rpcErr(error);
+}
+export async function opDelete(fid: string, confirmName: string): Promise<void> {
+  const { error } = await sb().rpc('op_delete_family', { fid, confirm_name: confirmName });
+  if (error) throw rpcErr(error);
 }

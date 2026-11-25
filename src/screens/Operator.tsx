@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { OpFamily, opEnter, opFamilies } from '../data/cloud';
+import { OpFamily, opDelete, opEnter, opFamilies, opRename } from '../data/cloud';
+import { Popup } from '../ui/Popup';
 import { BRAND } from '../brand';
 import { Button } from '../ui/Button';
 import { LogoMark } from '../ui/Logo';
@@ -27,7 +28,7 @@ const FEAT: Record<string, string> = { kalender: '📅', geld: '💶', lernen: '
 const FEAT_NAME: Record<string, string> = { kalender: 'Kalender', geld: 'Geld', lernen: 'Lernen', essen: 'Essen', sync: 'Kalender-Sync' };
 const days = (iso: string | null) => (iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : Infinity);
 const statusOf = (f: OpFamily): Status => (days(f.created_at) < 7 ? 'neu' : days(f.updated_at) < 7 ? 'aktiv' : days(f.updated_at) < 30 ? 'ruhend' : 'inaktiv');
-const AI_EUR = 0.15; // geschätzte Kosten pro KI-Aufruf
+const AI_EUR = 0.02; // geschätzte Kosten pro KI-Aufruf (gemessen: 0,04 $ für die ersten Tests im Nov. 2026)
 
 /** Übersicht aller Familien für den Betreiber. Nur Kennzahlen, keine Inhalte. Hineingehen nur mit Freigabe der Familie. */
 export function Operator({ onClose, onEntered }: { onClose: () => void; onEntered: () => void }) {
@@ -39,6 +40,15 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Status | 'alle'>('alle');
   const [copied, setCopied] = useState(false);
+  const [edit, setEdit] = useState<{ f: OpFamily; mode: 'menu' | 'rename' | 'delete'; text: string; err: string } | null>(null);
+  const runEdit = async () => {
+    if (!edit) return;
+    try {
+      if (edit.mode === 'rename') await opRename(edit.f.id, edit.text);
+      else await opDelete(edit.f.id, edit.text);
+      setEdit(null); load();
+    } catch (e: any) { setEdit(x => x && { ...x, err: e.message }); }
+  };
   const load = () => { setErr(''); opFamilies().then(setList, e => setErr(e.message)); };
   useEffect(load, []);
   const all = list ?? [];
@@ -48,12 +58,14 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
     const url = 'https://christoph589.github.io/Family/';
     try { (navigator as any).clipboard?.writeText(`Probier mal ${BRAND.name}, unseren Familienplaner: ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { /* egal */ }
   };
-  const help = (f: OpFamily) => f.mine ? <Text style={[s.muted, { fontSize: 13 }]}>eure Familie</Text> : f.support_until ? (
+  const more = (f: OpFamily) => <Pressable accessibilityLabel={`Mehr zu ${f.name}`} onPress={() => setEdit({ f, mode: 'menu', text: '', err: '' })} style={{ paddingHorizontal: 8, paddingVertical: 6 }}><Text style={{ color: C.muted, fontSize: 20, fontWeight: '800' }}>⋯</Text></Pressable>;
+  const help = (f: OpFamily) => <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>{helpBtn(f)}{more(f)}</View>;
+  const helpBtn = (f: OpFamily) => f.mine ? <Text style={[s.muted, { fontSize: 13 }]}>eure Familie</Text> : f.support_until ? (
     <Button title={busy === f.id ? '…' : 'Helfen →'} disabled={!!busy} style={{ paddingVertical: 8, paddingHorizontal: 14, minHeight: 0 }}
       onPress={() => { setBusy(f.id); opEnter(f.id).then(onEntered, e => { setErr(e.message); setBusy(''); }); }} />
   ) : <Text style={[s.muted, { fontSize: 13 }]}>🔒 keine Freigabe</Text>;
   const Badge = ({ st }: { st: Status }) => <View style={{ alignSelf: 'flex-start', backgroundColor: STATUS[st].bg, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 }}><Text style={{ color: STATUS[st].fg, fontWeight: '800', fontSize: 13 }}>{STATUS[st].label}</Text></View>;
-  const COLS: [string, number, 'left' | 'right'][] = [['Familie', 2.2, 'left'], ['Status', 1, 'left'], ['Kinder · Geräte', 1.2, 'right'], ['Erledigt (7 T.)', 1.1, 'right'], ['Funktionen', 1.4, 'left'], ['KI heute', 0.8, 'right'], ['Zuletzt aktiv', 1.2, 'right'], ['', 1.3, 'right']];
+  const COLS: [string, number, 'left' | 'right'][] = [['Familie', 2.2, 'left'], ['Status', 1, 'left'], ['Kinder · Geräte', 1.2, 'right'], ['Erledigt (7 T.)', 1.1, 'right'], ['Funktionen', 1.4, 'left'], ['KI heute', 0.8, 'right'], ['Zuletzt aktiv', 1.2, 'right'], ['', 1.7, 'right']];
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -136,6 +148,36 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
           </>
         )}
       </ScrollView>
+      {edit && (
+        <Popup onClose={() => setEdit(null)}>
+          <View style={{ gap: 12 }}>
+            <Text style={s.h2}>{edit.f.name}</Text>
+            {edit.mode === 'menu' && (
+              <>
+                <Button ghost title="✏️ Umbenennen" onPress={() => setEdit({ ...edit, mode: 'rename', text: edit.f.name })} />
+                {!edit.f.mine && <Button ghost title="🗑️ Familie löschen" onPress={() => setEdit({ ...edit, mode: 'delete', text: '' })} />}
+                {!edit.f.mine && !edit.f.support_until && <Text style={[s.muted, { fontSize: 13 }]}>Hineingehen und Inhalte ändern geht nur, wenn die Familie den Support-Zugang freigibt.</Text>}
+              </>
+            )}
+            {edit.mode === 'rename' && (
+              <>
+                <TextInput style={s.input} value={edit.text} onChangeText={x => setEdit({ ...edit, text: x, err: '' })} autoFocus />
+                <Button title="Speichern" disabled={!edit.text.trim()} onPress={runEdit} />
+              </>
+            )}
+            {edit.mode === 'delete' && (
+              <>
+                <Text style={{ color: C.danger, fontWeight: '700' }}>Löscht die Familie endgültig mit allen Kindern, Terminen, Aufgaben, Geld und Geräten. Das lässt sich nicht rückgängig machen.</Text>
+                <Text style={s.muted}>Zum Bestätigen den Namen genau eintippen: {edit.f.name}</Text>
+                <TextInput style={s.input} value={edit.text} onChangeText={x => setEdit({ ...edit, text: x, err: '' })} autoFocus />
+                <Button title="Endgültig löschen" disabled={edit.text !== edit.f.name} onPress={runEdit} style={{ backgroundColor: C.danger }} />
+              </>
+            )}
+            {!!edit.err && <Text style={{ color: C.danger, fontWeight: '700' }}>{edit.err}</Text>}
+            <Button ghost title="Abbrechen" onPress={() => setEdit(null)} />
+          </View>
+        </Popup>
+      )}
     </View>
   );
 }
