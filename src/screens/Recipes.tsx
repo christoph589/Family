@@ -10,7 +10,8 @@ import { addDays, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 import { AI_ERROR, extractRecipe, getSample } from '../ai/generate';
 import { pickPhotos } from './Exam';
-import { ConflictNote, DishTile, pickDishPhoto, shrinkDishPhoto } from './FoodPlus';
+import { ConflictNote, cropDishPhoto, DishTile, pickDishPhoto, shrinkDishPhoto } from './FoodPlus';
+import { loadPhotos } from '../ui/PhotoImg';
 import { cloudEnabled, sb } from '../data/cloud';
 
 /** Rezept von einer Webseite übernehmen (Server liest das eingebettete Rezept, ohne KI). */
@@ -46,7 +47,7 @@ export function ranked(d: FamilyData) {
 
 export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent: boolean; onPlan: (r: Recipe, date: string, slot: MealSlot) => void; onShop: (r: Recipe) => void }) {
   const { data, update } = useFamily();
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<boolean | 'shot'>(false);
   const [edit, setEdit] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [show, setShow] = useState<string | null>(null);
@@ -66,9 +67,10 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
         <Text style={[s.muted, { flex: 1, minWidth: 200 }]}>
           {parent ? 'Ganz oben steht, was die Familie am liebsten isst. Antippen zum Einplanen.' : 'Bewerte die Gerichte oder schlag ein neues vor. Mama und Papa sehen das Ranking und planen danach.'}
         </Text>
+        {!adding && parent && <Button ghost title="📷 Aus Screenshot" accessibilityLabel="Rezept aus Screenshot oder Foto übernehmen" onPress={() => { setAdding('shot'); setEdit(null); }} />}
         {!adding && <Button title={parent ? '+ Gericht' : '+ Vorschlagen'} onPress={() => { setAdding(true); setEdit(null); }} />}
       </View>
-      {adding && <RecipeForm meId={meId} parent={parent} onDone={() => setAdding(false)} />}
+      {adding && <RecipeForm meId={meId} parent={parent} shot={adding === 'shot'} onDone={() => setAdding(false)} />}
       {!!msg && <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text>}
       {list.length === 0 && !adding && (
         <View style={[s.card, { alignItems: 'center' }]}>
@@ -173,7 +175,7 @@ function PlanPicker({ onPick }: { onPick: (date: string, slot: MealSlot) => void
   );
 }
 
-function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: boolean; recipe?: Recipe; onDone: () => void }) {
+function RecipeForm({ meId, parent, recipe, onDone, shot }: { meId: string; parent: boolean; recipe?: Recipe; onDone: () => void; shot?: boolean }) {
   const { data, update } = useFamily();
   const [title, setTitle] = useState(recipe?.title ?? '');
   const [ing, setIng] = useState(recipe?.ingredients.join('\n') ?? '');
@@ -187,6 +189,8 @@ function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: bo
   const [reading, setReading] = useState(false);
   const [err, setErr] = useState('');
   useEffect(() => { let on = true; if (parent) getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, [parent]);
+  // Über „Aus Screenshot“ geöffnet: gleich den Foto-Sammler zeigen
+  useEffect(() => { if (shot) fromPhoto(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function fromPhoto() {
     const p = await pickPhotos(6, 'Rezept fotografieren').catch(() => []);
     if (!p.length) return;
@@ -196,6 +200,11 @@ function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: bo
       if (r.title && !title.trim()) setTitle(r.title);
       if (r.ingredients.length) setIng(r.ingredients.join('\n'));
       if (r.steps) setSteps(r.steps);
+      if (r.dish && !photo) {
+        const [src] = await loadPhotos([p[r.dish.img]]).catch(() => [] as string[]);
+        const cut = src ? await cropDishPhoto(src, r.dish.box).catch(() => null) : null;
+        if (cut) { setPhoto(cut); setPhotoSrc(undefined); }
+      }
     } catch (e: any) { setErr(AI_ERROR[e?.code] ?? 'Das Rezept konnte nicht gelesen werden.'); }
     setReading(false);
   }
@@ -232,10 +241,11 @@ function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: bo
         <View style={{ gap: 4 }}>
           <Button ghost title={reading ? 'Lese Rezept …' : '📷 Aus Foto oder Screenshot übernehmen'} disabled={reading} onPress={fromPhoto} />
           {reading && <ActivityIndicator color={C.accent} />}
-          <Text style={[s.muted, { fontSize: 12 }]}>Kochbuchseite fotografieren oder Screenshot aus Cookidoo, Chefkoch und Co. Die KI füllt Zutaten und Zubereitung aus.</Text>
-          {!!err && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{err}</Text>}
+          <Text style={[s.muted, { fontSize: 12 }]}>Kochbuchseite fotografieren oder Screenshots aus Cookidoo, Chefkoch, Instagram und Co. (bis 6 Bilder). Die KI füllt Zutaten und Zubereitung aus und schneidet das Foto vom Gericht aus, falls eins drauf ist. Ein KI-Aufruf.</Text>
         </View>
       )}
+      {(reading || linking) && !ai && <ActivityIndicator color={C.accent} />}
+      {!!err && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{err}</Text>}
       <Text style={s.label}>Gericht</Text>
       <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="z. B. Pfannkuchen mit Apfelmus" autoFocus={!recipe} />
       <Text style={s.label}>Zutaten{parent ? ' (eine pro Zeile, mit Menge)' : ''}</Text>

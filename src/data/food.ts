@@ -252,3 +252,27 @@ export function autoFill(d: FamilyData, days: string[], slots: MealSlot[], peopl
   }
   return out;
 }
+
+// ---------- Diktat für die Einkaufsliste ----------
+
+const NUM: Record<string, string> = { zwei: '2', drei: '3', vier: '4', fünf: '5', fuenf: '5', sechs: '6', sieben: '7', acht: '8', neun: '9', zehn: '10', elf: '11', zwölf: '12', zwanzig: '20', dreißig: '30', fünfzig: '50', hundert: '100', zweihundert: '200', fünfhundert: '500', halbes: '½', halbe: '½', halben: '½' };
+const FILLER = /^(und|bitte|noch|auch|dann|außerdem|ausserdem|wir brauchen|brauchen wir|ich brauche|kauf|kaufen|kauft|schreib|schreibe|setz|setze|auf die liste|auf die einkaufsliste|mal|ähm|äh)\s+/i;
+
+/** Gesprochenen Satz in einzelne Einkäufe zerlegen: "Milch, zwei Gurken und Brot" → ["Milch", "2 Gurken", "Brot"] */
+export function parseSpoken(text: string): string[] {
+  return text
+    .replace(/[.!?;]/g, ',')
+    .split(/,|\bund\b|\bsowie\b|\baußerdem\b|\bausserdem\b|\bplus\b|\n/i)
+    .map(x => {
+      let t = x.trim();
+      for (let i = 0; i < 3; i++) t = t.replace(FILLER, '').trim();
+      t = t.replace(/\s+(bitte|noch|auch|kaufen|mitbringen|holen|auf die liste|auf die einkaufsliste)$/i, '').trim();
+      t = t.replace(/^(ein|eine|einen)\s+(kilo|kilogramm|liter|pfund|packung|packungen|dose|flasche|netz|beutel|glas|becher|tüte|bund|kiste|stück)\b/i, '1 $2');
+      t = t.replace(/^(ein paar|ein bisschen|eine|einen|einem|einer|ein|etwas|bisschen)\s+/i, m => (/paar/i.test(m) ? 'ein paar ' : ''));
+      t = t.split(/\s+/).map(w => NUM[w.toLowerCase()] ?? w).join(' ');
+      t = t.replace(/^(\d+|½)\s*(kilo|kilogramm)(?=\s|$)/i, '$1 kg').replace(/^(\d+|½)\s*(gramm)\b/i, '$1 g').replace(/^(\d+|½)\s*(liter)\b/i, '$1 l');
+      return t ? t[0].toUpperCase() + t.slice(1) : '';
+    })
+    .filter(t => t.length > 1)
+    .slice(0, 30);
+}

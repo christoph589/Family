@@ -33,6 +33,19 @@ export async function shrinkDishPhoto(uri: string, width?: number): Promise<stri
   return out.base64 ? `data:image/jpeg;base64,${out.base64}` : out.uri;
 }
 
+/** Ausschnitt (Anteile 0 bis 1) aus einem Bild, z. B. das Foto des Gerichts in einem Rezept-Screenshot. */
+export async function cropDishPhoto(uri: string, box: [number, number, number, number]): Promise<string | null> {
+  const full = await ImageManipulator.manipulate(uri).renderAsync();
+  const W = full.width, H = full.height;
+  const x = Math.max(0, Math.round(box[0] * W)), y = Math.max(0, Math.round(box[1] * H));
+  const w = Math.min(W - x, Math.round((box[2] - box[0]) * W)), h = Math.min(H - y, Math.round((box[3] - box[1]) * H));
+  if (w < 60 || h < 40) return null;
+  const ctx = ImageManipulator.manipulate(uri).crop({ originX: x, originY: y, width: w, height: h });
+  if (w > 480) ctx.resize({ width: 480 });
+  const out = await (await ctx.renderAsync()).saveAsync({ compress: 0.6, format: SaveFormat.JPEG, base64: true });
+  return out.base64 ? `data:image/jpeg;base64,${out.base64}` : out.uri;
+}
+
 /** Bild zum Gericht: eigenes Foto, sonst ein farbiger Platzhalter mit passendem Emoji. Kostet nichts. */
 export function DishTile({ title, photo, ingredients, style, emojiSize = 34 }: { title: string; photo?: string; ingredients?: string[]; style?: any; emojiSize?: number }) {
   if (photo) return <PhotoImg uri={photo} style={[{ borderRadius: 10 }, style]} resizeMode="cover" accessibilityIgnoresInvertColors />;

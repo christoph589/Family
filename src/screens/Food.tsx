@@ -11,7 +11,8 @@ import { addDays, daysOf, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 import { Recipes, recipeScore } from './Recipes';
 import { ConflictNote, DietEditor, DishTile, pickDishPhoto, WeekCheck, WeekPlanner } from './FoodPlus';
-import { recipeOf } from '../data/food';
+import { parseSpoken, recipeOf } from '../data/food';
+import { canDictate, DictateButton } from '../ui/Dictate';
 
 const SLOTS: { value: MealSlot; label: string; icon: string }[] = [
   { value: 'mittag', label: 'Mittag', icon: '☀️' }, { value: 'abend', label: 'Abend', icon: '🌙' },
@@ -320,6 +321,7 @@ export function Shopping({ who, meId }: { who: string; meId?: string }) {
     <View style={[s.card, { maxWidth: 720, width: '100%' }]}>
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
         <TextInput style={[s.input, { flex: 1 }]} value={text} onChangeText={setText} onSubmitEditing={add} placeholder="Was fehlt? z. B. Milch, Brot" returnKeyType="done" />
+        <DictateButton label="Einkäufe sprechen" onLive={setText} onText={t => setText(parseSpoken(t).join(', '))} />
         <Button title="+" accessibilityLabel="Hinzufügen" onPress={add} disabled={!text.trim()} />
       </View>
       {!!text.trim() && (
@@ -356,7 +358,7 @@ export function Shopping({ who, meId }: { who: string; meId?: string }) {
           ))}
         </>
       )}
-      <Text style={[s.muted, { fontSize: 13 }]}>Alle in der Familie können etwas eintragen. Mit Komma gehen mehrere auf einmal. Tipp auf einen Eintrag ändert Person, Datum und Laden.</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>Alle in der Familie können etwas eintragen. Mit Komma gehen mehrere auf einmal.{canDictate() ? ' Mit 🎤 einfach sagen, z. B. „Milch, zwei Gurken und Brot“, dann auf + tippen.' : ''} Tipp auf einen Eintrag ändert Person, Datum und Laden.</Text>
     </View>
   );
 }
