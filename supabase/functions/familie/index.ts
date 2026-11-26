@@ -7,6 +7,7 @@
 // POST /familie {action:'tick', token}  kommt alle 5 Minuten vom Zeitplan aus fix-05 und verschickt fällige Erinnerungen
 // POST /familie {action:'ai', prompt, images} KI-Test und Vokabel-Foto, nur für Mitglieder einer Familie,
 //      höchstens AI_DAILY Aufrufe pro Familie und Tag. Braucht das Secret ANTHROPIC_API_KEY und fix-03-ki.sql.
+//      Zusätzlich Obergrenze für alle Familien zusammen: Secret AI_GLOBAL_DAILY_USD (Standard 10 US-Dollar pro Tag).
 //
 // Einspielen: Supabase Dashboard > Edge Functions > Deploy a new function > Via Editor,
 // Name "familie", diesen Code einfügen, Deploy. Danach bei der Funktion
@@ -179,6 +180,22 @@ const AI_DAILY = 30;
 const IMG = /^data:(image\/(?:jpeg|png|webp|gif)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/;
 const berlinDay = () => new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(new Date());
 
+/** Familie des angemeldeten Geräts. Abgelaufene Support-Zugänge zählen nicht; die eigene Familie geht vor. */
+async function memberOf(admin: any, userId: string): Promise<{ family_id: string; role: string } | null> {
+  const { data } = await admin.from('members').select('family_id, role, until').eq('user_id', userId);
+  const ok = (data ?? []).filter((m: any) => !m.until || new Date(m.until).getTime() > Date.now());
+  return ok.find((m: any) => !m.until) ?? ok[0] ?? null;
+}
+
+/** Obergrenze für alle Familien zusammen pro Tag (US-Dollar). Schützt vor einer Kostenexplosion, falls jemand das Familienlimit umgeht. */
+const AI_GLOBAL_USD = Number(Deno.env.get('AI_GLOBAL_DAILY_USD') ?? '10');
+async function globalBudgetLeft(admin: any) {
+  const { data, error } = await admin.from('ai_usage').select('micro').eq('day', berlinDay());
+  if (error) return true; // fix-11 fehlt: nur Familienlimit
+  const usd = (data ?? []).reduce((a: number, r: any) => a + Number(r.micro ?? 0), 0) / 1e6;
+  return usd < AI_GLOBAL_USD;
+}
+
 async function runAi(body: any, userId: string, admin: any) {
   if (!AI_KEY) return json({ error: 'no_key' }, 503);
   const prompt = String(body.prompt ?? '');
@@ -193,17 +210,26 @@ async function runAi(body: any, userId: string, admin: any) {
   }
 
   // Nur Mitglieder einer Familie, mit Tageslimit pro Familie (schützt vor hohen Kosten)
-  const { data: mem } = await admin.from('members').select('family_id').eq('user_id', userId).limit(1);
-  if (!mem?.length) return json({ error: 'not_member' }, 403);
-  const fid = mem[0].family_id;
+  const mem = await memberOf(admin, userId);
+  if (!mem) return json({ error: 'not_member' }, 403);
+  const fid = mem.family_id;
   const fam = await famFlags(admin, fid);
   if (!fam) return json({ error: 'no_sql' }, 500);
   if (fam.features?.ki === false) return json({ error: 'disabled' }, 403);
+  if (!await globalBudgetLeft(admin)) return json({ error: 'daily_limit' }, 429);
   const limit = fam.ai_limit ?? AI_DAILY;
   const day = berlinDay();
-  const used = fam.ai_day === day ? fam.ai_count : 0;
-  if (used >= limit) return json({ error: 'daily_limit' }, 429);
-  await admin.from('families').update({ ai_day: day, ai_count: used + 1 }).eq('id', fid);
+  let used: number;
+  // fix-13: Zähler in einem Schritt hochsetzen, damit viele gleichzeitige Aufrufe das Limit nicht umgehen
+  const take = await admin.rpc('ai_take', { fid, lim: limit });
+  if (!take.error) {
+    if (take.data == null) return json({ error: 'daily_limit' }, 429);
+    used = Number(take.data) - 1;
+  } else {
+    used = fam.ai_day === day ? fam.ai_count : 0;
+    if (used >= limit) return json({ error: 'daily_limit' }, 429);
+    await admin.from('families').update({ ai_day: day, ai_count: used + 1 }).eq('id', fid);
+  }
 
   const client = new Anthropic({ apiKey: AI_KEY });
   try {
@@ -258,8 +284,10 @@ async function runJudge(body: any, userId: string, admin: any) {
   const word = String(body.word ?? '').slice(0, 200), solution = String(body.solution ?? '').slice(0, 300), answer = String(body.answer ?? '').slice(0, 200);
   const lang = String(body.lang ?? 'Englisch').slice(0, 30), dir = body.dir === 'to_foreign' ? 'to_foreign' : 'to_german';
   if (!word || !solution || !answer) return json({ error: 'bad_request' }, 400);
-  const { data: mem } = await admin.from('members').select('family_id').eq('user_id', userId).limit(1);
-  if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const m0 = await memberOf(admin, userId);
+  if (!m0) return json({ error: 'not_member' }, 403);
+  const mem = [m0];
+  if (!await globalBudgetLeft(admin)) return json({ error: 'daily_limit' }, 429);
   const fam = await famFlags(admin, mem[0].family_id);
   if (fam?.features?.ki === false || fam?.features?.vokabeln === false) return json({ error: 'disabled' }, 403);
   const key = mem[0].family_id + '|' + berlinDay();
@@ -375,8 +403,9 @@ async function pushAction(body: any, userId: string, admin: any) {
   let cfg;
   try { cfg = await vapid(admin); } catch { return json({ error: 'no_sql' }, 500); }
   if (body.action === 'push_key') return json({ key: cfg.public_key });
-  const { data: mem } = await admin.from('members').select('family_id').eq('user_id', userId).limit(1);
-  if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const m0 = await memberOf(admin, userId);
+  if (!m0) return json({ error: 'not_member' }, 403);
+  const mem = [m0];
   const sub = body.sub;
   if (!sub?.endpoint || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) return json({ error: 'bad_request' }, 400);
   if (body.action === 'push_sub') {
@@ -632,9 +661,9 @@ async function icloudSeries(b: any, op: 'save' | 'delete') {
 }
 
 async function icloudAction(body: any, userId: string, admin: any) {
-  const { data: mem } = await admin.from('members').select('family_id, role').eq('user_id', userId).limit(1);
-  if (!mem?.length) return json({ error: 'not_member' }, 403);
-  const fid = mem[0].family_id, parent = mem[0].role === 'eltern';
+  const m0 = await memberOf(admin, userId);
+  if (!m0) return json({ error: 'not_member' }, 403);
+  const fid = m0.family_id, parent = m0.role === 'eltern';
   if (body.action === 'icloud_connect') {
     if (!parent) return json({ error: 'parents_only' }, 403);
     const c = { u: String(body.user ?? '').trim(), p: String(body.pass ?? '').replace(/\s|-/g, '') };
@@ -835,9 +864,9 @@ async function googleDelete(c: GCred, b: any) {
 }
 
 async function googleAction(body: any, userId: string, admin: any) {
-  const { data: mem } = await admin.from('members').select('family_id, role').eq('user_id', userId).limit(1);
-  if (!mem?.length) return json({ error: 'not_member' }, 403);
-  const fid = mem[0].family_id, parent = mem[0].role === 'eltern';
+  const m0 = await memberOf(admin, userId);
+  if (!m0) return json({ error: 'not_member' }, 403);
+  const fid = m0.family_id, parent = m0.role === 'eltern';
   if (body.action === 'google_status') { const g = await googleLoad(admin, fid); return json({ connected: !!g, email: g?.email, ready: !!(G_ID && G_SECRET) }); }
   if (!parent) return json({ error: 'parents_only' }, 403);
   if (body.action === 'google_auth_url') {
@@ -974,9 +1003,9 @@ async function untisWeek(c: UntisCred, id: number, from: string, to: string) {
 }
 
 async function untisAction(body: any, userId: string, admin: any) {
-  const { data: mem } = await admin.from('members').select('family_id, role').eq('user_id', userId).limit(1);
-  if (!mem?.length) return json({ error: 'not_member' }, 403);
-  const fid = mem[0].family_id, parent = mem[0].role === 'eltern';
+  const m0 = await memberOf(admin, userId);
+  if (!m0) return json({ error: 'not_member' }, 403);
+  const fid = m0.family_id, parent = m0.role === 'eltern';
   // Mehrere Zugänge (z. B. Kinder an verschiedenen Schulen): slot 0 = 'untis', slot 1 = 'untis2' …
   const slot = Math.max(0, Math.min(3, Number(body.slot) || 0));
   const kind = slot ? `untis${slot + 1}` : 'untis';
@@ -1046,6 +1075,8 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       const { data: user } = await userClient.auth.getUser();
       if (!user?.user) return json({ error: 'not_signed_in' }, 401);
       const body = await req.json();
+      // Abruf fremder Adressen nur für Mitglieder einer Familie (sonst nutzbar als offener Abruf-Dienst)
+      if ((body.action === 'import' || body.action === 'recipe_import') && !await memberOf(admin, user.user.id)) return json({ error: 'not_member' }, 403);
       if (body.action === 'ai') return await runAi(body, user.user.id, admin);
       if (body.action === 'judge') return await runJudge(body, user.user.id, admin);
       if (String(body.action).startsWith('push_')) return await pushAction(body, user.user.id, admin);
@@ -1070,6 +1101,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
     }
     return new Response('Not found', { status: 404, headers: cors });
   } catch (e) {
-    return json({ error: 'server', message: String((e as Error)?.message ?? e) }, 500);
+    console.error(e);
+    return json({ error: 'server' }, 500);
   }
 });

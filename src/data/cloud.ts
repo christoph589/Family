@@ -35,6 +35,10 @@ function friendly(e: { message?: string } | null): Error {
   if (m.includes('already registered')) return new Error('Für diese E-Mail gibt es schon ein Konto. Bitte anmelden.');
   if (m.includes('Anonymous sign-ins are disabled')) return new Error('Kindergeräte sind im Server noch nicht freigeschaltet (Anonymous sign-ins).');
   if (m.includes('parent_needs_account')) return new Error('Eltern brauchen ein Konto mit E-Mail.');
+  if (m.includes('too_many_attempts')) return new Error('Zu viele falsche Codes. Bitte in einer Stunde noch einmal versuchen.');
+  if (m.includes('too_many_families')) return new Error('Mit diesem Konto gibt es schon zu viele Familien.');
+  if (m.includes('too_big')) return new Error('Zu viele Daten auf einmal. Bitte große Fotos entfernen.');
+  if (m.includes('not_parent')) return new Error('Das dürfen nur Eltern.');
   return new Error(m || 'Keine Verbindung zum Server.');
 }
 
@@ -105,12 +109,29 @@ export async function joinFamily(code: string, role: 'eltern' | 'kind', childId?
   if (role === 'kind') await ensureSession();
   const { data, error } = await sb().rpc('join_family', { code, as_role: role, child: childId ?? null });
   if (error) throw friendly(error);
+  // Seit fix-13 liefert der Server bei falschem Code null (damit der Fehlversuch gezählt bleibt)
+  if (!data) throw friendly({ message: 'unknown_code' });
   return data as string;
 }
 
 export async function joinCode(fid: string): Promise<string | null> {
+  const r = await sb().rpc('family_join_code', { fid });
+  if (!r.error) return (r.data as string | null) ?? null;
+  // Vor fix-13: direkt aus der Tabelle
   const { data } = await sb().from('families').select('join_code').eq('id', fid).single();
   return data?.join_code ?? null;
+}
+
+/** Alle Geräte und Konten der Familie (nur Eltern, braucht fix-13). null = Server noch nicht umgestellt. */
+export interface Device { user_id: string; role: 'eltern' | 'kind'; child_id: string | null; email: string | null; created_at: string; last_seen: string | null; until: string | null; me: boolean }
+export async function familyDevices(fid: string): Promise<Device[] | null> {
+  const { data, error } = await sb().rpc('family_devices', { fid });
+  if (error) { if (/family_devices|function/i.test(error.message)) return null; throw friendly(error); }
+  return data as Device[];
+}
+export async function removeDevice(fid: string, uid: string) {
+  const { error } = await sb().rpc('remove_device', { fid, uid });
+  if (error) throw friendly(error);
 }
 export async function rotateJoinCode(fid: string): Promise<string> {
   const { data, error } = await sb().rpc('rotate_join_code', { fid });
