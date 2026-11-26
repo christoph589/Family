@@ -78,6 +78,10 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
   const inUnits = book.entries.filter(e => picked.includes(e.unit));
   const chosen = inUnits.filter(e => !off.has(keyOf(e)));
   const fresh = chosen.filter(e => !known.has(norm(e.front)));
+  // Sind alle gewählten Wörter schon im Kasten: den Kasten mit den meisten davon zum Weiterüben anbieten
+  const home = fresh.length || !chosen.length ? null : (data?.vocab ?? []).filter(v => v.childId === book.childId)
+    .map(v => ({ v, n: v.cards.filter(c => chosen.some(e => norm(e.front) === norm(c.front))).length }))
+    .sort((a, b) => b.n - a.n)[0]?.v ?? null;
   function tapWord(k: string) {
     if (rangeFrom === '') { setRangeFrom(k); return; }
     if (rangeFrom) {
@@ -202,10 +206,13 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
           )}
           {picked.length > 0 && (
             <View style={s.row}>
-              <Button title={fresh.length ? `${fresh.length} Vokabeln lernen` : chosen.length ? 'Schon alle im Kasten' : 'Erst Wörter wählen'} disabled={!fresh.length} onPress={start} />
+              {home
+                ? <Button color={C.ok} title="📚 Diese Wörter jetzt üben" onPress={() => { setSel([]); setOff(new Set()); setShowWords(false); onStarted(home.id); }} />
+                : <Button title={fresh.length ? `${fresh.length} Vokabeln lernen` : 'Erst Wörter wählen'} disabled={!fresh.length} onPress={start} />}
               <Button ghost title="Auswahl aufheben" onPress={() => { setSel([]); setOff(new Set()); setRangeFrom(null); }} />
             </View>
           )}
+          {home && <Text style={{ color: C.ok, fontWeight: '700', fontSize: 13 }}>Diese Wörter sind schon in deinem Kasten „{home.title}“. Mit dem grünen Knopf übst du sie gleich.</Text>}
           {picked.length > 0 && fresh.length < chosen.length && fresh.length > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Wörter, die schon in einem deiner Kästen sind, kommen nicht doppelt dazu.</Text>}
         </>
       )}
