@@ -380,7 +380,7 @@ const fmtP = (n: number) => String(n).replace('.', ',');
 export function PaperScore({ sheet, onDone }: { sheet: Worksheet; onDone?: () => void }) {
   const { update } = useFamily();
   const pts = sheet.exam?.points ?? sheet.questions.map(() => 1);
-  const ai = sheet.scan?.ai;
+  const ai = sheet.scan?.ai ?? (sheet.aiCheck?.pts ? { pts: sheet.aiCheck.pts, notes: [] as string[], unsure: [] as boolean[] } : undefined);
   const [got, setGot] = useState<(number | null)[]>(sheet.questions.map((_, i) => ai?.pts[i] ?? null));
   const set = (i: number, v: number) => setGot(g => g.map((x, j) => (j === i ? Math.min(pts[i], Math.max(0, v)) : x)));
   const all = got.every(x => x !== null);
@@ -388,13 +388,13 @@ export function PaperScore({ sheet, onDone }: { sheet: Worksheet; onDone?: () =>
   const results = vals.map((v, i) => v >= pts[i] / 2);
   const score = examScore({ ...sheet, paperScore: vals }, results);
   const save = (retry: boolean) => {
-    update(d => finishCheck(d, { ...sheet, paperScore: vals, answers: sheet.questions.map(() => 'auf Papier') }, results, retry));
+    update(d => finishCheck(d, { ...sheet, paperScore: vals, answers: sheet.answers ?? sheet.questions.map(() => 'auf Papier') }, results, retry));
     onDone?.();
   };
   return (
     <View style={{ gap: 8, borderWidth: ai ? 0 : 2, borderColor: C.accent, borderRadius: 16, padding: ai ? 0 : 12 }}>
       {!ai && <Text style={s.h2}>Punkte eintragen</Text>}
-      <Text style={[s.muted, { fontSize: 13 }]}>{ai ? 'Vorschlag der KI. Bitte mit dem Foto und dem Lösungsblatt abgleichen und bei Bedarf ändern. Erst „Fertig“ zählt.' : 'Pro Aufgabe die erreichten Punkte, halbe gehen auch. „Voll“ setzt die Höchstpunktzahl.'}</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>{ai ? `Vorschlag der KI. Bitte mit ${sheet.scan ? 'dem Foto' : 'den Antworten oben'} und dem Lösungsblatt abgleichen und bei Bedarf ändern. Erst „Fertig“ zählt.` : 'Pro Aufgabe die erreichten Punkte, halbe gehen auch. „Voll“ setzt die Höchstpunktzahl.'}</Text>
       {sheet.questions.map((q, i) => (
         <View key={i} style={{ gap: 4, paddingVertical: 6, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

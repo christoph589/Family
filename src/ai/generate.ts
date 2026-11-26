@@ -263,25 +263,36 @@ Antworte nur mit JSON: {"tasks":[{"pts":2,"note":"...","unsure":false}],"summary
   };
 }
 
-/** Prüft am Gerät getippte Antworten gegen die Musterlösung, auch wenn sie anders formuliert sind. Nur Text, keine Fotos. */
-export async function checkAnswers(sheet: { title: string; questions: Question[] }, answers: string[], signal?: AbortSignal): Promise<{ ok: boolean[]; notes: string[] }> {
+/** Prüft am Gerät getippte Antworten gegen die Musterlösung, nach Sinn statt Wortlaut. Bei Probe-Arbeiten mit Teilpunkten. */
+export async function checkAnswers(sheet: { title: string; questions: Question[]; exam?: { points: number[] } }, answers: string[], signal?: AbortSignal): Promise<{ ok: boolean[]; notes: string[]; pts?: number[] }> {
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
-  const list = sheet.questions.map((q, i) => `Aufgabe ${i + 1}: ${q.q}${q.options ? ` [Auswahl: ${q.options.join(' / ')}]` : ''}\n  Musterlösung: ${q.solution}\n  Antwort des Kindes: ${answers[i] || '(leer)'}`).join('\n');
-  const prompt = `Du bist eine faire Lehrkraft und gleichst die Antworten eines Kindes mit der Musterlösung ab: ${sheet.title}.
+  const max = sheet.exam?.points;
+  const list = sheet.questions.map((q, i) => `### Aufgabe ${i + 1}${max ? ` (${max[i]} Punkte)` : ''}
+Frage: ${q.q}${q.options ? `\nAuswahl: ${q.options.join(' / ')}` : ''}${q.type === 'table' ? '\n(Tabelle, Werte zeilenweise mit | getrennt)' : ''}
+Musterlösung: ${q.solution}
+Antwort des Kindes: ${answers[i] || '(leer)'}`).join('\n\n');
+  const prompt = `Du bist eine erfahrene, faire Grundschul- und Unterstufenlehrkraft. Du korrigierst die getippten Antworten eines Kindes: ${sheet.title}.
+Die Musterlösung ist nur EIN Beispiel für eine richtige Antwort. Bewerte nach Inhalt und Verständnis, nicht nach Wortlaut.
 
 ${list}
 
-Regeln:
-- "ok": true, wenn die Antwort inhaltlich stimmt, auch mit anderen Worten, kleinen Rechtschreibfehlern, anderer Schreibweise (0,75 = 3/4) oder in Kindersprache.
-- Bei Teilaufgaben (a, b, ...) nur ok, wenn alle Teile im Kern stimmen.
-- "note": ein kurzer Satz an die Eltern, was stimmt oder fehlt.
+So bewertest du:
+- Richtig ist, was fachlich dasselbe aussagt: andere Worte, Kindersprache, Umschreibungen, Synonyme ("vor den 2 schwarzen" = "links neben den zwei schwarzen Tasten"), andere Reihenfolge, Rechtschreib- und Tippfehler, Groß/Klein, fehlende Einheit wenn eindeutig, 0,75 = 3/4.
+- Eine ausführlichere oder knappere Antwort ist richtig, solange der Kern stimmt. Zusätzliche richtige Angaben schaden nicht.
+- Bei mehreren Teilen (a, b, ... oder "nenne zwei") jeden Teil einzeln prüfen.
+- Bei offenen Fragen ("Wo kann ...", "Nenne ein Beispiel") zählt jede fachlich passende Antwort, auch wenn sie nicht in der Musterlösung steht.
+- Falsch ist nur, was fachlich nicht stimmt, fehlt oder die Frage verfehlt.
+${max ? `- "pts": Punkte von 0 bis zur Höchstpunktzahl, halbe Punkte erlaubt. Jeder richtige Teil gibt seinen Anteil. Ganz richtig = volle Punkte.
+` : ''}- "ok": true, wenn die Antwort im Kern richtig ist${max ? ' (mindestens die Hälfte der Punkte)' : ''}.
+- "note": ein kurzer Satz an die Eltern: was stimmt, was fehlt.
 
-Antworte nur mit JSON: {"tasks":[{"ok":true,"note":"..."}]} mit genau ${sheet.questions.length} Einträgen in der Reihenfolge der Aufgaben.`;
+Denke jede Aufgabe kurz durch, antworte dann nur mit JSON: {"tasks":[{"ok":true,${max ? '"pts":2,' : ''}"note":"..."}]} mit genau ${sheet.questions.length} Einträgen in der Reihenfolge der Aufgaben.`;
   const res = await sample.json<any>(prompt, { signal, cache: false });
   const tasks: any[] = Array.isArray(res?.tasks) ? res.tasks : [];
   if (tasks.length !== sheet.questions.length) throw { code: 'invalid_json' };
-  return { ok: tasks.map(x => x?.ok === true), notes: tasks.map(x => str(x?.note, 200)) };
+  const pts = max ? max.map((m, i) => Math.min(m, Math.max(0, Math.round((Number(tasks[i]?.pts) || 0) * 2) / 2))) : undefined;
+  return { ok: tasks.map((x, i) => (pts ? pts[i] >= max![i] / 2 : x?.ok === true)), notes: tasks.map(x => str(x?.note, 200)), ...(pts ? { pts } : {}) };
 }
 
 const str = (v: unknown, max = 500) => String(v ?? '').trim().slice(0, max);

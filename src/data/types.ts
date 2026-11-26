@@ -119,7 +119,7 @@ export interface Worksheet {
   paperScore?: number[];
   /** Auf Papier geschrieben und abfotografiert: KI macht eine Vorkorrektur, Eltern bestätigen */
   /** KI-Abgleich digitaler Antworten mit der Lösung (Vorschlag für die Eltern) */
-  aiCheck?: { ok: boolean[]; notes: string[] };
+  aiCheck?: { ok: boolean[]; notes: string[]; pts?: number[] };
   scan?: { photos: string[]; at: string; by?: string; ai?: { pts: number[]; notes: string[]; unsure: boolean[]; summary?: string }; error?: string };
 }
 

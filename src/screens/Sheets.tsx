@@ -260,9 +260,26 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
   const ai = sheet.aiCheck;
   const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '') || !!ai?.ok[i]));
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (!ai && needsCheck(sheet)) { setBusy(true); runCheck(sheet, update).finally(() => setBusy(false)); } }, [sheet.id]);
+  useEffect(() => { if ((!ai || (sheet.exam && !ai.pts)) && needsCheck(sheet)) { setBusy(true); runCheck(sheet, update).finally(() => setBusy(false)); } }, [sheet.id]);
   const bonus = data ? selfBonus(data, sheet, understandingOf(res.filter(Boolean).length, sheet.questions.length)) : 0;
   const score = sheet.exam ? examScore(sheet, res) : null;
+  // Probe-Arbeit mit KI-Teilpunkten: Antworten zeigen, darunter Punkte je Aufgabe bestätigen
+  if (sheet.exam && ai?.pts) return (
+    <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
+      <Text style={[s.text, { fontWeight: '700' }]}>{name}: {sheet.title}</Text>
+      {sheet.questions.map((q, i) => (
+        <View key={i} style={{ gap: 2, borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }}>
+          <View style={[s.row, { justifyContent: 'space-between' }]}>
+            <Text style={s.label}>Aufgabe {i + 1}</Text>
+            <Text style={{ fontWeight: '800', fontSize: 13, color: ai.pts![i] >= sheet.exam!.points[i] ? C.ok : ai.pts![i] > 0 ? C.warn : C.danger }}>🤖 {String(ai.pts![i]).replace('.', ',')} / {sheet.exam!.points[i]}</Text>
+          </View>
+          <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} />
+          {ai.notes[i] ? <Text style={{ fontSize: 13, color: C.muted }}>🤖 {ai.notes[i]}</Text> : null}
+        </View>
+      ))}
+      <PaperScore sheet={sheet} />
+    </View>
+  );
   return (
     <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
       <Text style={[s.text, { fontWeight: '700' }]}>{name}: {sheet.title}</Text>
