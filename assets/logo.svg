@@ -5,9 +5,5 @@
   <circle cx="46" cy="64" r="11" fill="#ffc98f"/>
   <circle cx="82" cy="62" r="12" fill="#ff7a6b"/>
   <circle cx="64" cy="72" r="8.5" fill="#7ee0b5"/>
-  <g fill="none" stroke="#fff" stroke-linecap="round">
-    <path d="M22 76 C34 104 94 104 106 76" stroke-width="8"/>
-    <path d="M34 90 C50 84 66 92 88 84" stroke-width="4.5" opacity=".7"/>
-    <path d="M44 99 C58 93 74 99 90 92" stroke-width="4" opacity=".5"/>
-  </g>
+  <path d="M22 76 C34 104 94 104 106 76" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
 </svg>

@@ -1,6 +1,6 @@
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
-/** Bildmarke: Dach über drei Köpfen in einem Nest. */
+/** Bildmarke: Dach über drei Köpfen, darunter ein Lächeln. */
 export function LogoMark({ size = 40, round = true }: { size?: number; round?: boolean }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 128 128">
@@ -13,8 +13,6 @@ export function LogoMark({ size = 40, round = true }: { size?: number; round?: b
       <Circle cx="82" cy="62" r="12" fill="#ff7a6b" />
       <Circle cx="64" cy="72" r="8.5" fill="#7ee0b5" />
       <Path d="M22 76 C34 104 94 104 106 76" fill="none" stroke="#fff" strokeWidth={8} strokeLinecap="round" />
-      <Path d="M34 90 C50 84 66 92 88 84" fill="none" stroke="#fff" strokeWidth={4.5} strokeLinecap="round" opacity={0.7} />
-      <Path d="M44 99 C58 93 74 99 90 92" fill="none" stroke="#fff" strokeWidth={4} strokeLinecap="round" opacity={0.5} />
     </Svg>
   );
 }
