@@ -17,6 +17,7 @@ import { Avatar } from './src/ui/Avatar';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
 import { AiPrivacy, Family, Holiday, ParentPin } from './src/screens/Family';
+import { WeatherSetup } from './src/ui/Weather';
 import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import { Kiosk, wantsWall } from './src/ui/Kiosk';
@@ -321,7 +322,7 @@ function Root() {
       </View>
       <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingTop: 6, paddingBottom: 170 }]}>
         {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
-        {tab === 'heute' && <Today childIds={childIds} parent={parent} meId={profile.id} />}
+        {tab === 'heute' && <Today childIds={childIds} parent={parent} meId={profile.id} admin={admin} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} meId={profile.id} />}
         {tab === 'kalender' && <Timetable childIds={childIds} parent={false} />}
         {tab === 'lernen' && <Learn childIds={childIds} parent={parent} meId={profile.id} admin={admin} />}
@@ -362,6 +363,7 @@ function Root() {
         )}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Family />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <ParentPin />}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <WeatherSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <AiPrivacy />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
         {tab === 'aufgaben' && admin && showSec && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}

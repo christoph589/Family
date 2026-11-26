@@ -220,6 +220,8 @@ export interface FamilyData {
   giftOccasions?: GiftOccasion[];
   wishes?: Wish[];
   settings?: { /** Einwilligung der Eltern zur KI-Verarbeitung von Fotos */ aiConsent?: { at: string; by?: string }; /** Bundesland, z. B. DE-NW (wenn keine automatischen Ferien gesetzt sind) */ region?: string; googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
+    /** Wohnort fürs Wetter (nur Ort und grobe Koordinaten, kein Gerätestandort). off = Wetter ausgeblendet */
+    weather?: { name: string; lat: number; lon: number; off?: boolean };
     /** Automatische Ferien und Feiertage nach Bundesland */
     /** Eingebundene fremde Kalender (iCal-Links von iCloud, Google, Outlook, WebUntis) */
     feeds?: Feed[];

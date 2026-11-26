@@ -17,6 +17,7 @@ import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar, PersonHead } from '../ui/Avatar';
 import { useFeedItems } from '../data/feeds';
 import { useIcloudItems } from '../data/icloud';
+import { WeatherPill } from '../ui/Weather';
 
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 
@@ -59,8 +60,10 @@ function BathBoard({ data, date, now, controls, toggle, onTouch }: { data: Famil
           <Text style={{ fontSize: 18, color: C.muted, fontWeight: '700' }}>{now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })} · {PART_LABEL[part]}</Text>
           {!!BUILD && <Text style={{ fontSize: 11, color: C.muted, opacity: 0.6 }}>Stand {BUILD}</Text>}
         </View>
+        {width >= 700 && <WeatherPill big />}
         {controls}
       </View>
+      {width < 700 && <WeatherPill />}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {data.children.map(c => <BathColumn key={c.id} data={data} child={c} date={date} part={part} toggle={toggle} rowH={rowH} />)}
       </View>
@@ -194,6 +197,7 @@ export function Board({ onExit }: { onExit: () => void }) {
           </Text>
           {!!BUILD && <Text style={{ fontSize: 11, color: C.muted, opacity: 0.6 }}>Stand {BUILD}</Text>}
         </View>
+        <WeatherPill big={wide} />
         {holiday && (
           <View style={{ backgroundColor: C.warnSoft, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 8 }}>
             <Text style={{ fontWeight: '800', color: C.fg, fontSize: 16 }}>🏖️ {holiday}</Text>
