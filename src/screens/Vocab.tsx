@@ -9,7 +9,7 @@ import {
   LANGS, MASTERED, Reward, RoundResult, buildRound, checkTyped, choicesFor, dueCards, finishRound, langOf, levelOf,
   liveStreak, masteredCount, modeFor, newCards, parseVocabList, DAILY_CAP,
 } from '../data/vocab';
-import { AI_ERROR, extractVocab, generateHints, getSample } from '../ai/generate';
+import { AI_ERROR, extractVocab, generateHints, getSample, judgeAnswer } from '../ai/generate';
 import { collectPhotos } from './PhotoCollector';
 import { Button, Segmented } from '../ui/Button';
 import { C, SHADOW, grad, s } from '../ui/theme';
@@ -269,7 +269,8 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
   const [results, setResults] = useState<RoundResult[]>([]);
   const [combo, setCombo] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
-  const [answered, setAnswered] = useState<null | { ok: boolean; chosen?: string; typo?: boolean }>(null);
+  const [answered, setAnswered] = useState<null | { ok: boolean; chosen?: string; typo?: boolean; note?: string; judged?: boolean }>(null);
+  const [judging, setJudging] = useState(false);
   const [flipped, setFlipped] = useState(false);
   const [typed, setTyped] = useState('');
   const [reward, setReward] = useState<Reward | null>(null);
@@ -301,7 +302,24 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
 
   useEffect(() => { if (card && askForeign && canSpeak() && plan?.mode !== 'type') speak(card.front, L.speech); }, [card?.id, idx]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function answer(ok: boolean, extra: { chosen?: string; typo?: boolean } = {}) {
+  /** Schreibantwort prüfen: erst lokal, bei "falsch" fragt die App kurz die KI, ob es inhaltlich doch stimmt. */
+  async function submitTyped() {
+    if (!card || answered || judging || !typed.trim()) return;
+    const dirKey = plan?.reverse ? 'fx' : 'de';
+    const liveC = data?.vocab?.find(v => v.id === deck.id)?.cards.find(c => c.id === card.id);
+    const r = checkTyped(typed, solution, liveC?.ok?.[dirKey] ?? []);
+    if (r !== 'wrong') { answer(true, { typo: r === 'typo' }); return; }
+    setJudging(true);
+    const j = await judgeAnswer(ask, solution, typed.trim(), deck.lang, !!plan?.reverse);
+    setJudging(false);
+    if (j?.ok) {
+      const a = typed.trim();
+      update(d => ({ ...d, vocab: (d.vocab ?? []).map(v => (v.id !== deck.id ? v : { ...v, cards: v.cards.map(c => (c.id !== card.id ? c : { ...c, ok: { ...c.ok, [dirKey]: [...(c.ok?.[dirKey] ?? []), a].slice(-6) } })) })) }));
+      answer(true, { typo: true, note: j.note || 'Stimmt, das passt auch.', judged: true });
+    } else answer(false, { note: j?.note, judged: !!j });
+  }
+
+  function answer(ok: boolean, extra: { chosen?: string; typo?: boolean; note?: string; judged?: boolean } = {}) {
     if (!card || answered) return;
     setAnswered({ ok, ...extra });
     setResults(r => [...r, { cardId: card.id, ok }]);
@@ -382,7 +400,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
                   </Pressable>
                 )}
                 {(flipped || (answered && !answered.ok) || answered?.typo) && (
-                  <Text style={{ color: '#fff', fontSize: deck.prepId ? 19 : 24, fontWeight: '700', textAlign: 'center' }}>{answered?.typo ? `Fast! Richtig: ${solution}` : solution}</Text>
+                  <Text style={{ color: '#fff', fontSize: deck.prepId ? 19 : 24, fontWeight: '700', textAlign: 'center' }}>{answered?.judged && answered.ok ? `✓ Richtig! Buch: ${solution}` : answered?.typo ? `Fast! Richtig: ${solution}` : solution}</Text>
                 )}
                 {answered && !answered.ok && typed.trim() ? <Text style={{ color: '#fff', opacity: 0.85, textDecorationLine: 'line-through' }}>{typed.trim()}</Text> : null}
                 {answered?.ok && !answered.typo && <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>{combo >= 5 ? 'Unaufhaltsam! 🚀' : combo >= 3 ? 'Läuft! 🔥' : 'Richtig! ✓'}</Text>}
@@ -418,10 +436,10 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
               {plan.mode === 'type' && !answered && (
                 <View style={{ gap: 10 }}>
                   <TextInput autoFocus style={[s.input, { fontSize: 20, paddingVertical: 16 }]} value={typed} onChangeText={setTyped} autoCapitalize="none" autoCorrect={false}
-                    placeholder="Antwort schreiben" returnKeyType="done" onSubmitEditing={() => { const r = checkTyped(typed, solution); answer(r !== 'wrong', { typo: r === 'typo' }); }} />
+                    placeholder="Antwort schreiben" returnKeyType="done" onSubmitEditing={submitTyped} editable={!judging} />
                   <View style={[s.row, { flexWrap: 'nowrap' }]}>
                     <Button ghost title="Weiß ich nicht" style={{ flex: 1 }} onPress={() => answer(false)} />
-                    <Button title="Prüfen" style={{ flex: 1 }} disabled={!typed.trim()} onPress={() => { const r = checkTyped(typed, solution); answer(r !== 'wrong', { typo: r === 'typo' }); }} />
+                    <Button title={judging ? 'Prüfe genauer …' : 'Prüfen'} style={{ flex: 1 }} disabled={!typed.trim() || judging} onPress={submitTyped} />
                   </View>
                 </View>
               )}
@@ -429,6 +447,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
               {answered && (!answered.ok || answered.typo) && (
                 <View style={{ gap: 6 }}>
                   {!answered.ok && <Text style={[s.muted, { textAlign: 'center' }]}>Kein Problem, die kommt gleich nochmal.</Text>}
+                  {!!answered.note && <Text style={[s.text, { textAlign: 'center' }]}>🤖 {answered.note}</Text>}
                   {!answered.ok && typed.trim() && <Button ghost title="✋ Meins stimmt doch" onPress={overrule} />}
                   {!answered.ok && !deck.prepId && (hint || hintBusy) && (
                     <View style={{ backgroundColor: '#fff7e0', borderRadius: 18, padding: 16, gap: 6 }}>

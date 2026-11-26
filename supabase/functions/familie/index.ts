@@ -227,6 +227,37 @@ async function runAi(body: any, userId: string, admin: any) {
   }
 }
 
+// ---------- Vokabel-Schiedsrichter: kleines, schnelles Modell, eigenes Kontingent ----------
+const JUDGE_MODEL = 'claude-haiku-5-5';
+const JUDGE_DAILY = 300;
+const judgeCount = new Map<string, number>(); // grob pro Instanz und Tag, schützt vor Ausreißern
+
+async function runJudge(body: any, userId: string, admin: any) {
+  if (!AI_KEY) return json({ error: 'no_key' }, 503);
+  const word = String(body.word ?? '').slice(0, 200), solution = String(body.solution ?? '').slice(0, 300), answer = String(body.answer ?? '').slice(0, 200);
+  const lang = String(body.lang ?? 'Englisch').slice(0, 30), dir = body.dir === 'to_foreign' ? 'to_foreign' : 'to_german';
+  if (!word || !solution || !answer) return json({ error: 'bad_request' }, 400);
+  const { data: mem } = await admin.from('members').select('family_id').eq('user_id', userId).limit(1);
+  if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const key = mem[0].family_id + '|' + berlinDay();
+  const n = judgeCount.get(key) ?? 0;
+  if (n >= JUDGE_DAILY) return json({ error: 'daily_limit' }, 429);
+  judgeCount.set(key, n + 1);
+  const target = dir === 'to_foreign' ? lang : 'Deutsch';
+  const prompt = `Vokabelabfrage eines Schulkinds (Klasse 5 bis 7). Gefragt: "${word}". Lösung laut Buch: "${solution}". Antwort des Kindes auf ${target}: "${answer}".
+Ist die Antwort inhaltlich richtig? Richtig heißt: Sie trifft eine der Bedeutungen. Fehlende Artikel, Platzhalter (jdm., etw., sb., sth.), Klammerteile, Groß-/Kleinschreibung und kleine Tippfehler sind egal. Ein gleichwertiges Synonym zählt als richtig. Eine andere Bedeutung, ein anderes Wort oder eine falsche Wortart ist falsch.
+Antworte nur mit JSON: {"ok": true|false, "note": "höchstens 12 Wörter, freundlich, auf Deutsch, nur wenn ok=false oder fast falsch"}`;
+  const client = new Anthropic({ apiKey: AI_KEY });
+  try {
+    const msg = await client.messages.create({ model: JUDGE_MODEL, max_tokens: 200, messages: [{ role: 'user', content: prompt }] } as any);
+    const text = msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
+    return json({ text });
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) return json({ error: 'ai_down', status: e.status }, 502);
+    throw e;
+  }
+}
+
 // ---------- Erinnerungen (Web-Push) ----------
 
 async function vapid(admin: any) {
@@ -992,6 +1023,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       if (!user?.user) return json({ error: 'not_signed_in' }, 401);
       const body = await req.json();
       if (body.action === 'ai') return await runAi(body, user.user.id, admin);
+      if (body.action === 'judge') return await runJudge(body, user.user.id, admin);
       if (String(body.action).startsWith('push_')) return await pushAction(body, user.user.id, admin);
       if (String(body.action).startsWith('icloud_')) return await icloudAction(body, user.user.id, admin);
       if (String(body.action).startsWith('google_')) return await googleAction(body, user.user.id, admin);

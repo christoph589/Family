@@ -89,7 +89,7 @@ const ART = /^(to|the|a|an|le|la|les|l'|un|une|el|los|las|der|die|das|den|dem|de
 const norm = (v: string, keepParens = false) => {
   let s = v.toLowerCase().normalize('NFC');
   s = keepParens ? s.replace(/[()[\]]/g, ' ') : s.replace(/\(.*?\)|\[.*?\]/g, ' ');
-  s = s.replace(/[.!?¿¡"'„“”‚‘’…-]/g, ' ').replace(/\b(jdn|jdm|etw|sb|sth|so)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(/[.!?¿¡"'„“”‚‘’…-]/g, ' ').replace(/(^|\s)(jdn|jdm|jmd|jmdm|jmdn|jm|jn|etw|etwas|jemandem|jemanden|jemand|sb|sth|sbd|someone|something|so|o\s?s)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
   for (let i = 0; i < 2; i++) s = s.replace(ART, '').trim();
   return s.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss');
 };
@@ -108,13 +108,16 @@ function dist(a: string, b: string) {
  * Tolerant: Groß/Klein, Artikel, Klammern (mit oder ohne Inhalt), Satzzeichen, ä/ae, ß/ss egal.
  * Mehrere Lösungen mit , / ; getrennt: eine davon reicht. Schreibt das Kind mehrere, reicht eine richtige.
  */
-export function checkTyped(input: string, solution: string): 'exact' | 'typo' | 'wrong' {
+export function checkTyped(input: string, solution: string, accepted: string[] = []): 'exact' | 'typo' | 'wrong' {
   const parts = (v: string) => [v, ...v.split(/[,/;]| oder /)].filter(x => x.trim());
-  const opts = [...new Set(parts(solution).flatMap(o => [norm(o), norm(o, true)]))].filter(Boolean);
+  const opts = [...new Set([...parts(solution), ...accepted].flatMap(o => [norm(o), norm(o, true)]))].filter(Boolean);
   const answers = [...new Set(parts(input).flatMap(o => [norm(o), norm(o, true)]))].filter(Boolean);
   if (!answers.length) return 'wrong';
   const bag = (v: string) => v.split(' ').sort().join(' ');
-  if (answers.some(a => opts.includes(a) || opts.some(o => bag(o) === bag(a)))) return 'exact';
+  // Nur eine Präposition ausgelassen ("einverstanden sein" für "mit etwas einverstanden sein") zählt auch
+  const PREP = new Set(['mit', 'an', 'auf', 'fuer', 'ueber', 'zu', 'von', 'bei', 'in', 'um', 'aus', 'with', 'at', 'to', 'of', 'for', 'on', 'about', 'from', 'up']);
+  const onlyPrep = (a: string, o: string) => { const aw = a.split(' '), ow = o.split(' '); const rest = ow.filter(w => !aw.includes(w)); return aw.every(w => ow.includes(w)) && rest.length > 0 && rest.every(w => PREP.has(w)); };
+  if (answers.some(a => opts.includes(a) || opts.some(o => bag(o) === bag(a) || onlyPrep(a, o)))) return 'exact';
   const tol = (o: string) => (o.length > 8 ? 2 : o.length > 3 ? 1 : 0);
   if (answers.some(a => opts.some(o => tol(o) && dist(a, o) <= tol(o)))) return 'typo';
   return 'wrong';

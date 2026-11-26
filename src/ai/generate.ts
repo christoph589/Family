@@ -497,3 +497,14 @@ Antworte nur mit JSON: {"hints":[{"n":1,"ex":"...","de":"...","memo":"..."}]}`;
   }
   return out;
 }
+
+/** Schiedsrichter für Schreibantworten, die die App selbst als falsch werten würde. Kleines Modell, eigenes Kontingent. null = nicht erreichbar. */
+export async function judgeAnswer(word: string, solution: string, answer: string, lang: string, toForeign: boolean): Promise<{ ok: boolean; note?: string } | null> {
+  if (!cloudEnabled || !(await getLink().catch(() => null))) return null;
+  const req = sb().functions.invoke('familie', { body: { action: 'judge', word, solution, answer, lang, dir: toForeign ? 'to_foreign' : 'to_german' } })
+    .then(({ data, error }) => (error ? null : parseJsonLoose<{ ok: boolean; note?: string }>(String((data as any)?.text ?? ''))))
+    .catch(() => null);
+  const timeout = new Promise<null>(ok => setTimeout(() => ok(null), 8000));
+  const r = await Promise.race([req, timeout]);
+  return r && typeof r.ok === 'boolean' ? { ok: r.ok, note: r.note ? String(r.note).slice(0, 120) : undefined } : null;
+}
