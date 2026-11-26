@@ -21,7 +21,7 @@ async function call(body: object) {
   return data;
 }
 async function registration() {
-  const base = (document.querySelector('link[rel=manifest]')?.getAttribute('href') ?? '/Family/manifest.webmanifest').replace(/manifest\.webmanifest$/, '');
+  const base = (document.querySelector('link[rel=manifest]')?.getAttribute('href') ?? '/manifest.webmanifest').replace(/manifest\.webmanifest$/, '');
   return navigator.serviceWorker.register(base + 'sw.js', { scope: base });
 }
 

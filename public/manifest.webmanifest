@@ -1,8 +1,8 @@
 {
   "name": "Famelio",
   "short_name": "Famelio",
-  "start_url": "/Family/",
-  "scope": "/Family/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f3f4fa",
   "theme_color": "#5b4cf0",

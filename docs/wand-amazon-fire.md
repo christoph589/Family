@@ -17,7 +17,7 @@ Entwurf, noch nicht an echter Hardware geprüft. Dauer: ca. 20 Minuten.
 
 ## 2. Mit der Familie verbinden
 
-1. Im Browser „Silk“ öffnen: https://christoph589.github.io/Family/
+1. Im Browser „Silk“ öffnen: https://famelio.de/
 2. Als Elternteil mit dem Familiencode verbinden (wie auf jedem neuen Gerät).
 3. Prüfen, ob „Heute“ und der Kalender laden.
 
@@ -26,7 +26,7 @@ Entwurf, noch nicht an echter Hardware geprüft. Dauer: ca. 20 Minuten.
 1. Im Amazon Appstore nach „Fully Kiosk Browser“ suchen.
    Falls es dort fehlt: Einstellungen › Sicherheit und Datenschutz › „Apps aus unbekannten Quellen“ für Silk erlauben, dann in Silk die Seite fully-kiosk.com öffnen und die APK von dort laden. Nur von dieser offiziellen Seite.
 2. Fully öffnen und Folgendes einstellen:
-   - Web Content Settings › Start URL: `https://christoph589.github.io/Family/?wand`
+   - Web Content Settings › Start URL: `https://famelio.de/?wand`
    - Device Management › Keep Screen On: an
    - Device Management › Launch on Boot: an
    - Web Browsing Settings › Pull to Refresh: aus (sonst lädt die Seite beim Wischen neu)
