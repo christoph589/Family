@@ -84,21 +84,39 @@ export function choicesFor(card: VocabCard, deck: VocabDeck, reverse: boolean): 
   return shuffle([pick(card), ...others]);
 }
 
-const norm = (v: string) => v.toLowerCase().normalize('NFC').replace(/\(.*?\)/g, '').replace(/^(to|the|a|an|le|la|les|l'|un|une|el|los|las|der|die|das)\s+/, '').replace(/[.!?¿¡"']/g, '').replace(/\s+/g, ' ').trim();
+const ART = /^(to|the|a|an|le|la|les|l'|un|une|el|los|las|der|die|das|den|dem|des|ein|eine|einen|sich)\s+/;
+/** Vergleichsform: klein, ohne Artikel, ohne Satzzeichen, Umlaute vereinheitlicht. keepParens: Klammerinhalt behalten (nur Klammern weg). */
+const norm = (v: string, keepParens = false) => {
+  let s = v.toLowerCase().normalize('NFC');
+  s = keepParens ? s.replace(/[()[\]]/g, ' ') : s.replace(/\(.*?\)|\[.*?\]/g, ' ');
+  s = s.replace(/[.!?¿¡"'„“”‚‘’…-]/g, ' ').replace(/\b(jdn|jdm|etw|sb|sth|so)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < 2; i++) s = s.replace(ART, '').trim();
+  return s.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss');
+};
 function dist(a: string, b: string) {
   const m = a.length, n = b.length;
   const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
   for (let j = 1; j <= n; j++) d[0][j] = j;
-  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); // Buchstabendreher
+  }
   return d[m][n];
 }
-/** 'exact' = richtig, 'typo' = ein Tippfehler (zählt als richtig), 'wrong' = falsch. Mehrere Lösungen mit , / ; getrennt. */
+/**
+ * 'exact' = richtig, 'typo' = kleiner Tippfehler (zählt als richtig), 'wrong' = falsch.
+ * Tolerant: Groß/Klein, Artikel, Klammern (mit oder ohne Inhalt), Satzzeichen, ä/ae, ß/ss egal.
+ * Mehrere Lösungen mit , / ; getrennt: eine davon reicht. Schreibt das Kind mehrere, reicht eine richtige.
+ */
 export function checkTyped(input: string, solution: string): 'exact' | 'typo' | 'wrong' {
-  const a = norm(input);
-  if (!a) return 'wrong';
-  const opts = [solution, ...solution.split(/[,/;]/)].map(norm).filter(Boolean);
-  if (opts.includes(a)) return 'exact';
-  if (opts.some(o => o.length > 4 && dist(a, o) <= 1)) return 'typo';
+  const parts = (v: string) => [v, ...v.split(/[,/;]| oder /)].filter(x => x.trim());
+  const opts = [...new Set(parts(solution).flatMap(o => [norm(o), norm(o, true)]))].filter(Boolean);
+  const answers = [...new Set(parts(input).flatMap(o => [norm(o), norm(o, true)]))].filter(Boolean);
+  if (!answers.length) return 'wrong';
+  const bag = (v: string) => v.split(' ').sort().join(' ');
+  if (answers.some(a => opts.includes(a) || opts.some(o => bag(o) === bag(a)))) return 'exact';
+  const tol = (o: string) => (o.length > 8 ? 2 : o.length > 3 ? 1 : 0);
+  if (answers.some(a => opts.some(o => tol(o) && dist(a, o) <= tol(o)))) return 'typo';
   return 'wrong';
 }
 

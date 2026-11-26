@@ -304,6 +304,14 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
     }
   }
 
+  /** Kind war inhaltlich richtig, die Prüfung zu streng: zählt doch als richtig, kein Wiederholen. */
+  function overrule() {
+    if (!card || !answered || answered.ok) return;
+    setAnswered({ ...answered, ok: true });
+    setResults(r => r.map((x, i) => (i === r.length - 1 ? { ...x, ok: true } : x)));
+    setQueue(q => { const i = q.lastIndexOf(card); return i > idx ? q.filter((_, j) => j !== i) : q; });
+  }
+
   function next() {
     setAnswered(null); setFlipped(false); setTyped('');
     if (idx + 1 < queue.length) { setIdx(idx + 1); return; }
@@ -405,6 +413,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
               {answered && (!answered.ok || answered.typo) && (
                 <View style={{ gap: 6 }}>
                   {!answered.ok && <Text style={[s.muted, { textAlign: 'center' }]}>Kein Problem, die kommt gleich nochmal.</Text>}
+                  {!answered.ok && typed.trim() && <Button ghost title="✋ Meins stimmt doch" onPress={overrule} />}
                   <Button title="Weiter" onPress={next} style={{ paddingVertical: 16 }} />
                 </View>
               )}
