@@ -163,7 +163,8 @@ export function finishRound(d: FamilyData, deckId: string, results: RoundResult[
   const streakUp = old.last !== date;
   const streak = !streakUp ? old.streak : old.last === addDays(date, -1) ? old.streak + 1 : 1;
   const days = Object.fromEntries(Object.entries({ ...(old.days ?? {}), [date]: (old.days?.[date] ?? 0) + total }).sort().slice(-14));
-  const stats: VocabStats = { ...old, streak, last: date, best: Math.max(old.best, streak), total: old.total + right, days };
+  const learnDays = old.learnDays === undefined ? Object.keys({ ...(old.days ?? {}), [date]: 1 }).length : old.learnDays + (streakUp ? 1 : 0);
+  const stats: VocabStats = { ...old, streak, last: date, best: Math.max(old.best, streak), total: old.total + right, days, learnDays };
   data = { ...data, vocabStats: { ...(d.vocabStats ?? {}), [childId]: stats } };
 
   const perfect = right === total && total >= 5;

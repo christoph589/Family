@@ -123,6 +123,7 @@ function Root() {
   const [section, setSection] = useState<Section>('familie');
   const [menu, setMenu] = useState(true); // Handy: erst Liste der Bereiche, dann ein Bereich
   const [askOut, setAskOut] = useState(false);
+  const [profMenu, setProfMenu] = useState(false);
   // Vom Betreiber geschaltete Funktionen: beim Start und beim Zurückkommen in die App neu holen
   const flags = useFlags();
   const fidForFlags = cloud?.link.familyId;
@@ -273,24 +274,41 @@ function Root() {
     <SafeAreaView style={s.screen}>
       <View style={[{ backgroundColor: C.bg + 'e6', zIndex: 5 }, Platform.OS === 'web' ? ({ backdropFilter: 'blur(14px)', position: 'sticky', top: 0 } as any) : null]}>
         <View style={[s.row, { flexWrap: 'nowrap', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10, maxWidth: 1100, width: '100%', alignSelf: 'center' }]}>
-          <LogoMark size={wide ? 44 : 38} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[s.muted, { fontSize: 13, fontWeight: '700' }]} numberOfLines={1}>{dateStr} · {data.family.name}</Text>
             <Text style={[s.h1, { fontSize: wide ? 28 : 24 }]} numberOfLines={1}>{tab === 'aufgaben' ? 'Einstellungen' : wide ? `${greet}, ${me.name}` : `Hallo ${me.name} 👋`}</Text>
           </View>
-          {admin && (
-            <Pressable accessibilityRole="button" accessibilityLabel="Verwalten" onPress={() => { setMenu(true); setTab(tab === 'aufgaben' ? 'heute' : 'aufgaben'); }}
-              style={{ width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: tab === 'aufgaben' ? C.accent : C.surface, ...SHADOW.sm }}>
-              <Text style={{ fontSize: 20 }}>{tab === 'aufgaben' ? '✕' : '⚙️'}</Text>
+          {tab === 'aufgaben' && (
+            <Pressable accessibilityRole="button" accessibilityLabel="Einstellungen schließen" onPress={() => setTab('heute')}
+              style={{ width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accent, ...SHADOW.sm }}>
+              <Text style={{ fontSize: 20, color: '#fff', fontWeight: '800' }}>✕</Text>
             </Pressable>
           )}
-          <Pressable accessibilityRole="button" accessibilityLabel={`${me.name}, Person wechseln`}
-            onPress={() => { setProfile(null); setTab('heute'); }}
-            style={{ borderRadius: 30, padding: 3, ...grad(me.color, me.color + '55') }}>
-            <View style={{ borderRadius: 26, borderWidth: 2, borderColor: '#fff' }}>
-              <Avatar name={me.name} color={me.color} photo={(me as any).photo} size={42} />
-            </View>
-          </Pressable>
+          <View>
+            <Pressable accessibilityRole="button" accessibilityLabel={`${me.name}, Menü`}
+              onPress={() => setProfMenu(o => !o)}
+              style={{ borderRadius: 30, padding: 3, ...grad(me.color, me.color + '55') }}>
+              <View style={{ borderRadius: 26, borderWidth: 2, borderColor: '#fff' }}>
+                <Avatar name={me.name} color={me.color} photo={(me as any).photo} size={42} />
+              </View>
+            </Pressable>
+            {profMenu && (
+              <>
+                <Pressable onPress={() => setProfMenu(false)} style={[{ position: 'fixed' as any, left: 0, right: 0, top: 0, bottom: 0, zIndex: 20 }]} accessibilityLabel="Menü schließen" />
+                <View style={[{ position: 'absolute', right: 0, top: 58, zIndex: 21, backgroundColor: C.surface, borderRadius: 18, paddingVertical: 6, minWidth: 220 }, SHADOW.lg]}>
+                  <Text style={[s.label, { paddingHorizontal: 16, paddingVertical: 8 }]} numberOfLines={1}>{me.name}</Text>
+                  {admin && tab !== 'aufgaben' && (
+                    <Pressable accessibilityRole="menuitem" onPress={() => { setProfMenu(false); setMenu(true); setTab('aufgaben'); }} style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                      <Text style={[s.text, { fontWeight: '700' }]}>⚙️  Einstellungen</Text>
+                    </Pressable>
+                  )}
+                  <Pressable accessibilityRole="menuitem" onPress={() => { setProfMenu(false); setProfile(null); setTab('heute'); }} style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                    <Text style={[s.text, { fontWeight: '700' }]}>👥  Person wechseln</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
         </View>
       </View>
       <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingTop: 6, paddingBottom: 170 }]}>

@@ -74,22 +74,35 @@ export function buddyMood(d: FamilyData, childId: string, date = today()): { fac
 
 // ---------- Abzeichen ----------
 
-export interface Badge { id: string; icon: string; title: string; hint: string }
+export type BadgeGroup = 'start' | 'weiter' | 'episch';
+export const BADGE_GROUPS: { id: BadgeGroup; title: string }[] = [
+  { id: 'start', title: 'Erste Schritte' }, { id: 'weiter', title: 'Weiter, immer weiter' }, { id: 'episch', title: 'Epische Erfolge' },
+];
+type Metric = 'tasks' | 'streak' | 'tooth' | 'stars' | 'mastered' | 'learnDays' | 'right' | 'tests' | 'pot' | 'special';
+export interface Badge { id: string; icon: string; title: string; hint: string; group: BadgeGroup; metric: Metric; goal: number; unit: string }
+const B = (id: string, icon: string, title: string, hint: string, group: BadgeGroup, metric: Metric, goal: number, unit: string): Badge => ({ id, icon, title, hint, group, metric, goal, unit });
 export const BADGES: Badge[] = [
-  { id: 'erste', icon: '🌱', title: 'Erster Schritt', hint: 'Erste Aufgabe erledigt' },
-  { id: 'serie3', icon: '🔥', title: 'Am Ball', hint: '3 Tage am Stück geschafft' },
-  { id: 'serie7', icon: '⚡', title: 'Wochen-Held', hint: '7 Tage am Stück geschafft' },
-  { id: 'serie30', icon: '🏆', title: 'Unaufhaltsam', hint: '30 Tage am Stück geschafft' },
-  { id: 'zahn7', icon: '🦷', title: 'Strahlemann', hint: '7 Tage am Stück Zähne geputzt' },
-  { id: 'sterne100', icon: '⭐', title: 'Sternensammler', hint: '100 Punkte verdient' },
-  { id: 'sterne500', icon: '🌟', title: 'Sternenregen', hint: '500 Punkte verdient' },
-  { id: 'sterne1000', icon: '💫', title: 'Galaxie', hint: '1000 Punkte verdient' },
-  { id: 'vok10', icon: '🧠', title: 'Wortschatz', hint: '10 Vokabeln sitzen' },
-  { id: 'vok100', icon: '📖', title: 'Wörterbuch', hint: '100 Vokabeln sitzen' },
-  { id: 'test', icon: '✏️', title: 'Durchgezogen', hint: 'Ersten Test abgegeben' },
-  { id: 'topf', icon: '🤝', title: 'Teamplayer', hint: 'In den Familien-Topf eingezahlt' },
-  { id: 'sonder1', icon: '🎯', title: 'Sonderauftrag', hint: 'Erste Sonderaufgabe geschafft' },
-  { id: 'sonder5', icon: '🦸', title: 'Sonderheld', hint: '5 Sonderaufgaben geschafft' },
+  B('erste', '🐣', 'Kesses Küken', 'Erste Aufgabe erledigt', 'start', 'tasks', 1, 'Aufgaben'),
+  B('test', '🦉', 'Eifrige Eule', 'Ersten Test abgegeben', 'start', 'tests', 1, 'Tests'),
+  B('lern3', '🐭', 'Muntere Maus', 'An 3 Tagen Vokabeln gelernt', 'start', 'learnDays', 3, 'Lerntage'),
+  B('vok10', '🐸', 'Fleißiger Frosch', '10 Vokabeln sitzen', 'start', 'mastered', 10, 'Vokabeln'),
+  B('topf', '🐝', 'Hilfsbereite Hummel', 'In den Familien-Topf eingezahlt', 'start', 'pot', 1, 'Einzahlungen'),
+  B('sonder1', '🐞', 'Mutiger Marienkäfer', 'Erste Sonderaufgabe geschafft', 'start', 'special', 1, 'Sonderaufgaben'),
+  B('serie3', '🐶', 'Hurtiger Hund', '3 Tage am Stück geschafft', 'weiter', 'streak', 3, 'Tage am Stück'),
+  B('serie7', '🦊', 'Flotter Fuchs', '7 Tage am Stück geschafft', 'weiter', 'streak', 7, 'Tage am Stück'),
+  B('zahn7', '🦫', 'Blitzblanker Biber', '7 Tage am Stück Zähne geputzt', 'weiter', 'tooth', 7, 'Tage am Stück'),
+  B('sterne100', '🐱', 'Kuschelige Katze', '100 Punkte verdient', 'weiter', 'stars', 100, 'Punkte'),
+  B('lern30', '🐨', 'Kluger Koala', 'An 30 Tagen Vokabeln gelernt', 'weiter', 'learnDays', 30, 'Lerntage'),
+  B('vok100', '🐼', 'Pfiffiger Panda', '100 Vokabeln sitzen', 'weiter', 'mastered', 100, 'Vokabeln'),
+  B('tests10', '🐙', 'Kluge Krake', '10 Tests abgegeben', 'weiter', 'tests', 10, 'Tests'),
+  B('sonder5', '🦁', 'Lässiger Löwe', '5 Sonderaufgaben geschafft', 'weiter', 'special', 5, 'Sonderaufgaben'),
+  B('serie30', '🐉', 'Donnernder Drache', '30 Tage am Stück geschafft', 'episch', 'streak', 30, 'Tage am Stück'),
+  B('lern100', '🐘', 'Emsiger Elefant', 'An 100 Tagen Vokabeln gelernt', 'episch', 'learnDays', 100, 'Lerntage'),
+  B('vok500', '🐋', 'Weiser Wal', '500 Vokabeln sitzen', 'episch', 'mastered', 500, 'Vokabeln'),
+  B('richtig1000', '🦒', 'Großartige Giraffe', '1000 Vokabeln richtig beantwortet', 'episch', 'right', 1000, 'richtige Antworten'),
+  B('sterne500', '🦄', 'Edles Einhorn', '500 Punkte verdient', 'episch', 'stars', 500, 'Punkte'),
+  B('sterne1000', '🦅', 'Atemberaubender Adler', '1000 Punkte verdient', 'episch', 'stars', 1000, 'Punkte'),
+  B('sonder20', '🐬', 'Dufter Delfin', '20 Sonderaufgaben geschafft', 'episch', 'special', 20, 'Sonderaufgaben'),
 ];
 
 function toothStreak(d: FamilyData, childId: string, date: string) {
@@ -101,22 +114,28 @@ function toothStreak(d: FamilyData, childId: string, date: string) {
   return best;
 }
 
-export function earnedBadges(d: FamilyData, child: Child, date = today()): Set<string> {
-  const id = child.id, out = new Set<string>();
-  if (d.completions.some(c => c.childId === id)) out.add('erste');
-  const bs = bestStreak(d, id, date);
-  if (bs >= 3) out.add('serie3'); if (bs >= 7) out.add('serie7'); if (bs >= 30) out.add('serie30');
-  if (toothStreak(d, id, date) >= 7) out.add('zahn7');
-  const st = lifetimeStars(d, id);
-  if (st >= 100) out.add('sterne100'); if (st >= 500) out.add('sterne500'); if (st >= 1000) out.add('sterne1000');
-  const m = (d.vocab ?? []).filter(v => v.childId === id).reduce((n, v) => n + masteredCount(v), 0);
-  if (m >= 10) out.add('vok10'); if (m >= 100) out.add('vok100');
-  if ((d.worksheets ?? []).some(w => w.childId === id && w.status !== 'offen')) out.add('test');
-  if (d.ledger.some(e => e.childId === id && e.potId)) out.add('topf');
+/** Alle Zahlen, an denen Abzeichen hängen. */
+export function badgeMetrics(d: FamilyData, child: Child, date = today()): Record<Metric, number> {
+  const id = child.id;
+  const vs = d.vocabStats?.[id];
   const sp = new Set(d.tasks.filter(t => t.special && t.childId === id).map(t => t.id));
-  const nSp = d.completions.filter(c => c.childId === id && c.status === 'bestaetigt' && sp.has(c.taskId)).length;
-  if (nSp >= 1) out.add('sonder1'); if (nSp >= 5) out.add('sonder5');
-  return out;
+  return {
+    tasks: d.completions.filter(c => c.childId === id).length,
+    streak: bestStreak(d, id, date),
+    tooth: toothStreak(d, id, date),
+    stars: lifetimeStars(d, id),
+    mastered: (d.vocab ?? []).filter(v => v.childId === id).reduce((n, v) => n + masteredCount(v), 0),
+    learnDays: vs?.learnDays ?? Object.keys(vs?.days ?? {}).length,
+    right: vs?.total ?? 0,
+    tests: (d.worksheets ?? []).filter(w => w.childId === id && w.status !== 'offen').length,
+    pot: d.ledger.filter(e => e.childId === id && e.potId).length,
+    special: d.completions.filter(c => c.childId === id && c.status === 'bestaetigt' && sp.has(c.taskId)).length,
+  };
+}
+
+export function earnedBadges(d: FamilyData, child: Child, date = today()): Set<string> {
+  const m = badgeMetrics(d, child, date);
+  return new Set(BADGES.filter(b => m[b.metric] >= b.goal).map(b => b.id));
 }
 
 // ---------- Überraschungskiste ----------

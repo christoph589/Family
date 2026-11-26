@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { today } from '../data/logic';
 import { Child } from '../data/types';
-import { BADGES, BUDDIES, buddyMood, buddyStage, drawSurprise, earnedBadges, lastWeekStrong, lifetimeStars, openSurprise, Surprise, SURPRISE_DAYS, surpriseReady, taskStreak } from '../data/quest';
+import { Badge, BADGE_GROUPS, badgeMetrics, BADGES, BUDDIES, buddyMood, buddyStage, drawSurprise, earnedBadges, lastWeekStrong, lifetimeStars, openSurprise, Surprise, SURPRISE_DAYS, surpriseReady, taskStreak } from '../data/quest';
 import { Button } from '../ui/Button';
 import { C, s, SHADOW } from '../ui/theme';
 import { Confetti } from './Vocab';
@@ -60,6 +60,10 @@ function QuestModal({ child, parent, onClose }: { child: Child; parent: boolean;
   const [name, setName] = useState('');
   const earned = earnedBadges(d, child);
   const [seen] = useState(() => child.seenBadges ?? []);
+  const m = badgeMetrics(d, child);
+  const [detail, setDetail] = useState<Badge | null>(null);
+  const [party, setParty] = useState<Badge[]>(() => (parent ? [] : BADGES.filter(b => earned.has(b.id) && !seen.includes(b.id))));
+  const cols = useWindowDimensions().width >= 480 ? 3 : 2;
   const streak = taskStreak(d, child.id);
   const week = lastWeekStrong(d, child.id);
   const close = () => {
@@ -108,24 +112,72 @@ function QuestModal({ child, parent, onClose }: { child: Child; parent: boolean;
             </View>
             <Text style={[s.muted, { fontSize: 13, textAlign: 'center' }]}>Ein Tag zählt, wenn mindestens drei Viertel der Aufgaben erledigt sind.</Text>
             <Text style={s.label}>Abzeichen {earned.size} von {BADGES.length}</Text>
-            <View style={[s.row, { gap: 8 }]}>
-              {BADGES.map(b => {
-                const has = earned.has(b.id), isNew = has && !seen.includes(b.id);
-                return (
-                  <View key={b.id} accessibilityLabel={`${b.title}: ${b.hint}${has ? '' : ', noch nicht geschafft'}`}
-                    style={{ width: '45%', flexGrow: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 16, alignItems: 'center', gap: 2, backgroundColor: has ? C.accentSoft : C.surface2, opacity: has ? 1 : 0.6, borderWidth: isNew ? 2 : 0, borderColor: C.accent2 }}>
-                    <Text style={{ fontSize: 28 }}>{has ? b.icon : '🔒'}</Text>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: C.fg, textAlign: 'center' }}>{b.title}</Text>
-                    <Text style={{ fontSize: 12, color: isNew ? C.accent2 : C.muted, textAlign: 'center', fontWeight: isNew ? '800' : '400' }}>{isNew ? 'Neu!' : b.hint}</Text>
-                  </View>
-                );
-              })}
-            </View>
+            {BADGE_GROUPS.map(g => (
+              <View key={g.id} style={{ gap: 10 }}>
+                <Text style={[s.h2, { fontSize: 18 }]}>{g.title}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {BADGES.filter(b => b.group === g.id).map(b => {
+                    const has = earned.has(b.id), isNew = has && !seen.includes(b.id);
+                    const pct = Math.min(1, m[b.metric] / b.goal);
+                    return (
+                      <Pressable key={b.id} onPress={() => setDetail(b)} accessibilityRole="button" accessibilityLabel={`${b.title}: ${b.hint}. ${has ? 'Geschafft' : `${m[b.metric]} von ${b.goal}`}`}
+                        style={[{ width: cols === 3 ? '31%' : '47%', flexGrow: 1, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 18, alignItems: 'center', gap: 6, backgroundColor: has ? C.surface : C.surface2,
+                          borderWidth: has ? (isNew ? 2 : 0) : 1.5, borderStyle: has ? 'solid' : 'dashed', borderColor: has ? C.accent2 : C.line }, has ? SHADOW.sm : null]}>
+                        <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: has ? C.accentSoft : C.line + '88', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={[{ fontSize: 36 }, has ? null : ({ opacity: 0.35, filter: 'grayscale(1)' } as any)]}>{b.icon}</Text>
+                        </View>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: has ? C.accent : C.muted, textAlign: 'center' }}>{b.title}</Text>
+                        {has ? (isNew ? <Text style={{ fontSize: 11, fontWeight: '800', color: C.accent2 }}>Neu!</Text> : null) : (
+                          <View style={{ alignSelf: 'stretch', marginHorizontal: 6, height: 8, borderRadius: 4, backgroundColor: C.surface, overflow: 'hidden' }}>
+                            <View style={{ width: `${Math.max(pct > 0 ? 6 : 0, pct * 100)}%`, height: '100%', backgroundColor: C.ok, borderRadius: 4 }} />
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
             <Button ghost title="Schließen" onPress={close} />
           </ScrollView>
+          {detail && (
+            <Pressable onPress={() => setDetail(null)} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(18,21,39,0.35)', padding: 16 }}>
+              <View style={[s.row, { flexWrap: 'nowrap', backgroundColor: '#2b2d3a', borderRadius: 22, padding: 16, gap: 14 }, SHADOW.lg]}>
+                <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#ffffff22', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={[{ fontSize: 42 }, earned.has(detail.id) ? null : ({ filter: 'grayscale(1)', opacity: 0.6 } as any)]}>{detail.icon}</Text>
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>{detail.title}</Text>
+                  <Text style={{ color: '#ffffffcc', fontSize: 15 }}>{detail.hint}</Text>
+                  <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700', marginTop: 6 }}>{earned.has(detail.id) ? '✅ Geschafft!' : `Bisher: ${m[detail.metric]} / ${detail.goal} ${detail.unit}`}</Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
+          {party.length > 0 && (
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 }}>
+              <Confetti key={party[0].id} />
+              <Text style={[s.label, { color: C.accent2 }]}>Neues Abzeichen!</Text>
+              <BadgePop icon={party[0].icon} />
+              <Text style={[s.h1, { textAlign: 'center' }]}>{party[0].title}</Text>
+              <Text style={[s.muted, { fontSize: 16, textAlign: 'center' }]}>{party[0].hint}</Text>
+              <Button title={party.length > 1 ? `Weiter (noch ${party.length - 1})` : 'Juhu! 🎉'} onPress={() => setParty(p => p.slice(1))} />
+            </View>
+          )}
         </View>
       </View>
     </Modal>
+  );
+}
+
+/** Abzeichen springt groß herein */
+function BadgePop({ icon }: { icon: string }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => { v.setValue(0); Animated.spring(v, { toValue: 1, friction: 4, tension: 60, useNativeDriver: false }).start(); }, [icon, v]);
+  return (
+    <Animated.View style={{ width: 140, height: 140, borderRadius: 70, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center', transform: [{ scale: v }, { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['-30deg', '0deg'] }) }] }}>
+      <Text style={{ fontSize: 84 }}>{icon}</Text>
+    </Animated.View>
   );
 }
 
