@@ -84,15 +84,17 @@ function CloudApp() {
     <LinkCtx.Provider value={{ link, unlink: () => { signOut().finally(() => setLinkState(null)); } }}>
       <FamilyProvider key={link.familyId} store={store}>
         <StatusBar style="dark" />
+        <View style={{ flex: 1, flexDirection: 'column' }}>
         {back && (
-          <View style={{ backgroundColor: C.ok, paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <Text style={{ color: '#fff', fontWeight: '800', flexShrink: 1 }}>🛟 Support-Modus: Du bist in einer anderen Familie. Änderungen sind echt.</Text>
+          <View style={{ flexGrow: 0, flexShrink: 0, backgroundColor: C.ok, paddingHorizontal: 16, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <Text style={{ color: '#fff', fontWeight: '800', flexShrink: 1, fontSize: 13 }} numberOfLines={2}>🛟 Support-Modus: andere Familie, Änderungen sind echt.</Text>
             <Pressable onPress={() => leaveSupport().then(reload)} style={{ backgroundColor: '#ffffff33', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 }}>
               <Text style={{ color: '#fff', fontWeight: '800' }}>Zurück zu meiner Familie</Text>
             </Pressable>
           </View>
         )}
-        <Root />
+        <View style={{ flex: 1 }}><Root /></View>
+        </View>
       </FamilyProvider>
     </LinkCtx.Provider>
   );
