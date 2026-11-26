@@ -86,11 +86,14 @@ export function summarize(d: FamilyData, childId: string, n: number, end = today
   // Runden vor Einführung des Lern-Logs: aus den Punkte-Buchungen „Vokabeln: Titel (3/10)“
   type R = { w: number; ok: number; r: number };
   const ledgerRounds: Record<string, R> = {}, ledgerPrep: Record<string, R> = {};
+  const prepSubject = (title: string) => { const v = decks.find(x => x.prepId && x.title === title); return (d.exams ?? []).find(e => e.id === v?.prepId)?.subject ?? v?.lang ?? 'Sonstiges'; };
+  const prepBySubj: Record<string, number> = {};
   for (const e of d.ledger) {
     if (e.childId !== childId || !e.at || !inRange(e.at.slice(0, 10))) continue;
     const m = /^Vokabeln: (.*) \((\d+)\/(\d+)\)$/.exec(e.reason);
     if (!m) continue;
     const k = e.at.slice(0, 10), bag = prepTitles.has(m[1]) ? ledgerPrep : ledgerRounds, x = (bag[k] ??= { w: 0, ok: 0, r: 0 });
+    if (bag === ledgerPrep) { const sj = prepSubject(m[1]); prepBySubj[sj] = (prepBySubj[sj] ?? 0) + +m[3]; }
     x.ok += +m[2]; x.w += +m[3]; x.r++;
   }
   const sheets = (d.worksheets ?? []).filter(w => w.childId === childId && w.status !== 'offen').map(w => ({ w, day: sheetDay(d, w) })).filter(x => inRange(x.day));
@@ -123,6 +126,8 @@ export function summarize(d: FamilyData, childId: string, n: number, end = today
     if (v.prepId) subj((d.exams ?? []).find(e => e.id === v.prepId)?.subject ?? v.lang).cards += nSeen;
     else subj(v.lang).words += nSeen;
   }
+  // Lernkarten-Runden aus den Punkte-Buchungen, falls die Karten inzwischen neu erstellt wurden
+  for (const [sj, nW] of Object.entries(prepBySubj)) { const r = subj(sj); r.cards = Math.max(r.cards, nW); }
   const done = sheets.map(x => x.w);
   const checked = done.filter(w => w.understanding && !w.exam);
   const probes = sheets.filter(x => x.w.exam && x.w.status === 'geprueft').map(x => ({ sheet: x.w, subject: sheetSubject(d, x.w), date: x.day })).sort((a, b) => b.date.localeCompare(a.date));
