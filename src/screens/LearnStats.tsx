@@ -75,7 +75,8 @@ function KidRow({ kid, sum, days, on, dim, onPress }: { kid: Child; sum: Summary
         <View style={[s.row, { gap: 8, paddingLeft: 44, flexWrap: 'wrap' }]}>
           <Stat value={`${sum.activeDays}/${days}`} label="Tage gelernt" />
           {sum.secs > 0 && <Stat value={fmtMin(sum.secs)} label="Lernzeit" />}
-          <Stat value={String(sum.words)} label={acc !== null ? `Vokabeln · ${acc} % richtig` : 'Vokabeln'} tone={acc !== null && acc < 60 ? C.danger : undefined} />
+          {(sum.words > 0 || !sum.flash) && <Stat value={String(sum.words)} label={acc !== null ? `Vokabeln · ${acc} % richtig` : 'Vokabeln'} tone={acc !== null && acc < 60 ? C.danger : undefined} />}
+          {sum.flash > 0 && <Stat value={String(sum.flash)} label="Lernkarten (Arbeit)" />}
           <Stat value={String(sum.tests.length)} label={und !== null ? `Tests · ${und} % verstanden` : 'Tests'} tone={und !== null && und < 50 ? C.danger : undefined} />
         </View>
       )}
@@ -133,6 +134,7 @@ function KidDetail({ kid, sum, prev, days, onGo }: { kid: Child; sum: Summary; p
           {acc !== null && <Text style={[s.text, { fontSize: 14 }]}>{acc} % beim ersten Mal richtig</Text>}
           <Trend now={acc} before={accPrev} />
           <Text style={[s.muted, { fontSize: 12 }]}>{sum.mastered ? `${sum.mastered} neu gelernt · ` : ''}{sitting} von {cards.length} sitzen</Text>
+          {sum.flash > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Dazu {sum.flash} Lernkarten für Klassenarbeiten</Text>}
         </Pressable>
         <Pressable onPress={() => onGo('themen')} style={{ flexGrow: 1, flexBasis: 150, backgroundColor: C.bg, borderRadius: 14, padding: 12, gap: 2 }}>
           <Text style={s.label}>📝 Tests</Text>
@@ -148,7 +150,7 @@ function KidDetail({ kid, sum, prev, days, onGo }: { kid: Child; sum: Summary; p
           <Text style={s.label}>Was gelernt wurde</Text>
           {sum.subjects.map(x => {
             const u = pct(x.understood, x.checked);
-            const bits = [x.secs ? fmtMin(x.secs) : '', x.words ? `${x.words} Wörter` : '', x.tests ? `${x.tests} ${x.tests === 1 ? 'Test' : 'Tests'}` : '', u !== null ? `${u} % verstanden` : ''].filter(Boolean);
+            const bits = [x.secs ? fmtMin(x.secs) : '', x.words ? `${x.words} Wörter` : '', x.cards ? `${x.cards} Lernkarten` : '', x.tests ? `${x.tests} ${x.tests === 1 ? 'Test' : 'Tests'}` : '', u !== null ? `${u} % verstanden` : ''].filter(Boolean);
             return (
               <View key={x.subject} style={{ gap: 3 }}>
                 <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>

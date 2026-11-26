@@ -17,8 +17,8 @@ export function logLearn(d: FamilyData, childId: string, add: Omit<LearnDay, 'su
   const all = d.learnLog ?? {};
   const mine = { ...(all[childId] ?? {}) };
   const cur: LearnDay = { ...(mine[date] ?? {}) };
-  const plus = (k: 'w' | 'ok' | 'r' | 'm' | 't' | 's') => { const v = add[k]; if (v) cur[k] = (cur[k] ?? 0) + Math.round(v); };
-  (['w', 'ok', 'r', 'm', 't', 's'] as const).forEach(plus);
+  const plus = (k: 'w' | 'ok' | 'r' | 'm' | 't' | 's' | 'kw' | 'kok') => { const v = add[k]; if (v) cur[k] = (cur[k] ?? 0) + Math.round(v); };
+  (['w', 'ok', 'r', 'm', 't', 's', 'kw', 'kok'] as const).forEach(plus);
   if (add.s && add.subject) cur.subj = { ...(cur.subj ?? {}), [add.subject]: (cur.subj?.[add.subject] ?? 0) + Math.round(add.s) };
   mine[date] = cur;
   const cut = shiftDay(date, -KEEP_DAYS);
@@ -62,10 +62,10 @@ export function sheetDay(d: FamilyData, w: Worksheet) {
 const U_SCORE: Record<Understanding, number> = { verstanden: 1, teilweise: 0.5, nochmal: 0 };
 
 export interface DayRow { date: string; secs: number; words: number; ok: number; tests: number; active: boolean }
-export interface SubjectRow { subject: string; secs: number; tests: number; words: number; understood: number; checked: number }
+export interface SubjectRow { subject: string; secs: number; tests: number; words: number; cards: number; understood: number; checked: number }
 export interface Summary {
   days: DayRow[];
-  secs: number; activeDays: number; words: number; ok: number; graded: number; rounds: number; mastered: number;
+  secs: number; activeDays: number; words: number; /** Lernkarten für Klassenarbeiten */ flash: number; ok: number; graded: number; rounds: number; mastered: number;
   tests: Worksheet[]; checked: number; understood: number;
   probes: { sheet: Worksheet; subject: string; date: string }[];
   subjects: SubjectRow[];
@@ -76,33 +76,40 @@ export interface Summary {
 export function summarize(d: FamilyData, childId: string, n: number, end = today()): Summary {
   const log = d.learnLog?.[childId] ?? {};
   const vDays = d.vocabStats?.[childId]?.days ?? {};
-  const cards = (d.vocab ?? []).filter(v => v.childId === childId).flatMap(v => v.cards);
+  // Vokabeln und Lernkarten (Klassenarbeit) getrennt zählen
+  const decks = (d.vocab ?? []).filter(v => v.childId === childId);
+  const vocabCards = decks.filter(v => !v.prepId).flatMap(v => v.cards);
+  const prepCards = decks.filter(v => v.prepId).flatMap(v => v.cards);
+  const prepTitles = new Set(decks.filter(v => v.prepId).map(v => v.title));
   const from = shiftDay(end, -(n - 1));
   const inRange = (x: string) => x >= from && x <= end;
-  // Vokabel-Runden vor Einführung des Lern-Logs: aus den Punkte-Buchungen „Vokabeln: Titel (3/10)“
-  const ledgerRounds: Record<string, { w: number; ok: number; r: number }> = {};
+  // Runden vor Einführung des Lern-Logs: aus den Punkte-Buchungen „Vokabeln: Titel (3/10)“
+  type R = { w: number; ok: number; r: number };
+  const ledgerRounds: Record<string, R> = {}, ledgerPrep: Record<string, R> = {};
   for (const e of d.ledger) {
     if (e.childId !== childId || !e.at || !inRange(e.at.slice(0, 10))) continue;
-    const m = /^Vokabeln: .*\((\d+)\/(\d+)\)$/.exec(e.reason);
+    const m = /^Vokabeln: (.*) \((\d+)\/(\d+)\)$/.exec(e.reason);
     if (!m) continue;
-    const k = e.at.slice(0, 10), x = (ledgerRounds[k] ??= { w: 0, ok: 0, r: 0 });
-    x.ok += +m[1]; x.w += +m[2]; x.r++;
+    const k = e.at.slice(0, 10), bag = prepTitles.has(m[1]) ? ledgerPrep : ledgerRounds, x = (bag[k] ??= { w: 0, ok: 0, r: 0 });
+    x.ok += +m[2]; x.w += +m[3]; x.r++;
   }
   const sheets = (d.worksheets ?? []).filter(w => w.childId === childId && w.status !== 'offen').map(w => ({ w, day: sheetDay(d, w) })).filter(x => inRange(x.day));
   const subjects = new Map<string, SubjectRow>();
-  const subj = (k: string) => { let r = subjects.get(k); if (!r) subjects.set(k, (r = { subject: k, secs: 0, tests: 0, words: 0, understood: 0, checked: 0 })); return r; };
+  const subj = (k: string) => { let r = subjects.get(k); if (!r) subjects.set(k, (r = { subject: k, secs: 0, tests: 0, words: 0, cards: 0, understood: 0, checked: 0 })); return r; };
 
   const days: DayRow[] = [];
-  let secs = 0, words = 0, ok = 0, graded = 0, rounds = 0, mastered = 0;
+  let secs = 0, words = 0, ok = 0, graded = 0, rounds = 0, mastered = 0, flash = 0;
   for (let i = 0; i < n; i++) {
     const k = shiftDay(from, i), L = log[k] ?? {}, lr = ledgerRounds[k];
-    const w = Math.max(L.w ?? 0, vDays[k] ?? 0, lr?.w ?? 0, cards.filter(c => c.seen === k).length);
+    const kw = Math.max(L.kw ?? 0, ledgerPrep[k]?.w ?? 0, prepCards.filter(c => c.seen === k).length);
+    // Alte Tageswerte enthalten auch Lernkarten, die ziehen wir ab
+    const w = Math.max(L.w ?? 0, Math.max(0, (vDays[k] ?? 0) - kw), lr?.w ?? 0, vocabCards.filter(c => c.seen === k).length);
     // Trefferquote nur aus Runden mit bekannter Auswertung
     const okK = L.w ? L.ok ?? 0 : lr?.ok ?? 0, gradedK = L.w ? L.w : lr?.w ?? 0;
     const t = sheets.filter(x => x.day === k).length;
     const sec = L.s ?? 0;
-    days.push({ date: k, secs: sec, words: w, ok: okK, tests: t, active: !!(sec || w || t) });
-    secs += sec; words += w; ok += okK; graded += gradedK; rounds += L.r ?? lr?.r ?? 0; mastered += L.m ?? 0;
+    days.push({ date: k, secs: sec, words: w, ok: okK, tests: t, active: !!(sec || w || t || kw) });
+    secs += sec; words += w; flash += kw; ok += okK; graded += gradedK; rounds += L.r ?? lr?.r ?? 0; mastered += L.m ?? 0;
     for (const [s, v] of Object.entries(L.subj ?? {})) subj(s).secs += v;
   }
   for (const { w } of sheets) {
@@ -110,21 +117,21 @@ export function summarize(d: FamilyData, childId: string, n: number, end = today
     if (w.understanding) { r.checked++; r.understood += U_SCORE[w.understanding]; }
   }
   // Vokabeln je Sprache: Wörter, die im Zeitraum zuletzt geübt wurden
-  for (const v of (d.vocab ?? []).filter(v => v.childId === childId)) {
+  for (const v of decks) {
     const nSeen = v.cards.filter(c => c.seen && inRange(c.seen)).length;
     if (!nSeen) continue;
-    const k = v.prepId ? (d.exams ?? []).find(e => e.id === v.prepId)?.subject ?? v.lang : v.lang;
-    subj(k).words += nSeen;
+    if (v.prepId) subj((d.exams ?? []).find(e => e.id === v.prepId)?.subject ?? v.lang).cards += nSeen;
+    else subj(v.lang).words += nSeen;
   }
   const done = sheets.map(x => x.w);
   const checked = done.filter(w => w.understanding && !w.exam);
   const probes = sheets.filter(x => x.w.exam && x.w.status === 'geprueft').map(x => ({ sheet: x.w, subject: sheetSubject(d, x.w), date: x.day })).sort((a, b) => b.date.localeCompare(a.date));
   return {
-    days, secs, activeDays: days.filter(x => x.active).length, words, ok, graded, rounds, mastered,
+    days, secs, activeDays: days.filter(x => x.active).length, words, flash, ok, graded, rounds, mastered,
     tests: done.sort((a, b) => sheetDay(d, b).localeCompare(sheetDay(d, a))),
     checked: checked.length, understood: checked.reduce((a, w) => a + U_SCORE[w.understanding!], 0),
     probes,
-    subjects: [...subjects.values()].sort((a, b) => b.secs - a.secs || b.tests - a.tests || b.words - a.words),
+    subjects: [...subjects.values()].sort((a, b) => b.secs - a.secs || b.tests - a.tests || b.words + b.cards - a.words - a.cards),
     hasTime: end >= TIME_SINCE || days.some(x => x.secs > 0),
   };
 }

@@ -99,6 +99,7 @@ export interface VocabStats { streak: number; last?: string; best: number; total
 export interface LearnDay {
   /** aktive Lernzeit in Sekunden */ s?: number;
   /** Vokabeln/Lernkarten abgefragt, davon beim ersten Versuch richtig, Runden */ w?: number; ok?: number; r?: number;
+  /** Lernkarten zu Klassenarbeiten: abgefragt, davon richtig */ kw?: number; kok?: number;
   /** Wörter, die an diesem Tag neu „sitzen“ (Fach 3 erreicht) */ m?: number;
   /** Tests und Probe-Arbeiten abgegeben */ t?: number;
   /** Lernzeit in Sekunden je Fach (z. B. Englisch, Mathe) */ subj?: Record<string, number>;
