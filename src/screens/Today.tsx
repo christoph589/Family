@@ -70,9 +70,65 @@ export function Today({ childIds, parent, meId }: { childIds: string[]; parent: 
           </View>
         </View>
       )}
-      <View style={[s.row, { alignItems: 'flex-start', gap: 18 }]}>
-        {kids.map(k => <ChildColumn key={k.id} child={k} parent={parent} />)}
-      </View>
+      {parent && kids.length > 1 ? <KidOverview kids={kids} /> : (
+        <View style={[s.row, { alignItems: 'flex-start', gap: 18 }]}>
+          {kids.map(k => <ChildColumn key={k.id} child={k} parent={parent} />)}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** Eltern mit mehreren Kindern: pro Kind eine kurze Zeile. Antippen zeigt alle Aufgaben des Kindes. */
+function KidOverview({ kids }: { kids: Child[] }) {
+  const { data, update } = useFamily();
+  const [open, setOpen] = useState<string | null>(null);
+  const date = today();
+  const sel = kids.find(k => k.id === open);
+  if (sel) return (
+    <View style={{ gap: 12 }}>
+      <Pressable onPress={() => setOpen(null)} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 }}>
+        <Text style={{ color: C.accent, fontWeight: '800', fontSize: 16 }}>← Alle Kinder</Text>
+      </Pressable>
+      <ChildColumn child={sel} parent />
+    </View>
+  );
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={s.label}>Kinder heute</Text>
+      {kids.map(child => {
+        const items = tasksFor(data!, child.id, date);
+        const done = items.filter(i => i.completion?.status === 'bestaetigt').length;
+        const wait = items.filter(i => i.completion?.status === 'wartet');
+        const special = items.filter(i => i.task.special && i.completion?.status !== 'bestaetigt').length;
+        const pct = items.length ? done / items.length : 0;
+        return (
+          <Pressable key={child.id} onPress={() => setOpen(child.id)} accessibilityRole="button" accessibilityLabel={`${child.name}: ${done} von ${items.length} erledigt`}
+            style={[{ backgroundColor: C.surface, borderRadius: 22, padding: 14, gap: 10, borderLeftWidth: 6, borderLeftColor: child.color }, SHADOW.sm]}>
+            <View style={[s.row, { flexWrap: 'nowrap', gap: 12 }]}>
+              <Avatar name={child.name} color={child.color} photo={child.photo} size={46} />
+              <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+                <View style={[s.row, { flexWrap: 'nowrap', justifyContent: 'space-between' }]}>
+                  <Text style={[s.text, { fontWeight: '800', fontSize: 17, flexShrink: 1 }]} numberOfLines={1}>{child.name}</Text>
+                  <Text style={{ fontWeight: '800', color: C.fg }}>⭐ {pointsOf(data!, child.id)}</Text>
+                </View>
+                <View style={{ height: 8, borderRadius: 4, backgroundColor: C.surface2, overflow: 'hidden' }}>
+                  <View style={{ width: `${pct * 100}%`, height: '100%', backgroundColor: pct >= 1 ? C.ok : child.color, borderRadius: 4 }} />
+                </View>
+                <Text style={[s.muted, { fontSize: 13 }]}>{items.length ? (pct >= 1 ? `Alles erledigt 🎉 (${items.length})` : `${done} von ${items.length} erledigt`) : 'Heute keine Aufgaben'}{special ? ` · ⭐ ${special} Sonderaufgabe${special > 1 ? 'n' : ''}` : ''}</Text>
+              </View>
+              <Text style={{ color: C.muted, fontSize: 22 }}>›</Text>
+            </View>
+            {wait.length > 0 && (
+              <Pressable onPress={() => update(d => wait.reduce((x, i) => confirm(x, i.task, date), d))} accessibilityRole="button"
+                style={[s.row, { flexWrap: 'nowrap', backgroundColor: C.warnSoft, borderRadius: 14, paddingVertical: 8, paddingHorizontal: 12, gap: 8 }]}>
+                <Text style={[s.text, { flex: 1, fontSize: 14, fontWeight: '700', color: C.warn }]} numberOfLines={1}>⏳ {wait.length} warten: {wait.map(i => i.task.title).join(', ')}</Text>
+                <View style={{ backgroundColor: C.ok, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>✓ Alle</Text></View>
+              </Pressable>
+            )}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
