@@ -138,9 +138,25 @@ export function cloudStore(fid: string): DataStore {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'family_state', filter: `family_id=eq.${fid}` },
           p => { const n = p.new as { data: FamilyData; version: number }; if (n?.data) cb(n.data, n.version); })
         .subscribe();
-      // Fallback, falls Realtime getrennt war (Tablet im Standby): beim Zurückkehren neu laden
-      const poll = setInterval(() => { fetchState(fid).then(s => cb(s.data, s.version), () => {}); }, 30000);
-      return () => { clearInterval(poll); sb().removeChannel(ch); };
+      // Fallback, falls Realtime getrennt war (Tablet im Standby): erst nur die Versionsnummer fragen,
+      // den ganzen Stand nur bei Änderung laden. Bei Fehlern seltener fragen, im Hintergrund gar nicht.
+      let last = -1, wait = 30000, stop = false, timer: ReturnType<typeof setTimeout> | null = null;
+      const tick = async () => {
+        if (stop) return;
+        const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+        if (!hidden) {
+          try {
+            const { data, error } = await sb().from('family_state').select('version').eq('family_id', fid).single();
+            if (error) throw error;
+            const v = (data as { version: number }).version;
+            if (v !== last) { const s = await fetchState(fid); last = s.version; cb(s.data, s.version); }
+            wait = 30000;
+          } catch { wait = Math.min(wait * 2, 300000); }
+        }
+        if (!stop) timer = setTimeout(tick, wait);
+      };
+      timer = setTimeout(tick, wait);
+      return () => { stop = true; if (timer) clearTimeout(timer); sb().removeChannel(ch); };
     },
     async clear() { await setLink(null); },
   };
