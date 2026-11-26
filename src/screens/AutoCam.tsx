@@ -8,10 +8,10 @@ import { C } from '../ui/theme';
  * Neu = Bild unterscheidet sich deutlich von der letzten Aufnahme (umgeblättert).
  * Ruhig = zwischen zwei Bildern kaum Bewegung, etwa eine Sekunde lang.
  */
-const W = 64, H = 48;
-const STILL = 4.5;      // mittlere Helligkeitsänderung pro Pixel zwischen zwei Bildern
-const CHANGED = 14;     // Abstand zur letzten Aufnahme, ab dem es eine neue Seite ist
-const HOLD_MS = 900;    // so lange ruhig halten
+const W = 32, H = 24; // grob, damit Wackeln und Bildrauschen kaum zählen
+const STILL = 9;      // mittlere Helligkeitsänderung pro Pixel zwischen zwei Bildern
+const CHANGED = 12;     // Abstand zur letzten Aufnahme, ab dem es eine neue Seite ist
+const HOLD_MS = 700;    // so lange ruhig halten
 
 export const autoCamSupported = () => typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
@@ -22,6 +22,7 @@ export function AutoCam({ count, max, onShot, onClose }: { count: number; max: n
   const [hint, setHint] = useState('Kamera startet …');
   const [still, setStill] = useState(0);
   const [flash, setFlash] = useState(false);
+  const [dbg, setDbg] = useState('');
   const autoRef = useRef(true); autoRef.current = auto;
   const shootRef = useRef<() => void>(() => {});
   const full = count >= max;
@@ -30,7 +31,7 @@ export function AutoCam({ count, max, onShot, onClose }: { count: number; max: n
     let stream: MediaStream | null = null, timer: any, dead = false;
     const small = document.createElement('canvas'); small.width = W; small.height = H;
     const sctx = small.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D;
-    let prev: Uint8ClampedArray | null = null, last: Uint8ClampedArray | null = null, stillSince = 0, armed = true;
+    let motionAvg = 99, prev: Uint8ClampedArray | null = null, last: Uint8ClampedArray | null = null, stillSince = 0, armed = true;
     const gray = () => {
       const v = video.current!; sctx.drawImage(v, 0, 0, W, H);
       const d = sctx.getImageData(0, 0, W, H).data, g = new Uint8ClampedArray(W * H);
@@ -58,7 +59,9 @@ export function AutoCam({ count, max, onShot, onClose }: { count: number; max: n
         timer = setInterval(() => {
           const v = video.current; if (!v || !v.videoWidth) return;
           const g = gray();
-          const motion = prev ? diff(g, prev) : 99; prev = g;
+          const raw = prev ? diff(g, prev) : 99; prev = g;
+          motionAvg = motionAvg * 0.5 + raw * 0.5; const motion = motionAvg;
+          setDbg(`Bewegung ${raw.toFixed(1)} · Abstand ${last ? diff(g, last).toFixed(1) : '-'}`);
           if (!armed && last && diff(g, last) > CHANGED) armed = true;
           if (!autoRef.current) { setHint('Zum Aufnehmen den Auslöser tippen.'); return; }
           if (mean(g) < 35) { setHint('Zu dunkel. Bitte mehr Licht.'); stillSince = 0; setStill(0); return; }
@@ -90,6 +93,7 @@ export function AutoCam({ count, max, onShot, onClose }: { count: number; max: n
           </Pressable>
         </View>
         <Text style={{ color: '#fff', fontSize: 15 }}>{err || hint}</Text>
+        {!!dbg && <Text style={{ color: '#ffffff99', fontSize: 11 }}>{dbg}</Text>}
         {auto && !err && <View style={{ height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}><View style={{ height: 5, width: `${Math.round(still * 100)}%`, backgroundColor: C.ok }} /></View>}
       </View>
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: 40, paddingTop: 18, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.45)' }}>
