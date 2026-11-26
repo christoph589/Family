@@ -18,6 +18,7 @@ import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
 import { AiPrivacy, Family, Holiday, ParentPin } from './src/screens/Family';
 import { WeatherSetup } from './src/ui/Weather';
+import { TrainSetup } from './src/ui/Train';
 import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import { Kiosk, wantsWall } from './src/ui/Kiosk';
@@ -364,6 +365,7 @@ function Root() {
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Family />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <ParentPin />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <WeatherSetup />}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <TrainSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <AiPrivacy />}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
         {tab === 'aufgaben' && admin && showSec && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}

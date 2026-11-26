@@ -18,6 +18,7 @@ import { Avatar, PersonHead } from '../ui/Avatar';
 import { useFeedItems } from '../data/feeds';
 import { useIcloudItems } from '../data/icloud';
 import { WeatherPill } from '../ui/Weather';
+import { TrainCards } from '../ui/Train';
 
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 
@@ -64,6 +65,7 @@ function BathBoard({ data, date, now, controls, toggle, onTouch }: { data: Famil
         {controls}
       </View>
       {width < 700 && <WeatherPill />}
+      <TrainCards big />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {data.children.map(c => <BathColumn key={c.id} data={data} child={c} date={date} part={part} toggle={toggle} rowH={rowH} />)}
       </View>
@@ -226,6 +228,7 @@ export function Board({ onExit }: { onExit: () => void }) {
         {controls}
       </View>
 
+      <TrainCards big={wide} />
       {birthdaysOn(data, date).map(({ child, age }) => (
         <View key={child.id} style={[s.card, { backgroundColor: child.color, flexDirection: 'row', alignItems: 'center', gap: 16 }]}>
           <Text style={{ fontSize: 44 }}>🎂🎉</Text>
