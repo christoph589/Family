@@ -7,15 +7,24 @@ import { Gift } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { Money } from './Money';
+import { KidWishes, ParentWishes } from './Wishes';
+import { pendingWishes } from '../data/wishes';
 
-/** Geld-Reiter für Eltern: Taschengeld und Geschenke. */
+/** Geld-Reiter: Taschengeld, Wunschzettel und (für Eltern) Geschenke. */
 export function MoneyTab({ childIds, parent, meId }: { childIds: string[]; parent: boolean; meId?: string }) {
-  const [part, setPart] = useState<'taschengeld' | 'geschenke'>('taschengeld');
-  if (!parent) return <Money childIds={childIds} parent={parent} />;
+  const { data } = useFamily();
+  const [part, setPart] = useState<'taschengeld' | 'wuensche' | 'geschenke'>('taschengeld');
+  const fresh = data ? pendingWishes(data).filter(w => childIds.includes(w.childId)).length : 0;
+  if (!parent) return (
+    <View style={{ gap: 14 }}>
+      <Segmented value={part} onChange={setPart} options={[{ value: 'taschengeld', label: '👛 Taschengeld' }, { value: 'wuensche', label: '🎁 Wunschzettel' }]} />
+      {part === 'taschengeld' ? <Money childIds={childIds} parent={parent} /> : childIds.map(id => <KidWishes key={id} childId={id} />)}
+    </View>
+  );
   return (
     <View style={{ gap: 14 }}>
-      <Segmented value={part} onChange={setPart} options={[{ value: 'taschengeld', label: '👛 Taschengeld' }, { value: 'geschenke', label: '🎁 Geschenke' }]} />
-      {part === 'taschengeld' ? <Money childIds={childIds} parent={parent} /> : <Gifts meId={meId} />}
+      <Segmented value={part} onChange={setPart} options={[{ value: 'taschengeld', label: '👛 Taschengeld' }, { value: 'wuensche', label: fresh ? `📝 Wünsche (${fresh})` : '📝 Wünsche' }, { value: 'geschenke', label: '🎁 Geschenke' }]} />
+      {part === 'taschengeld' ? <Money childIds={childIds} parent={parent} /> : part === 'wuensche' ? <ParentWishes childIds={childIds} meId={meId} /> : <Gifts meId={meId} />}
     </View>
   );
 }
