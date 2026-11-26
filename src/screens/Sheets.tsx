@@ -12,6 +12,7 @@ import { PaperScore, ResultLine, scanAndGrade } from './Exam';
 import { printHtml, sheetHtml } from '../ui/Print';
 import { AI_ERROR, checkAnswers, getSample } from '../ai/generate';
 import { currentGrade } from '../data/logic';
+import { activeTimer, logLearn, sheetSubject } from '../data/learnstats';
 
 
 /** Eltern legen eine Arbeit an. Später schlägt die KI Fragen und Lösungen vor. */
@@ -91,6 +92,7 @@ const drafts: Record<string, string[]> = {};
 
 // Startzeit der Probe-Arbeit, damit die Uhr beim kurzen Verlassen weiterläuft
 const started: Record<string, number> = {};
+const spent: Record<string, number> = {};
 const clock = (w: Worksheet) => { const m = Math.floor((Date.now() - (started[w.id] ?? Date.now())) / 60000); return `${m} Min`; };
 
 function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void }) {
@@ -98,7 +100,10 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
   const [, tick] = useState(0);
   useEffect(() => { if (!sheet.exam) return; started[sheet.id] ??= Date.now(); const t = setInterval(() => tick(x => x + 1), 30000); return () => clearInterval(t); }, [sheet.id]);
   const [answers, setAnswersState] = useState<string[]>(drafts[sheet.id] ?? sheet.questions.map(() => ''));
-  const setAnswers = (fn: (a: string[]) => string[]) => setAnswersState(a => (drafts[sheet.id] = fn(a)));
+  // Aktive Lernzeit: Pausen über 5 Minuten ohne Eingabe zählen nicht. Bleibt erhalten, wenn das Kind später weitermacht.
+  const timer = useRef(activeTimer(300)).current;
+  useEffect(() => () => { spent[sheet.id] = (spent[sheet.id] ?? 0) + timer.take(); }, [sheet.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setAnswers = (fn: (a: string[]) => string[]) => { timer.tick(); setAnswersState(a => (drafts[sheet.id] = fn(a))); };
   const done = sheet.questions.filter((q, i) => isAnswered(q, answers[i] ?? '')).length;
   const complete = done === sheet.questions.length;
   // Am Handy eine Aufgabe pro Bildschirm, am Tablet alle untereinander
@@ -122,8 +127,9 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
     </View>
   );
   const submit = <Button title="Abgeben" disabled={!complete} onPress={() => {
-    const done = { ...sheet, answers: answers.map(a => a.trim()), status: 'abgegeben' as const };
-    update(d => setSheet(d, done));
+    const done = { ...sheet, answers: answers.map(a => a.trim()), status: 'abgegeben' as const, doneAt: today() };
+    const secs = (spent[sheet.id] ?? 0) + timer.take(); spent[sheet.id] = 0;
+    update(d => logLearn(setSheet(d, done), sheet.childId, { t: 1, s: secs, subject: sheetSubject(d, sheet) }));
     delete drafts[sheet.id]; onDone();
     runCheck(done, update);
   }} />;

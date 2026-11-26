@@ -95,6 +95,15 @@ export interface VocabBook { id: string; childId: string; title: string; lang: s
 export interface VocabStats { streak: number; last?: string; best: number; total: number;
   /** abgefragte Wörter pro Tag (letzte 14 Tage) */ days?: Record<string, number>; /** Tage mit Vokabeln insgesamt */ learnDays?: number; /** an diesem Tag haben Eltern über das Tageslimit hinaus freigegeben */ unlock?: string }
 
+/** Was ein Kind an einem Tag gelernt hat. Nur, was das Kind selbst gemacht hat. */
+export interface LearnDay {
+  /** aktive Lernzeit in Sekunden */ s?: number;
+  /** Vokabeln/Lernkarten abgefragt, davon beim ersten Versuch richtig, Runden */ w?: number; ok?: number; r?: number;
+  /** Wörter, die an diesem Tag neu „sitzen“ (Fach 3 erreicht) */ m?: number;
+  /** Tests und Probe-Arbeiten abgegeben */ t?: number;
+  /** Lernzeit in Sekunden je Fach (z. B. Englisch, Mathe) */ subj?: Record<string, number>;
+}
+
 export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
 export interface Question {
   q: string;
@@ -126,6 +135,8 @@ export interface Worksheet {
   /** Auf Papier geschrieben und abfotografiert: KI macht eine Vorkorrektur, Eltern bestätigen */
   /** KI-Abgleich digitaler Antworten mit der Lösung (Vorschlag für die Eltern) */
   aiCheck?: { ok: boolean[]; notes: string[]; pts?: number[] };
+  /** Tag, an dem das Kind abgegeben hat (YYYY-MM-DD) */
+  doneAt?: string;
   scan?: { photos: string[]; at: string; by?: string; ai?: { pts: number[]; notes: string[]; unsure: boolean[]; summary?: string }; error?: string };
 }
 
@@ -190,6 +201,8 @@ export interface FamilyData {
   vocab?: VocabDeck[];
   vocabBooks?: VocabBook[];
   vocabStats?: Record<string, VocabStats>;
+  /** Lern-Statistik je Kind und Tag (letzte 120 Tage), Schlüssel: Kind-ID, dann YYYY-MM-DD */
+  learnLog?: Record<string, Record<string, LearnDay>>;
   worksheets?: Worksheet[];
   exams?: ExamPrep[];
   events?: CalEvent[];
