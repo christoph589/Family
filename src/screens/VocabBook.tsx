@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { DeleteButton } from '../ui/DeleteButton';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { today, uid } from '../data/logic';
 import { LANGS, langOf, newCards } from '../data/vocab';
@@ -65,12 +65,29 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [sel, setSel] = useState<number[]>([]);
+  /** Abgewählte Wörter (Schlüssel unit|wort). Standard: alle Wörter der gewählten Units. */
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const [showWords, setShowWords] = useState(false);
+  const [rangeFrom, setRangeFrom] = useState<string | null>(null);
   const ctl = useRef<AbortController | null>(null);
   useEffect(() => { let on = true; getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, []);
   const count = (u: string) => book.entries.filter(e => e.unit === u).length;
   const picked = book.units.filter((_, i) => sel.includes(i));
   const known = new Set((data?.vocab ?? []).filter(v => v.childId === book.childId).flatMap(v => v.cards.map(c => norm(c.front))));
-  const fresh = book.entries.filter(e => picked.includes(e.unit) && !known.has(norm(e.front)));
+  const keyOf = (e: { unit: string; front: string }) => e.unit + '|' + e.front;
+  const inUnits = book.entries.filter(e => picked.includes(e.unit));
+  const chosen = inUnits.filter(e => !off.has(keyOf(e)));
+  const fresh = chosen.filter(e => !known.has(norm(e.front)));
+  function tapWord(k: string) {
+    if (rangeFrom === '') { setRangeFrom(k); return; }
+    if (rangeFrom) {
+      const a = inUnits.findIndex(e => keyOf(e) === rangeFrom), b = inUnits.findIndex(e => keyOf(e) === k);
+      const [lo, hi] = a < b ? [a, b] : [b, a];
+      setOff(new Set(inUnits.filter((_, i) => i < lo || i > hi).map(keyOf)));
+      setRangeFrom(null); return;
+    }
+    setOff(x => { const n = new Set(x); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  }
 
   const [prog, setProg] = useState('');
   function merge(cards: { unit: string; front: string; back: string }[]) {
@@ -115,12 +132,12 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
       : stop === 'cancelled' ? `Abgebrochen. ${total} Vokabeln bis dahin gelesen und gespeichert.` : `${total} Vokabeln gelesen und gespeichert.`);
     setBusy(false);
   }
-  const tapUnit = (i: number) => setSel(x => (x.includes(i) ? x.filter(j => j !== i) : [...x, i]));
+  const tapUnit = (i: number) => { setSel(x => (x.includes(i) ? x.filter(j => j !== i) : [...x, i])); setRangeFrom(null); };
   function start() {
     const id = uid();
     const title = `${book.title}: ${picked.join(', ')}`.slice(0, 80);
     update(d => ({ ...d, vocab: [...(d.vocab ?? []), { id, childId: book.childId, title, lang: book.lang, cards: newCards(fresh.map(e => ({ front: e.front, back: e.back }))), createdAt: today() }] }));
-    setSel([]); onStarted(id);
+    setSel([]); setOff(new Set()); setShowWords(false); onStarted(id);
   }
 
   return (
@@ -145,12 +162,51 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
             })}
           </View>
           {picked.length > 0 && (
-            <View style={s.row}>
-              <Button title={fresh.length ? `${fresh.length} Vokabeln lernen` : 'Schon alle im Kasten'} disabled={!fresh.length} onPress={start} />
-              <Button ghost title="Auswahl aufheben" onPress={() => setSel([])} />
+            <View style={{ backgroundColor: C.surface, borderRadius: 14, padding: 10, gap: 8 }}>
+              <Pressable onPress={() => setShowWords(v => !v)} accessibilityRole="button" style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
+                <Text style={[s.text, { fontWeight: '800', flexShrink: 1 }]}>✏️ Wörter: {chosen.length} von {inUnits.length} gewählt</Text>
+                <Text style={{ color: C.accent, fontWeight: '800' }}>{showWords ? 'Zuklappen ▲' : 'Auswählen ▼'}</Text>
+              </Pressable>
+              {showWords && (
+                <>
+                  <View style={[s.row, { gap: 6 }]}>
+                    <Button ghost title={rangeFrom === null ? '↕️ Von … bis …' : 'Bereich abbrechen'} style={{ paddingVertical: 8, paddingHorizontal: 12, minHeight: 38 }} onPress={() => setRangeFrom(r => (r === null ? '' : null))} />
+                    <Button ghost title="Alle" style={{ paddingVertical: 8, paddingHorizontal: 12, minHeight: 38 }} onPress={() => { setOff(new Set()); setRangeFrom(null); }} />
+                    <Button ghost title="Keine" style={{ paddingVertical: 8, paddingHorizontal: 12, minHeight: 38 }} onPress={() => { setOff(new Set(inUnits.map(keyOf))); setRangeFrom(null); }} />
+                  </View>
+                  {rangeFrom !== null && <Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>{rangeFrom === '' ? 'Tippe das erste Wort an.' : 'Jetzt das letzte Wort antippen.'}</Text>}
+                  <ScrollView style={{ maxHeight: 380 }} nestedScrollEnabled>
+                    {picked.map(u => (
+                      <View key={u} style={{ gap: 2, marginBottom: 6 }}>
+                        <Text style={[s.label, { marginTop: 4 }]}>{u}</Text>
+                        {inUnits.filter(e => e.unit === u).map((e, i) => {
+                          const k = keyOf(e), on = !off.has(k), mark = rangeFrom === k;
+                          return (
+                            <Pressable key={k} onPress={() => tapWord(k)} accessibilityRole="checkbox" accessibilityState={{ checked: on }}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 6, borderRadius: 8, backgroundColor: mark ? C.accentSoft : 'transparent' }}>
+                              <Text style={{ width: 24, textAlign: 'right', color: C.muted, fontSize: 12 }}>{i + 1}</Text>
+                              <View style={{ width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: C.accent, backgroundColor: on ? C.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                                {on && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+                              </View>
+                              <Text style={[s.text, { flex: 1, minWidth: 0, fontSize: 14, opacity: on ? 1 : 0.5 }]} numberOfLines={1}>{e.front} <Text style={{ color: C.muted }}>· {e.back}</Text></Text>
+                              {known.has(norm(e.front)) && <Text style={{ fontSize: 11, color: C.muted }}>schon im Kasten</Text>}
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
             </View>
           )}
-          {picked.length > 0 && fresh.length < book.entries.filter(e => picked.includes(e.unit)).length && fresh.length > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Wörter, die schon in einem deiner Kästen sind, kommen nicht doppelt dazu.</Text>}
+          {picked.length > 0 && (
+            <View style={s.row}>
+              <Button title={fresh.length ? `${fresh.length} Vokabeln lernen` : chosen.length ? 'Schon alle im Kasten' : 'Erst Wörter wählen'} disabled={!fresh.length} onPress={start} />
+              <Button ghost title="Auswahl aufheben" onPress={() => { setSel([]); setOff(new Set()); setRangeFrom(null); }} />
+            </View>
+          )}
+          {picked.length > 0 && fresh.length < chosen.length && fresh.length > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Wörter, die schon in einem deiner Kästen sind, kommen nicht doppelt dazu.</Text>}
         </>
       )}
       {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI liest {prog || 'die Seiten'}. Pro Paket etwa eine Minute. Bereits Gelesenes ist schon gespeichert.</Text></View>}
