@@ -10,8 +10,10 @@ import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { pickPhotos } from './Exam';
 
-/** Pro Durchgang höchstens so viele Seiten, damit die Antwort der KI nicht abgeschnitten wird. */
-const BATCH = 6;
+/** So viele Seiten auf einmal auswählen. Die App schickt sie in kleinen Paketen nacheinander an die KI. */
+const MAX_PAGES = 40;
+/** Seiten pro KI-Aufruf, damit die Antwort nicht abgeschnitten wird. */
+const CHUNK = 3;
 const norm = (v: string) => v.trim().toLowerCase();
 
 /** Ganze Vokabelverzeichnisse: zu Schuljahresbeginn in Etappen importieren, dann Bereich (von Unit bis Unit) zum Lernen wählen. */
@@ -72,23 +74,47 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
   const known = new Set((data?.vocab ?? []).filter(v => v.childId === book.childId).flatMap(v => v.cards.map(c => norm(c.front))));
   const fresh = book.entries.filter(e => picked.includes(e.unit) && !known.has(norm(e.front)));
 
+  const [prog, setProg] = useState('');
+  function merge(cards: { unit: string; front: string; back: string }[]) {
+    update(d => ({ ...d, vocabBooks: (d.vocabBooks ?? []).map(b => {
+      if (b.id !== book.id) return b;
+      const seen = new Set(b.entries.map(e => e.unit + '|' + norm(e.front)));
+      const add = cards.filter(c => !seen.has(c.unit + '|' + norm(c.front)) && (seen.add(c.unit + '|' + norm(c.front)), true));
+      const units = [...b.units]; for (const c of add) if (!units.includes(c.unit)) units.push(c.unit);
+      return { ...b, units, entries: [...b.entries, ...add] };
+    }) }));
+  }
   async function importPages() {
     setMsg('');
-    const photos = await pickPhotos(BATCH).catch(() => [] as string[]);
+    const photos = await pickPhotos(MAX_PAGES).catch(() => [] as string[]);
     if (!photos.length) return;
     setBusy(true);
     ctl.current = new AbortController();
-    try {
-      const cards = await extractVocabBook(photos, book.lang, book.units[book.units.length - 1], ctl.current.signal);
-      update(d => ({ ...d, vocabBooks: (d.vocabBooks ?? []).map(b => {
-        if (b.id !== book.id) return b;
-        const seen = new Set(b.entries.map(e => e.unit + '|' + norm(e.front)));
-        const add = cards.filter(c => !seen.has(c.unit + '|' + norm(c.front)) && (seen.add(c.unit + '|' + norm(c.front)), true));
-        const units = [...b.units]; for (const c of add) if (!units.includes(c.unit)) units.push(c.unit);
-        return { ...b, units, entries: [...b.entries, ...add] };
-      }) }));
-      setMsg(`${cards.length} Vokabeln gelesen. Weiter mit den nächsten Seiten (bis zu ${BATCH} auf einmal).`);
-    } catch (e: any) { if (e?.code !== 'cancelled') setMsg(AI_ERROR[e?.code] ?? 'Die Seiten konnten nicht gelesen werden. Bitte nochmal versuchen.'); }
+    let lastUnit = book.units[book.units.length - 1], total = 0;
+    const failed: string[] = [];
+    let stop = '';
+    for (let i = 0; i < photos.length && !stop; i += CHUNK) {
+      const part = photos.slice(i, i + CHUNK);
+      const label = part.length > 1 ? `${i + 1} bis ${i + part.length}` : `${i + 1}`;
+      setProg(`Seite ${label} von ${photos.length}`);
+      for (let tries = 0; tries < 2; tries++) {
+        try {
+          const cards = await extractVocabBook(part, book.lang, lastUnit, ctl.current.signal);
+          merge(cards); total += cards.length;
+          lastUnit = cards[cards.length - 1]?.unit ?? lastUnit;
+          break;
+        } catch (e: any) {
+          if (e?.code === 'cancelled') { stop = 'cancelled'; break; }
+          if (e?.code === 'daily_limit' || e?.code === 'no_consent' || e?.code === 'unavailable') { stop = AI_ERROR[e.code] ?? 'Die KI ist gerade nicht erreichbar.'; failed.push(label); break; }
+          if (tries === 1) failed.push(label);
+        }
+      }
+    }
+    setProg('');
+    const rest = stop && stop !== 'cancelled' ? ` ${stop}` : '';
+    setMsg(failed.length
+      ? `${total} Vokabeln gelesen. Nicht geklappt: Seite ${failed.join(', ')}. Diese Seiten bitte nochmal auswählen.${rest}`
+      : stop === 'cancelled' ? `Abgebrochen. ${total} Vokabeln bis dahin gelesen und gespeichert.` : `${total} Vokabeln gelesen und gespeichert.`);
     setBusy(false);
   }
   function tapUnit(i: number) {
@@ -131,10 +157,10 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
           {picked.length > 0 && fresh.length < book.entries.filter(e => picked.includes(e.unit)).length && fresh.length > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Wörter, die schon in einem deiner Kästen sind, kommen nicht doppelt dazu.</Text>}
         </>
       )}
-      {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI liest die Seiten. Das dauert etwa eine Minute.</Text></View>}
-      {!!msg && <Text style={{ color: /gelesen/.test(msg) ? C.ok : C.danger, fontWeight: '700', fontSize: 13 }}>{msg}</Text>}
+      {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI liest {prog || 'die Seiten'}. Pro Paket etwa eine Minute. Bereits Gelesenes ist schon gespeichert.</Text></View>}
+      {!!msg && <Text style={{ color: /Nicht geklappt|Limit|nicht erreichbar/.test(msg) ? C.danger : C.ok, fontWeight: '700', fontSize: 13 }}>{msg}</Text>}
       <View style={s.row}>
-        {ai && !busy && <Button ghost title={book.entries.length ? `+ Weitere Seiten (bis ${BATCH})` : `Seiten fotografieren (bis ${BATCH})`} onPress={importPages} />}
+        {ai && !busy && <Button ghost title={book.entries.length ? '+ Weitere Seiten' : `Seiten auswählen (bis ${MAX_PAGES} auf einmal)`} onPress={importPages} />}
         {busy && <Button ghost title="Abbrechen" onPress={() => ctl.current?.abort()} />}
         {!busy && <DeleteButton parent={parent} confirm="Buch wirklich löschen" onDelete={() => update(d => ({ ...d, vocabBooks: (d.vocabBooks ?? []).filter(b => b.id !== book.id) }))} />}
       </View>
