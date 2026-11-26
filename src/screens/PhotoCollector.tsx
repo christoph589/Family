@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { AutoCam, autoCamSupported } from './AutoCam';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { shrink } from './Learn';
@@ -23,12 +24,15 @@ export function PhotoCollector() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  useEffect(() => { open = r => { setPhotos([]); setMsg(''); setReq(r); }; return () => { open = null; }; }, []);
+  const [cam, setCam] = useState(false);
+  useEffect(() => { open = r => { setPhotos([]); setMsg(''); setCam(false); setReq(r); }; return () => { open = null; }; }, []);
   if (!req) return null;
   const room = req.max - photos.length;
 
+  const canAuto = Platform.OS === 'web' && autoCamSupported();
   async function add(camera: boolean) {
     setMsg('');
+    if (camera && canAuto) { setCam(true); return; }
     if (camera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync().catch(() => ({ granted: true }));
       if (!perm.granted) { setMsg('Kamera nicht erlaubt. Bitte in den Einstellungen freigeben.'); return; }
@@ -53,7 +57,7 @@ export function PhotoCollector() {
             <Text style={[s.h2, { flexShrink: 1 }]}>{req.title}</Text>
             <Text style={[s.muted, { fontWeight: '800' }]}>{photos.length} / {req.max}</Text>
           </View>
-          <Text style={[s.muted, { fontSize: 13 }]}>Eine Seite nach der anderen fotografieren. Erst wenn alle drin sind, auf „Fertig“ tippen.</Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>{canAuto ? 'Die Kamera bleibt offen und nimmt jede neue Seite automatisch auf, sobald du sie ruhig hältst. Einfach umblättern.' : 'Eine Seite nach der anderen fotografieren. Erst wenn alle drin sind, auf „Fertig“ tippen.'}</Text>
           {photos.length > 0 && (
             <ScrollView style={{ maxHeight: 260 }} contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {photos.map((p, i) => (
@@ -72,7 +76,7 @@ export function PhotoCollector() {
           {!!msg && <Text style={{ color: C.danger, fontWeight: '700' }}>{msg}</Text>}
           {room > 0 && (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Button title={photos.length ? '📸 Nächste Seite' : '📸 Foto aufnehmen'} disabled={busy} style={{ flex: 1, paddingVertical: 16 }} onPress={() => add(true)} />
+              <Button title={canAuto ? (photos.length ? '📸 Weiter scannen' : '📸 Scannen') : photos.length ? '📸 Nächste Seite' : '📸 Foto aufnehmen'} disabled={busy} style={{ flex: 1, paddingVertical: 16 }} onPress={() => add(true)} />
               <Button ghost title="🖼️ Galerie" disabled={busy} style={{ paddingVertical: 16 }} onPress={() => add(false)} />
             </View>
           )}
@@ -82,6 +86,7 @@ export function PhotoCollector() {
           </View>
         </View>
       </View>
+      {cam && <AutoCam count={photos.length} max={req.max} onShot={d => setPhotos(p => [...p, d].slice(0, req!.max))} onClose={() => setCam(false)} />}
     </Modal>
   );
 }
