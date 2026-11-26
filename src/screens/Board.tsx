@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DeleteButton } from '../ui/DeleteButton';
-import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { potBalance, potShares, birthdaysOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today, toggleByChild } from '../data/logic';
 import { TIME_ORDER } from '../data/templates';
@@ -29,6 +29,10 @@ function hardReload() {
 }
 const BUILD = process.env.EXPO_PUBLIC_BUILD ?? '';
 
+/** Ältere Tablets (Fire OS 7) kennen neue Emojis nicht und zeigen ein leeres Kästchen. Hier ein bekanntes Ersatz-Emoji. */
+const EMOJI_FALLBACK: Record<string, string> = { '🪥': '🦷', '🪣': '🧽', '🪴': '🌱', '🫙': '🥫', '🪮': '💇', '🩴': '👟' };
+const oldEmoji = (e: string) => (Platform.OS === 'web' && /Silk|KF[A-Z]{2,4}|Android [5-9]\b/.test(typeof navigator !== 'undefined' ? navigator.userAgent : '') ? EMOJI_FALLBACK[e] ?? e : e);
+
 type WallView = 'zentral' | 'bad';
 const urlView = (): WallView | null => {
   if (typeof location === 'undefined') return null;
@@ -40,27 +44,34 @@ const partOf = (d: Date) => (d.getHours() < 11 ? 'morgens' : d.getHours() < 16 ?
 
 /** Bad-Ansicht: nur die Aufgaben der Kinder, groß und zum Abhaken. Was gerade dran ist (morgens/abends), steht oben. */
 function BathBoard({ data, date, now, controls, toggle, onTouch }: { data: FamilyData; date: string; now: Date; controls: React.ReactNode; toggle: (t: Task) => void; onTouch: () => void }) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const part = partOf(now);
+  // Alles auf einen Bildschirm: Zeilenhöhe nach dem Kind mit den meisten Aufgaben richten
+  const most = Math.max(1, ...data.children.map(c => tasksFor(data, c.id, date).length));
+  const cols = width >= 700 ? data.children.length : 1;
+  const free = height - 100 - (cols > 1 ? 1 : data.children.length) * 85;
+  const rowH = cols > 1 ? Math.max(30, Math.min(58, Math.floor(free / most) - 6)) : 58;
   return (
-    <ScrollView onTouchStart={onTouch} style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: width >= 700 ? 24 : 14, gap: 16 }}>
+    <ScrollView onTouchStart={onTouch} style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: width >= 700 ? 18 : 14, gap: 12 }}>
       <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap' }]}>
         <View style={{ flexShrink: 1 }}>
-          <Text style={{ fontSize: 44, fontWeight: '800', color: C.fg, lineHeight: 48 }}>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</Text>
+          <Text style={{ fontSize: 38, fontWeight: '800', color: C.fg, lineHeight: 42 }}>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</Text>
           <Text style={{ fontSize: 18, color: C.muted, fontWeight: '700' }}>{now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })} · {PART_LABEL[part]}</Text>
           {!!BUILD && <Text style={{ fontSize: 11, color: C.muted, opacity: 0.6 }}>Stand {BUILD}</Text>}
         </View>
         {controls}
       </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
-        {data.children.map(c => <BathColumn key={c.id} data={data} child={c} date={date} part={part} toggle={toggle} />)}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+        {data.children.map(c => <BathColumn key={c.id} data={data} child={c} date={date} part={part} toggle={toggle} rowH={rowH} />)}
       </View>
-      <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Antippen zum Abhaken. Mama oder Papa bestätigen, dann gibt es die Punkte.</Text>
+      {rowH >= 50 && <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Antippen zum Abhaken. Mama oder Papa bestätigen, dann gibt es die Punkte.</Text>}
     </ScrollView>
   );
 }
 
-function BathColumn({ data, child, date, part, toggle }: { data: FamilyData; child: Child; date: string; part: string; toggle: (t: Task) => void }) {
+function BathColumn({ data, child, date, part, toggle, rowH }: { data: FamilyData; child: Child; date: string; part: string; toggle: (t: Task) => void; rowH: number }) {
+  const fs = Math.max(14, Math.min(19, Math.round(rowH * 0.36)));
+  const box = Math.max(22, Math.min(34, Math.round(rowH * 0.6)));
   const items = tasksFor(data, child.id, date);
   // Jetzt dran: passende Tageszeit und Aufgaben ohne Tageszeit. Danach Liegengebliebenes, zuletzt Späteres.
   const rank = (t?: string) => (!t || t === part ? 0 : TIME_ORDER[t] < TIME_ORDER[part] ? 1 : 2);
@@ -69,7 +80,7 @@ function BathColumn({ data, child, date, part, toggle }: { data: FamilyData; chi
   const now = sorted.filter(i => rank(i.task.time) === 0);
   const allNowDone = now.length > 0 && now.every(i => i.completion);
   return (
-    <View style={[s.card, { flexGrow: 1, flexBasis: 280, gap: 10, borderTopWidth: 6, borderTopColor: child.color }]}>
+    <View style={[s.card, { flexGrow: 1, flexBasis: 280, gap: rowH < 46 ? 4 : 8, borderTopWidth: 6, borderTopColor: child.color }]}>
       <PersonHead name={child.name} color={child.color} photo={child.photo} value={`${done}/${items.length}`} />
       {!items.length && <Text style={s.muted}>Heute nichts zu tun 🎈</Text>}
       {allNowDone && <Text style={{ fontSize: 18, fontWeight: '800', color: C.ok }}>🎉 Alles für jetzt erledigt!</Text>}
@@ -78,13 +89,13 @@ function BathColumn({ data, child, date, part, toggle }: { data: FamilyData; chi
         const ok = completion?.status === 'bestaetigt';
         return (
           <Pressable key={task.id} accessibilityRole="checkbox" accessibilityState={{ checked: !!completion }} disabled={ok} onPress={() => toggle(task)}
-            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingHorizontal: 12, borderRadius: 16,
+            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: rowH, paddingHorizontal: 10, borderRadius: 14,
               backgroundColor: completion ? child.color + '22' : C.bg, opacity: later && !completion ? 0.45 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
-            <View style={{ width: 34, height: 34, borderRadius: 10, borderWidth: 3, borderColor: child.color, backgroundColor: completion ? child.color : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-              {completion && <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>✓</Text>}
+            <View style={{ width: box, height: box, borderRadius: box * 0.3, borderWidth: 3, borderColor: child.color, backgroundColor: completion ? child.color : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+              {completion && <Text style={{ color: '#fff', fontWeight: '900', fontSize: box * 0.55 }}>✓</Text>}
             </View>
-            <Text style={{ flex: 1, fontSize: 19, fontWeight: '700', color: C.fg, textDecorationLine: completion ? 'line-through' : 'none' }} numberOfLines={2}>
-              {task.icon ? task.icon + ' ' : ''}{task.title}
+            <Text style={{ flex: 1, fontSize: fs, fontWeight: '700', color: C.fg, textDecorationLine: completion ? 'line-through' : 'none' }} numberOfLines={rowH < 46 ? 1 : 2}>
+              {task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}
             </Text>
             <Text style={{ fontSize: 13, color: completion && !ok ? C.warn : C.muted, fontWeight: '700' }}>{completion && !ok ? 'wartet' : TIME_ICON[task.time ?? '']?.trim() ?? ''}</Text>
           </Pressable>
@@ -349,7 +360,7 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
       {open.map(({ task, completion }) => (
         <View key={task.id} style={[s.row, { flexWrap: 'nowrap' }]}>
           <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: completion ? C.warn : child.color, backgroundColor: completion ? C.warn : 'transparent' }} />
-          <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>{task.icon ? task.icon + ' ' : ''}{task.title}{TIME_ICON[task.time ?? ''] ?? ''}</Text>
+          <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>{task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}{TIME_ICON[task.time ?? ''] ?? ''}</Text>
           {completion && <Text style={{ color: C.warn, fontSize: 12, fontWeight: '700' }}>wartet</Text>}
         </View>
       ))}
