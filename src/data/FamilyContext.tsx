@@ -65,10 +65,15 @@ export function FamilyProvider({ children, store = localStore }: { children: Rea
   }, [store, show]);
 
   useEffect(() => {
-    let alive = true;
+    let alive = true, fresh = false;
+    // Sofort mit dem zuletzt gemerkten Stand starten, frische Daten kommen im Hintergrund.
+    store.peek?.().then(c => {
+      if (!alive || fresh || !c?.data || base.current.data) return;
+      base.current = c; show(); setLoading(false);
+    });
     store.load()
-      .then(s => { if (alive) { base.current = s; show(); } })
-      .catch(e => alive && setSaveError(`Daten konnten nicht geladen werden. (${e?.message ?? e})`))
+      .then(s => { fresh = true; if (alive && (!base.current.data || s.version >= base.current.version)) { base.current = s; show(); } })
+      .catch(e => alive && setSaveError(base.current.data ? 'Keine Verbindung. Du siehst den zuletzt geladenen Stand.' : `Daten konnten nicht geladen werden. (${e?.message ?? e})`))
       .finally(() => alive && setLoading(false));
     const off = store.subscribe?.((d, v) => {
       if (v <= base.current.version) return;

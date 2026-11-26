@@ -118,19 +118,33 @@ export async function rotateJoinCode(fid: string): Promise<string> {
   return data as string;
 }
 
+const cacheKey = (fid: string) => `famelio:cache:${fid}`;
+let cacheTimer: ReturnType<typeof setTimeout> | null = null;
+/** Stand lokal merken (gebündelt, damit schnelles Abhaken nicht ständig groß speichert). */
+function remember(fid: string, s: { data: FamilyData; version: number }) {
+  if (cacheTimer) clearTimeout(cacheTimer);
+  cacheTimer = setTimeout(() => { AsyncStorage.setItem(cacheKey(fid), JSON.stringify(s)).catch(() => {}); }, 1500);
+}
+
 async function fetchState(fid: string) {
   const { data, error } = await sb().from('family_state').select('data, version').eq('family_id', fid).single();
   if (error) throw friendly(error);
-  return { data: data.data as FamilyData, version: data.version as number };
+  const s = { data: data.data as FamilyData, version: data.version as number };
+  remember(fid, s);
+  return s;
 }
 
 export function cloudStore(fid: string): DataStore {
   return {
     cloud: true,
     load: () => fetchState(fid),
+    async peek() {
+      try { const raw = await AsyncStorage.getItem(cacheKey(fid)); return raw ? JSON.parse(raw) : null; } catch { return null; }
+    },
     async save(d, expected) {
       const { data, error } = await sb().rpc('save_state', { fid, expected, new_data: d });
       if (error) { if (error.message.includes('conflict')) throw new ConflictError(); throw friendly(error); }
+      remember(fid, { data: d, version: data as number });
       return data as number;
     },
     subscribe(cb) {
@@ -158,7 +172,7 @@ export function cloudStore(fid: string): DataStore {
       timer = setTimeout(tick, wait);
       return () => { stop = true; if (timer) clearTimeout(timer); sb().removeChannel(ch); };
     },
-    async clear() { await setLink(null); },
+    async clear() { await AsyncStorage.removeItem(cacheKey(fid)).catch(() => {}); await setLink(null); },
   };
 }
 

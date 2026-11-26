@@ -15,6 +15,8 @@ export interface DataStore {
   save(data: FamilyData, expected: number): Promise<number>;
   subscribe?(cb: (data: FamilyData, version: number) => void): () => void;
   clear(): Promise<void>;
+  /** Letzter bekannter Stand auf diesem Gerät, damit die App sofort startet und im Hintergrund aktualisiert. */
+  peek?(): Promise<{ data: FamilyData; version: number } | null>;
 }
 
 const KEY = 'familienplaner:v1';
