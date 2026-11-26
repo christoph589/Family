@@ -64,13 +64,11 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
   const [ai, setAi] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  const [from, setFrom] = useState<number | null>(null);
-  const [to, setTo] = useState<number | null>(null);
+  const [sel, setSel] = useState<number[]>([]);
   const ctl = useRef<AbortController | null>(null);
   useEffect(() => { let on = true; getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, []);
   const count = (u: string) => book.entries.filter(e => e.unit === u).length;
-  const lo = from === null ? null : Math.min(from, to ?? from), hi = from === null ? null : Math.max(from, to ?? from);
-  const picked = lo === null ? [] : book.units.slice(lo, hi! + 1);
+  const picked = book.units.filter((_, i) => sel.includes(i));
   const known = new Set((data?.vocab ?? []).filter(v => v.childId === book.childId).flatMap(v => v.cards.map(c => norm(c.front))));
   const fresh = book.entries.filter(e => picked.includes(e.unit) && !known.has(norm(e.front)));
 
@@ -117,14 +115,12 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
       : stop === 'cancelled' ? `Abgebrochen. ${total} Vokabeln bis dahin gelesen und gespeichert.` : `${total} Vokabeln gelesen und gespeichert.`);
     setBusy(false);
   }
-  function tapUnit(i: number) {
-    if (from === null || to !== null) { setFrom(i); setTo(null); } else setTo(i);
-  }
+  const tapUnit = (i: number) => setSel(x => (x.includes(i) ? x.filter(j => j !== i) : [...x, i]));
   function start() {
     const id = uid();
-    const title = `${book.title}: ${picked[0]}${picked.length > 1 ? ` bis ${picked[picked.length - 1]}` : ''}`;
+    const title = `${book.title}: ${picked.join(', ')}`.slice(0, 80);
     update(d => ({ ...d, vocab: [...(d.vocab ?? []), { id, childId: book.childId, title, lang: book.lang, cards: newCards(fresh.map(e => ({ front: e.front, back: e.back }))), createdAt: today() }] }));
-    setFrom(null); setTo(null); onStarted(id);
+    setSel([]); onStarted(id);
   }
 
   return (
@@ -135,10 +131,10 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
       </View>
       {book.units.length > 0 && (
         <>
-          <Text style={[s.muted, { fontSize: 13 }]}>{from === null ? 'Tippe die erste Unit an, die du lernen willst.' : to === null ? 'Jetzt die letzte Unit antippen, oder gleich starten.' : 'Bereich gewählt.'}</Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>{sel.length ? `${picked.length} ${picked.length === 1 ? 'Unit' : 'Units'} gewählt. Nochmal antippen nimmt sie wieder raus.` : 'Tippe alle Units an, die gelernt werden sollen.'}</Text>
           <View style={[s.row, { gap: 6 }]}>
             {book.units.map((u, i) => {
-              const on = lo !== null && i >= lo && i <= hi!;
+              const on = sel.includes(i);
               return (
                 <Pressable key={u} onPress={() => tapUnit(i)} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${u}, ${count(u)} Vokabeln`}
                   style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 2, borderColor: C.accent, backgroundColor: on ? C.accent : C.surface }}>
@@ -151,7 +147,7 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
           {picked.length > 0 && (
             <View style={s.row}>
               <Button title={fresh.length ? `${fresh.length} Vokabeln lernen` : 'Schon alle im Kasten'} disabled={!fresh.length} onPress={start} />
-              <Button ghost title="Auswahl aufheben" onPress={() => { setFrom(null); setTo(null); }} />
+              <Button ghost title="Auswahl aufheben" onPress={() => setSel([])} />
             </View>
           )}
           {picked.length > 0 && fresh.length < book.entries.filter(e => picked.includes(e.unit)).length && fresh.length > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Wörter, die schon in einem deiner Kästen sind, kommen nicht doppelt dazu.</Text>}
