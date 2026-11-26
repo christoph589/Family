@@ -292,7 +292,7 @@ async function vapid(admin: any) {
     await admin.from('push_config').update({ public_key: k.publicKey, private_key: k.privateKey }).eq('id', 1);
     cfg.public_key = k.publicKey; cfg.private_key = k.privateKey;
   }
-  webpush.setVapidDetails('https://christoph589.github.io/Family/', cfg.public_key, cfg.private_key);
+  webpush.setVapidDetails('https://famelio.de/', cfg.public_key, cfg.private_key);
   return cfg as { public_key: string; private_key: string; tick_token: string };
 }
 

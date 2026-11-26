@@ -23,9 +23,6 @@
       "output": "single",
       "favicon": "./assets/favicon.png",
       "name": "Famelio"
-    },
-    "experiments": {
-      "baseUrl": "/Family"
     }
   }
 }
