@@ -42,6 +42,28 @@
         window.addEventListener('pageshow', fix);
       })();
     </script>
+    <script>
+      /* Neue Version automatisch laden: beim Start und wenn die App wieder in den Vordergrund kommt,
+         wird index.html ohne Cache geholt. Hat sich das App-Bündel geändert, lädt die Seite neu. */
+      (function () {
+        var mine = function () { var s = document.querySelector('script[src*="/_expo/static/js/web/"]'); return s ? s.getAttribute('src').split('/').pop() : ''; };
+        var busy = false;
+        function check() {
+          if (busy || !window.fetch) return; busy = true;
+          fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+            busy = false;
+            var m = /_expo\/static\/js\/web\/([^"']+\.js)/.exec(html || ''), cur = mine();
+            if (m && cur && m[1] !== cur) {
+              var a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+              location.reload();
+            }
+          }).catch(function () { busy = false; });
+        }
+        window.addEventListener('load', function () { setTimeout(check, 1500); });
+        document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') check(); });
+        window.addEventListener('pageshow', function (e) { if (e.persisted) check(); });
+      })();
+    </script>
   </head>
 
   <body>
