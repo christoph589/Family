@@ -162,7 +162,8 @@ export function finishRound(d: FamilyData, deckId: string, results: RoundResult[
   const old: VocabStats = d.vocabStats?.[childId] ?? { streak: 0, best: 0, total: 0 };
   const streakUp = old.last !== date;
   const streak = !streakUp ? old.streak : old.last === addDays(date, -1) ? old.streak + 1 : 1;
-  const stats: VocabStats = { streak, last: date, best: Math.max(old.best, streak), total: old.total + right };
+  const days = Object.fromEntries(Object.entries({ ...(old.days ?? {}), [date]: (old.days?.[date] ?? 0) + total }).sort().slice(-14));
+  const stats: VocabStats = { ...old, streak, last: date, best: Math.max(old.best, streak), total: old.total + right, days };
   data = { ...data, vocabStats: { ...(d.vocabStats ?? {}), [childId]: stats } };
 
   const perfect = right === total && total >= 5;
@@ -187,3 +188,7 @@ export function liveStreak(d: FamilyData, childId: string, date = today()) {
 export const learnedShare = (deck: VocabDeck) => (deck.cards.length ? deck.cards.filter(c => c.box >= 1).length / deck.cards.length : 0);
 /** Ab diesem Anteil gibt es die Probe-Arbeit. */
 export const LEARN_GOAL = 0.8;
+
+/** Tageslimit für Kinder: kurze Einheiten. Bis Klasse 7: 50 Wörter, danach 100. Eltern können für heute freigeben. */
+export function vocabLimit(grade?: string) { const g = parseInt(grade ?? '', 10); return !g || g <= 7 ? 50 : 100; }
+export function vocabToday(d: FamilyData, childId: string, date = today()) { return d.vocabStats?.[childId]?.days?.[date] ?? 0; }

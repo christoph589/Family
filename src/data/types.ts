@@ -89,7 +89,8 @@ export interface VocabCard { id: string; front: string; back: string; box: numbe
 export interface VocabDeck { id: string; childId: string; title: string; lang: string; cards: VocabCard[]; createdAt: string; by?: string; /** Lernkarten zu einer Klassenarbeit, nicht im Vokabeltrainer */ prepId?: string }
 /** Ganzes Vokabelverzeichnis eines Schulbuchs, zu Schuljahresbeginn importiert. Kinder wählen daraus einen Bereich zum Lernen. */
 export interface VocabBook { id: string; childId: string; title: string; lang: string; units: string[]; entries: { front: string; back: string; unit: string }[]; createdAt: string; by?: string }
-export interface VocabStats { streak: number; last?: string; best: number; total: number }
+export interface VocabStats { streak: number; last?: string; best: number; total: number;
+  /** abgefragte Wörter pro Tag (letzte 14 Tage) */ days?: Record<string, number>; /** an diesem Tag haben Eltern über das Tageslimit hinaus freigegeben */ unlock?: string }
 
 export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
 export interface Question {

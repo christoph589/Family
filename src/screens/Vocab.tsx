@@ -3,11 +3,11 @@ import { DeleteButton, parentPinOk } from '../ui/DeleteButton';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { today, uid } from '../data/logic';
+import { currentGrade, today, uid } from '../data/logic';
 import { VocabCard, VocabDeck } from '../data/types';
 import {
   LANGS, MASTERED, Reward, RoundResult, buildRound, checkTyped, choicesFor, dueCards, finishRound, langOf, levelOf,
-  liveStreak, masteredCount, modeFor, newCards, parseVocabList, DAILY_CAP,
+  liveStreak, masteredCount, modeFor, newCards, parseVocabList, DAILY_CAP, vocabLimit, vocabToday,
 } from '../data/vocab';
 import { AI_ERROR, extractVocab, generateHints, getSample, judgeAnswer } from '../ai/generate';
 import { collectPhotos } from './PhotoCollector';
@@ -47,6 +47,11 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
   const best = [...decks].sort((a, b) => dueCards(b).length - dueCards(a).length)[0];
   const practicedToday = stats?.last === today();
   const deck = decks.find(d => d.id === playing);
+  // Tageslimit: kurze Einheiten, danach Pause bis morgen (Eltern können freigeben)
+  const limit = vocabLimit(currentGrade(kid));
+  const doneToday = vocabToday(data, kid.id);
+  const locked = !parent && doneToday >= limit && stats?.unlock !== today();
+  const play = (id: string) => setPlaying(locked ? null : id);
 
   return (
     <View style={{ gap: 16 }}>
@@ -75,8 +80,9 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
           </View>
         </View>
         {!parent && streak > 0 && !practicedToday && <Text style={{ color: '#fff', fontWeight: '700' }}>Heute noch eine Runde, sonst ist deine Serie weg!</Text>}
-        {best && (
-          <Pressable accessibilityRole="button" onPress={() => setPlaying(best.id)}
+        {locked && <LockCard name={kid.name} limit={limit} onUnlock={() => update(d => ({ ...d, vocabStats: { ...(d.vocabStats ?? {}), [kid.id]: { ...(d.vocabStats?.[kid.id] ?? { streak: 0, best: 0, total: 0 }), unlock: today() } } }))} />}
+        {best && !locked && (
+          <Pressable accessibilityRole="button" onPress={() => play(best.id)}
             style={({ pressed }) => [{ backgroundColor: '#fff', borderRadius: 16, paddingVertical: 14, alignItems: 'center', transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
             <Text style={{ color: C.accent, fontWeight: '800', fontSize: 18 }}>{due ? `Jetzt üben: ${best.title}` : 'Freie Runde spielen'}</Text>
           </Pressable>
@@ -84,7 +90,9 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
         {parent && <Text style={{ color: '#fff', opacity: 0.85, fontSize: 13 }}>Wenn du übst, gibt es keine Punkte. Punkte bekommt {kid.name} nur selbst.</Text>}
       </View>
 
-      <VocabBooks childId={kid.id} meId={meId} parent={parent} onStarted={id => setPlaying(id)} />
+      {parent && <VocabReport childId={kid.id} name={kid.name} limit={limit} />}
+
+      <VocabBooks childId={kid.id} meId={meId} parent={parent} onStarted={id => play(id)} />
 
       {editing && <DeckEditor deck={editing === 'new' ? undefined : editing} childId={kid.id} meId={meId} parent={parent} onDone={() => setEditing(null)} />}
 
@@ -106,7 +114,7 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
               <BoxBar deck={d} />
               <Text style={[s.muted, { fontSize: 12 }]}>{d.cards.length} Vokabeln · {m} sitzen</Text>
               <View style={s.row}>
-                <Button title={n ? 'Üben' : 'Freie Runde'} style={{ paddingVertical: 7, paddingHorizontal: 14 }} onPress={() => setPlaying(d.id)} />
+                <Button title={n ? 'Üben' : 'Freie Runde'} style={{ paddingVertical: 7, paddingHorizontal: 14 }} onPress={() => play(d.id)} />
                 <Button ghost title="Bearbeiten" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => setEditing(d)} />
                 <DeleteButton parent={parent} style={{ paddingVertical: 7, paddingHorizontal: 12 }} onDelete={() => update(x => ({ ...x, vocab: (x.vocab ?? []).filter(v => v.id !== d.id) }))} />
               </View>
@@ -580,6 +588,97 @@ export function VocabReset({ childIds }: { childIds: string[] }) {
         <Button ghost title="Abbrechen" onPress={close} />
       </View>
       {bad && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>PIN stimmt nicht.</Text>}
+    </View>
+  );
+}
+
+function LockCard({ name, limit, onUnlock }: { name: string; limit: number; onUnlock: () => void }) {
+  const { data } = useFamily();
+  const [ask, setAsk] = useState(false);
+  const [pin, setPin] = useState('');
+  const [err, setErr] = useState(false);
+  return (
+    <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, gap: 8 }}>
+      <Text style={{ fontSize: 18, fontWeight: '800', color: C.fg }}>🌙 Genug für heute, {name}!</Text>
+      <Text style={{ color: C.fg }}>Du hast heute schon {limit} Wörter geübt. Dein Kopf braucht jetzt Pause, damit die Wörter über Nacht hängen bleiben. Komm morgen wieder!</Text>
+      {!ask ? (
+        <Pressable onPress={() => setAsk(true)} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Eltern: heute weiter üben lassen</Text></Pressable>
+      ) : (
+        <View style={[s.row, { gap: 8 }]}>
+          <TextInput autoFocus style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="PIN"
+            onChangeText={v => { const x = v.replace(/\D/g, '').slice(0, 4); setPin(x); setErr(false); if (x.length === 4) { if (parentPinOk(data, x)) onUnlock(); else { setErr(true); setPin(''); } } }} />
+          {err && <Text style={{ color: C.danger, fontWeight: '700' }}>PIN stimmt nicht.</Text>}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** Eltern-Überblick: Was sitzt, was ist in Arbeit, wo hakt es, wie viel wurde geübt. */
+function VocabReport({ childId, name, limit }: { childId: string; name: string; limit: number }) {
+  const { data } = useFamily();
+  const [open, setOpen] = useState(false);
+  if (!data) return null;
+  const decks = (data.vocab ?? []).filter(d => d.childId === childId && !d.prepId);
+  const cards = decks.flatMap(d => d.cards.map(c => ({ ...c, deck: d.title })));
+  if (!cards.length) return null;
+  const sit = cards.filter(c => c.box >= 3).length;
+  const work = cards.filter(c => c.box > 0 && c.box < 3).length;
+  const fresh = cards.filter(c => c.box === 0 && !c.right && !c.wrong).length;
+  const shaky = cards.filter(c => c.box === 0 && (c.right || c.wrong)).length;
+  const hard = [...cards].filter(c => c.wrong > 0).sort((a, b) => b.wrong - a.wrong || a.box - b.box).slice(0, 8);
+  const days = data.vocabStats?.[childId]?.days ?? {};
+  const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(today() + 'T12:00:00'); d.setDate(d.getDate() - (6 - i)); const k = d.toISOString().slice(0, 10); return { k, n: days[k] ?? 0, wd: d.toLocaleDateString('de-DE', { weekday: 'short' }).slice(0, 2) }; });
+  const max = Math.max(limit, ...week.map(w => w.n));
+  const seg = (n: number, color: string) => n > 0 ? <View style={{ flex: n, backgroundColor: color }} /> : null;
+  return (
+    <View style={[s.card, { gap: 12 }]}>
+      <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
+        <Text style={[s.h2, { flexShrink: 1 }]}>📊 So steht {name}</Text>
+        <Text style={{ color: C.accent, fontWeight: '800' }}>{open ? 'Weniger ▲' : 'Mehr ▼'}</Text>
+      </Pressable>
+      <View style={{ flexDirection: 'row', height: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: C.line }}>
+        {seg(sit, C.ok)}{seg(work, '#f5b400')}{seg(shaky, C.danger)}{seg(fresh, '#c9c6e8')}
+      </View>
+      <View style={[s.row, { gap: 12 }]}>
+        <Text style={{ fontWeight: '800', color: C.ok }}>✓ {sit} sitzen</Text>
+        <Text style={{ fontWeight: '800', color: '#b88400' }}>↻ {work} in Arbeit</Text>
+        <Text style={{ fontWeight: '800', color: C.danger }}>✗ {shaky} wackeln</Text>
+        <Text style={{ fontWeight: '800', color: C.muted }}>{fresh} noch nicht geübt</Text>
+      </View>
+      {open && (
+        <>
+          <Text style={s.label}>Geübt, letzte 7 Tage (Wörter)</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 70 }}>
+            {week.map(w => (
+              <View key={w.k} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                <Text style={{ fontSize: 10, color: C.muted }}>{w.n || ''}</Text>
+                <View style={{ width: '100%', height: Math.max(3, Math.round((w.n / max) * 44)), borderRadius: 4, backgroundColor: w.n ? C.accent : C.line }} />
+                <Text style={{ fontSize: 11, color: C.muted }}>{w.wd}</Text>
+              </View>
+            ))}
+          </View>
+          {hard.length > 0 && (
+            <>
+              <Text style={s.label}>Hier hakt es (meiste Fehler)</Text>
+              {hard.map(c => (
+                <View key={c.deck + c.id} style={[s.row, { flexWrap: 'nowrap', gap: 8 }]}>
+                  <Text style={{ width: 34, textAlign: 'center', fontWeight: '800', color: C.danger }}>{c.wrong}×</Text>
+                  <Text style={[s.text, { flex: 1, minWidth: 0 }]} numberOfLines={1}>{c.front} <Text style={{ color: C.muted }}>· {c.back}</Text></Text>
+                </View>
+              ))}
+            </>
+          )}
+          <Text style={s.label}>Je Kasten</Text>
+          {decks.map(d => { const n = d.cards.length, k = d.cards.filter(c => c.box >= 3).length; return (
+            <View key={d.id} style={{ gap: 4 }}>
+              <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}><Text style={[s.text, { flexShrink: 1, fontSize: 14 }]} numberOfLines={1}>{d.title}</Text><Text style={{ fontSize: 13, color: C.muted }}>{k} / {n}</Text></View>
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: C.line, overflow: 'hidden' }}><View style={{ width: `${Math.round((k / Math.max(1, n)) * 100)}%`, height: '100%', backgroundColor: C.ok }} /></View>
+            </View>
+          ); })}
+          <Text style={[s.muted, { fontSize: 12 }]}>„Sitzen“ heißt: mindestens dreimal hintereinander gewusst, mit Abstand von Tagen. Tageslimit für {name}: {limit} Wörter.</Text>
+        </>
+      )}
     </View>
   );
 }
