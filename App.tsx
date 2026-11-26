@@ -21,6 +21,7 @@ import { Timetable } from './src/screens/Timetable';
 import { Board } from './src/screens/Board';
 import { Kiosk, wantsWall } from './src/ui/Kiosk';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MIG_SPLIT, splitPrepVocab } from './src/data/vocab';
 import { birthdaysOn, extraStates, isAdmin, parentsOf, payAllowances, peopleOf, pruneAiPhotos, ensurePackTasks, today } from './src/data/logic';
 import { PackSetup } from './src/screens/PackSetup';
 import { AiConsent } from './src/ui/AiConsent';
@@ -150,6 +151,7 @@ function Root() {
   // Fälliges Taschengeld buchen (idempotent, auch bei mehreren Geräten)
   useEffect(() => { if (data && payAllowances(data) !== data) update(d => payAllowances(d)); }, [data?.money, data && today()]);
   useEffect(() => { if (data && ensurePackTasks(data) !== data) update(d => ensurePackTasks(d)); }, [data?.children]);
+  useEffect(() => { if (data && !data.migrations?.includes(MIG_SPLIT)) update(d => splitPrepVocab(d)); }, [!!data, data?.migrations]);
   useEffect(() => { if (data && pruneAiPhotos(data) !== data) update(d => pruneAiPhotos(d)); }, [data?.exams, data?.topics, data && today()]);
   // Ferien für Kinder mit eigenem Bundesland nachladen
   const needStates = data ? extraStates(data).filter(st => { const x = data.settings?.autoHoliday?.extra?.[st]; const soon = new Date(); soon.setDate(soon.getDate() + 200); return data.settings?.autoHoliday?.on && (!x || x.validTo < today(soon)); }).join(',') : '';

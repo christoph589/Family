@@ -6,6 +6,7 @@ import { fmtMin, pct, shiftDay, Summary, summarize, TIME_SINCE } from '../data/l
 import { Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { Child } from '../data/types';
+import { SheetResult } from './Sheets';
 
 type Part = 'themen' | 'klassenarbeit' | 'vokabeln';
 const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
@@ -94,6 +95,7 @@ function Trend({ now, before, unit = ' %' }: { now: number | null; before: numbe
 function KidDetail({ kid, sum, prev, days, onGo }: { kid: Child; sum: Summary; prev: Summary; days: number; onGo: (p: Part) => void }) {
   const { data } = useFamily();
   const [allTests, setAllTests] = useState(false);
+  const [openTest, setOpenTest] = useState<string | null>(null);
   if (!data) return null;
   const useTime = sum.secs > 0;
   const val = (d: Summary['days'][number]) => (useTime ? d.secs / 60 : d.words);
@@ -172,11 +174,15 @@ function KidDetail({ kid, sum, prev, days, onGo }: { kid: Child; sum: Summary; p
             const tag = r ? `Note ca. ${r.note}` : w.understanding ? UNDERSTANDING_LABEL[w.understanding] : 'wartet auf Prüfung';
             const tone = r ? (r.note <= 2 ? C.ok : r.note >= 4 ? C.danger : C.warn) : w.understanding === 'verstanden' ? C.ok : w.understanding === 'nochmal' ? C.danger : w.understanding ? C.warn : C.muted;
             return (
-              <Pressable key={w.id} onPress={() => onGo(w.exam ? 'klassenarbeit' : 'themen')} style={[s.row, { flexWrap: 'nowrap', gap: 8, padding: 8, borderRadius: 10, backgroundColor: C.bg }]}>
+              <View key={w.id} style={{ gap: 6 }}>
+              <Pressable onPress={() => (w.status === 'geprueft' ? setOpenTest(openTest === w.id ? null : w.id) : onGo(w.exam ? 'klassenarbeit' : 'themen'))} accessibilityRole="button"
+                style={[s.row, { flexWrap: 'nowrap', gap: 8, padding: 8, borderRadius: 10, backgroundColor: openTest === w.id ? C.accentSoft : C.bg }]}>
                 <Text style={{ fontSize: 15 }}>{w.exam ? '📄' : '📝'}</Text>
                 <Text style={[s.text, { flex: 1, minWidth: 0, fontSize: 14 }]} numberOfLines={1}>{w.title}</Text>
                 <Text style={{ fontSize: 12, fontWeight: '800', color: tone }} numberOfLines={1}>{tag}</Text>
               </Pressable>
+              {openTest === w.id && <SheetResult sheet={w} />}
+              </View>
             );
           })}
           {sum.tests.length > 5 && <Pressable onPress={() => setAllTests(x => !x)}><Text style={{ color: C.accent, fontWeight: '800', fontSize: 13 }}>{allTests ? 'Weniger zeigen' : `Alle ${sum.tests.length} zeigen`}</Text></Pressable>}

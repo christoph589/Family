@@ -5,7 +5,7 @@ import { ActivityIndicator, Animated, Easing, Modal, Platform, Pressable, Scroll
 import { useFamily } from '../data/FamilyContext';
 import { currentGrade, today, uid } from '../data/logic';
 import { activeTimer } from '../data/learnstats';
-import { VocabCard, VocabDeck } from '../data/types';
+import { VocabCard, VocabClaim, VocabDeck } from '../data/types';
 import {
   LANGS, MASTERED, Reward, RoundResult, buildRound, checkTyped, choicesFor, dueCards, finishRound, langOf, levelOf,
   liveStreak, masteredCount, modeFor, newCards, parseVocabList, DAILY_CAP, vocabLimit, vocabToday,
@@ -91,6 +91,7 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
         {parent && <Text style={{ color: '#fff', opacity: 0.85, fontSize: 13 }}>Wenn du übst, gibt es keine Punkte. Punkte bekommt {kid.name} nur selbst.</Text>}
       </View>
 
+      {parent && <VocabClaims childId={kid.id} name={kid.name} />}
       {parent && <VocabReport childId={kid.id} name={kid.name} limit={limit} />}
 
       <VocabBooks childId={kid.id} meId={meId} parent={parent} onStarted={id => play(id)} />
@@ -365,8 +366,17 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
     }
   }
 
-  /** Kind war inhaltlich richtig, die Prüfung zu streng: zählt doch als richtig, kein Wiederholen. */
+  /** Kind meint, es war richtig: zählt jetzt als falsch, die Eltern entscheiden später. Selbst auf richtig stellen geht nicht. */
+  const [claimed, setClaimed] = useState(false);
+  function claim() {
+    if (!card || !answered || answered.ok || claimed) return;
+    const c: VocabClaim = { id: uid(), childId: deck.childId, deckId: deck.id, cardId: card.id, dir: plan?.reverse ? 'fx' : 'de', ask, solution, answer: typed.trim().slice(0, 120), at: new Date().toISOString(), note: answered.note };
+    update(d => ({ ...d, vocabClaims: [...(d.vocabClaims ?? []).filter(x => !(x.cardId === c.cardId && x.answer === c.answer)), c].slice(-50) }));
+    setClaimed(true);
+  }
+  /** Nur Eltern beim eigenen Üben: zählt doch als richtig, kein Wiederholen. */
   function overrule() {
+    if (givePoints) return;
     if (!card || !answered || answered.ok) return;
     setAnswered({ ...answered, ok: true });
     setResults(r => r.map((x, i) => (i === r.length - 1 ? { ...x, ok: true } : x)));
@@ -374,7 +384,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
   }
 
   function next() {
-    setAnswered(null); setFlipped(false); setTyped('');
+    setAnswered(null); setFlipped(false); setTyped(''); setClaimed(false);
     if (idx + 1 < queue.length) { setIdx(idx + 1); return; }
     if (!data) return;
     const secs = timer.take();
@@ -477,7 +487,8 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
                 <View style={{ gap: 6 }}>
                   {!answered.ok && <Text style={[s.muted, { textAlign: 'center' }]}>Kein Problem, die kommt gleich nochmal.</Text>}
                   {!!answered.note && <Text style={[s.text, { textAlign: 'center' }]}>🤖 {answered.note}</Text>}
-                  {!answered.ok && typed.trim() && <Button ghost title="✋ Meins stimmt doch" onPress={overrule} />}
+                  {!answered.ok && typed.trim() && !claimed && <Button ghost title={givePoints ? '✋ Meins stimmt doch, Eltern fragen' : '✋ Stimmt doch (als richtig zählen)'} onPress={givePoints ? claim : overrule} />}
+                  {claimed && <Text style={[s.muted, { textAlign: 'center' }]}>Mama oder Papa schauen drüber. Wenn deine Antwort stimmt, zählt sie ab dann als richtig.</Text>}
                   {!answered.ok && !deck.prepId && (hint || hintBusy) && (
                     <View style={{ backgroundColor: '#fff7e0', borderRadius: 18, padding: 16, gap: 6 }}>
                       <Text style={{ fontWeight: '800', color: C.fg }}>💡 Merkhilfe</Text>
@@ -700,6 +711,54 @@ function VocabReport({ childId, name, limit }: { childId: string; name: string; 
           <Text style={[s.muted, { fontSize: 12 }]}>„Sitzen“ heißt: mindestens dreimal hintereinander gewusst, mit Abstand von Tagen. Tageslimit für {name}: {limit} Wörter. Bisher {cards.filter(c => c.right || c.wrong).length} verschiedene Wörter geübt (Tageswerte zählen erst seit 26.11. abends).</Text>
         </>
       )}
+    </View>
+  );
+}
+
+/** Eltern: Einsprüche des Kindes („Meins stimmt doch“) und von der KI als richtig anerkannte Antworten prüfen. */
+function VocabClaims({ childId, name }: { childId: string; name: string }) {
+  const { data, update } = useFamily();
+  const [showAi, setShowAi] = useState(false);
+  if (!data) return null;
+  const claims = (data.vocabClaims ?? []).filter(c => c.childId === childId);
+  const decks = (data.vocab ?? []).filter(d => d.childId === childId && !d.prepId);
+  const accepted = decks.flatMap(d => d.cards.flatMap(c => (['de', 'fx'] as const).flatMap(dir => (c.ok?.[dir] ?? []).map(a => ({ deckId: d.id, card: c, dir, a })))));
+  if (!claims.length && !accepted.length) return null;
+  const setOk = (deckId: string, cardId: string, dir: 'de' | 'fx', fn: (l: string[]) => string[]) => (d: any) => ({ ...d, vocab: (d.vocab ?? []).map((v: VocabDeck) => (v.id !== deckId ? v : { ...v, cards: v.cards.map(c => (c.id !== cardId ? c : { ...c, ok: { ...c.ok, [dir]: fn(c.ok?.[dir] ?? []) } })) })) });
+  const decide = (c: VocabClaim, yes: boolean) => update(d => {
+    let next = { ...d, vocabClaims: (d.vocabClaims ?? []).filter(x => x.id !== c.id) };
+    if (yes) next = setOk(c.deckId, c.cardId, c.dir, l => [...l.filter(x => x !== c.answer), c.answer].slice(-6))(next);
+    return next;
+  });
+  return (
+    <View style={[s.card, { gap: 10 }, claims.length ? { borderWidth: 2, borderColor: C.warn } : null]}>
+      {claims.length > 0 && <Text style={s.h2}>✋ {name} meint, das stimmt ({claims.length})</Text>}
+      {claims.map(c => (
+        <View key={c.id} style={{ backgroundColor: C.bg, borderRadius: 12, padding: 10, gap: 4 }}>
+          <Text style={[s.text, { fontWeight: '800' }]}>{c.ask}</Text>
+          <Text style={s.text}>Antwort von {name}: <Text style={{ fontWeight: '800', color: C.danger }}>{c.answer}</Text></Text>
+          <Text style={s.muted}>Lösung im Buch: {c.solution}</Text>
+          {!!c.note && <Text style={[s.muted, { fontSize: 13 }]}>🤖 {c.note}</Text>}
+          <View style={s.row}>
+            <Button title="Stimmt, gilt ab jetzt" color={C.ok} style={{ paddingVertical: 7 }} onPress={() => decide(c, true)} />
+            <Button ghost title="Ist falsch" style={{ paddingVertical: 7 }} onPress={() => decide(c, false)} />
+          </View>
+        </View>
+      ))}
+      {claims.length > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Bis ihr entscheidet, zählt die Antwort als falsch. Selbst auf richtig stellen kann {name} nicht.</Text>}
+      {accepted.length > 0 && (
+        <Pressable onPress={() => setShowAi(x => !x)} style={[s.row, { justifyContent: 'space-between' }]}>
+          <Text style={[s.text, { fontWeight: '700', fontSize: 14 }]}>Als richtig anerkannte Antworten ({accepted.length})</Text>
+          <Text style={{ color: C.accent, fontWeight: '800' }}>{showAi ? '▲' : '▼'}</Text>
+        </Pressable>
+      )}
+      {showAi && accepted.map(x => (
+        <View key={x.card.id + x.dir + x.a} style={[s.row, { flexWrap: 'nowrap', gap: 8 }]}>
+          <Text style={[s.text, { flex: 1, minWidth: 0, fontSize: 14 }]} numberOfLines={2}>{x.dir === 'de' ? x.card.front : x.card.back} → <Text style={{ fontWeight: '800' }}>{x.a}</Text> <Text style={{ color: C.muted }}>(Buch: {x.dir === 'de' ? x.card.back : x.card.front})</Text></Text>
+          <Pressable accessibilityLabel="Nicht mehr gelten lassen" onPress={() => update(setOk(x.deckId, x.card.id, x.dir, l => l.filter(v => v !== x.a)))} style={{ paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ color: C.danger, fontWeight: '800' }}>✕</Text></Pressable>
+        </View>
+      ))}
+      {showAi && <Text style={[s.muted, { fontSize: 12 }]}>Diese Antworten hat die KI oder ihr als richtig gewertet, sie zählen künftig ohne Nachfrage. Mit ✕ gilt wieder nur die Lösung aus dem Buch.</Text>}
     </View>
   );
 }

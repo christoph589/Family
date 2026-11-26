@@ -89,6 +89,7 @@ export interface VocabCard { id: string; front: string; back: string; box: numbe
   /** Merkhilfe der KI, einmal erzeugt: Beispielsatz, Übersetzung, Eselsbrücke */ hint?: { ex: string; de: string; memo?: string };
   /** Von der KI als richtig erkannte Antworten (nach Richtung), werden danach ohne KI akzeptiert */ ok?: { de?: string[]; fx?: string[] };
   /** Zuletzt geübt (YYYY-MM-DD) */ seen?: string }
+export interface VocabClaim { id: string; childId: string; deckId: string; cardId: string; dir: 'de' | 'fx'; ask: string; solution: string; answer: string; at: string; /** Begründung der KI, warum falsch */ note?: string }
 export interface VocabDeck { id: string; childId: string; title: string; lang: string; cards: VocabCard[]; createdAt: string; by?: string; /** Lernkarten zu einer Klassenarbeit, nicht im Vokabeltrainer */ prepId?: string }
 /** Ganzes Vokabelverzeichnis eines Schulbuchs, zu Schuljahresbeginn importiert. Kinder wählen daraus einen Bereich zum Lernen. */
 export interface VocabBook { id: string; childId: string; title: string; lang: string; units: string[]; entries: { front: string; back: string; unit: string }[]; createdAt: string; by?: string }
@@ -204,6 +205,10 @@ export interface FamilyData {
   vocabStats?: Record<string, VocabStats>;
   /** Lern-Statistik je Kind und Tag (letzte 120 Tage), Schlüssel: Kind-ID, dann YYYY-MM-DD */
   learnLog?: Record<string, Record<string, LearnDay>>;
+  /** Kind meint, seine Vokabel-Antwort stimmt doch. Eltern entscheiden. */
+  vocabClaims?: VocabClaim[];
+  /** Erledigte einmalige Datenbereinigungen */
+  migrations?: string[];
   worksheets?: Worksheet[];
   exams?: ExamPrep[];
   events?: CalEvent[];

@@ -124,8 +124,8 @@ export function checkTyped(input: string, solution: string, accepted: string[] =
   return 'wrong';
 }
 
-export function vocabPointsToday(d: FamilyData, childId: string, date = today()) {
-  return d.ledger.filter(e => e.childId === childId && e.reason.startsWith('Vokabeln') && e.at.slice(0, 10) === date && e.points > 0).reduce((s, e) => s + e.points, 0);
+export function vocabPointsToday(d: FamilyData, childId: string, date = today(), prefix = 'Vokabeln') {
+  return d.ledger.filter(e => e.childId === childId && e.reason.startsWith(prefix) && e.at.slice(0, 10) === date && e.points > 0).reduce((s, e) => s + e.points, 0);
 }
 
 export const levelOf = (total: number) => {
@@ -163,6 +163,14 @@ export function finishRound(d: FamilyData, deckId: string, results: RoundResult[
   const childId = deck.childId;
   const subject = deck.prepId ? (d.exams ?? []).find(e => e.id === deck.prepId)?.subject ?? deck.lang : deck.lang;
   data = logLearn(data, childId, deck.prepId ? { kw: total, kok: right, s: secs, subject } : { w: total, ok: right, r: 1, m: newlySit, s: secs, subject }, date);
+  // Lernkarten für Klassenarbeiten sind keine Vokabeln: eigene Punkte, keine Serie, kein Level, kein Tageslimit
+  if (deck.prepId) {
+    const perfectK = right === total && total >= 5;
+    const rawK = Math.ceil(right / 2) + (perfectK ? 3 : 0);
+    const pointsK = Math.min(rawK, Math.max(0, DAILY_CAP - vocabPointsToday(d, childId, date, PREP_PREFIX)));
+    if (pointsK > 0) data = addPoints(data, childId, pointsK, `${PREP_PREFIX}: ${deck.title} (${right}/${total})`);
+    return { data, reward: { ...empty, points: pointsK, perfect: perfectK, capped: rawK > pointsK } };
+  }
   const old: VocabStats = d.vocabStats?.[childId] ?? { streak: 0, best: 0, total: 0 };
   const streakUp = old.last !== date;
   const streak = !streakUp ? old.streak : old.last === addDays(date, -1) ? old.streak + 1 : 1;
@@ -180,6 +188,47 @@ export function finishRound(d: FamilyData, deckId: string, results: RoundResult[
   if (streakBonus > 0) data = addPoints(data, childId, streakBonus, `Vokabeln: ${streak} Tage am Stück`);
   const lv = levelOf(stats.total);
   return { data, reward: { points, streak, streakUp: streakUp && streak > 1, streakBonus, perfect, capped: raw > points, levelUp: lv.level > levelOf(old.total).level, level: lv.level, newlyMastered } };
+}
+
+/** Buchungstext für Lernkarten-Runden (Klassenarbeit). Vokabel-Runden heißen „Vokabeln: …“. */
+export const PREP_PREFIX = 'Lernkarten';
+
+/**
+ * Einmalige Bereinigung: Früher liefen Lernkarten-Runden als Vokabeln (Serie, Level, Tageswerte, Buchungstext).
+ * Bucht sie um und rechnet sie aus der Vokabel-Statistik heraus. Läuft nur einmal je Familie.
+ */
+export const MIG_SPLIT = 'lernkarten-getrennt';
+export function splitPrepVocab(d: FamilyData): FamilyData {
+  if (d.migrations?.includes(MIG_SPLIT)) return d;
+  const stats = { ...(d.vocabStats ?? {}) };
+  const RX = /^Vokabeln: (.*) \((\d+)\/(\d+)\)$/;
+  const ledger = d.ledger.map(e => {
+    const m = RX.exec(e.reason);
+    if (!m) return e;
+    const isPrep = (d.vocab ?? []).some(v => v.childId === e.childId && v.prepId && v.title === m[1]);
+    if (!isPrep) return e;
+    const st = stats[e.childId];
+    if (st) {
+      const day = e.at.slice(0, 10);
+      const days = { ...(st.days ?? {}) };
+      if (days[day] !== undefined) { days[day] = Math.max(0, days[day] - +m[3]); if (!days[day]) delete days[day]; }
+      stats[e.childId] = { ...st, total: Math.max(0, st.total - +m[2]), days };
+    }
+    return { ...e, reason: `${PREP_PREFIX}: ${m[1]} (${m[2]}/${m[3]})` };
+  });
+  for (const [id, st] of Object.entries(stats)) {
+    const realRounds = ledger.some(e => e.childId === id && RX.test(e.reason));
+    const realCards = (d.vocab ?? []).some(v => v.childId === id && !v.prepId && v.cards.some(c => c.right || c.wrong));
+    if (!realRounds && !realCards) { stats[id] = { streak: 0, best: 0, total: 0, days: {}, learnDays: 0, unlock: st.unlock }; continue; }
+    // Serie neu aus den Tageswerten (letzte 14 Tage), falls der letzte Lerntag nur Lernkarten hatte
+    const keys = Object.keys(st.days ?? {}).filter(k => (st.days![k] ?? 0) > 0).sort();
+    const last = keys[keys.length - 1];
+    if (!last || last === st.last || st.streak > 14) continue;
+    let streak = 1;
+    while (keys.includes(addDays(last, -streak))) streak++;
+    stats[id] = { ...st, last, streak, learnDays: Math.max(keys.length, (st.learnDays ?? 0) - 1) };
+  }
+  return { ...d, ledger, vocabStats: stats, migrations: [...(d.migrations ?? []), MIG_SPLIT] };
 }
 
 /** Serie zählt nur, wenn gestern oder heute geübt wurde. */

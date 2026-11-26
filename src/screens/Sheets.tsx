@@ -358,3 +358,66 @@ export function UnderstandingChip({ u }: { u: Understanding }) {
   const [fg, bg] = U_COLOR[u];
   return <Text style={{ color: fg, backgroundColor: bg, fontWeight: '700', fontSize: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, overflow: 'hidden' }}>{UNDERSTANDING_LABEL[u]}</Text>;
 }
+
+/** Ergebnis eines geprüften Tests zum Nachschauen (nur lesen): Antworten, Lösungen, richtig/falsch. */
+export function SheetResult({ sheet }: { sheet: Worksheet }) {
+  const res = sheet.results ?? [];
+  const pts = sheet.exam?.points;
+  return (
+    <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
+      {sheet.exam ? <ResultLine sheet={sheet} /> : sheet.understanding ? <View style={s.row}><UnderstandingChip u={sheet.understanding} /><Text style={s.muted}>{res.filter(Boolean).length} von {sheet.questions.length} richtig</Text></View> : null}
+      {sheet.questions.map((q, i) => {
+        const ok = res[i];
+        const got = sheet.paperScore?.[i];
+        return (
+          <View key={i} style={{ gap: 2, borderTopWidth: i ? 1 : 0, borderTopColor: C.line, paddingTop: i ? 8 : 0 }}>
+            <View style={[s.row, { justifyContent: 'space-between' }]}>
+              <Text style={s.label}>{sheet.exam ? 'Aufgabe' : 'Frage'} {i + 1}</Text>
+              <Text style={{ fontWeight: '800', fontSize: 13, color: ok ? C.ok : C.danger }}>{pts && got !== undefined ? `${String(got).replace('.', ',')} / ${pts[i]} P.` : ok ? '✓ richtig' : '✗ falsch'}</Text>
+            </View>
+            <AnswerView q={q} answer={sheet.answers?.[i] ?? (sheet.scan ? '(auf Papier)' : '')} />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Eltern: alle geprüften Tests oder Probe-Arbeiten zum Nachschauen. */
+export function DoneSheets({ childIds, exam }: { childIds: string[]; exam: boolean }) {
+  const { data } = useFamily();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+  if (!data) return null;
+  const list = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === 'geprueft' && !!w.exam === exam)
+    .sort((a, b) => (b.doneAt ?? b.date).localeCompare(a.doneAt ?? a.date));
+  if (!list.length) return null;
+  const shown = all ? list : list.slice(0, 5);
+  return (
+    <View style={[s.card, { gap: 8 }]}>
+      <Text style={s.label}>{exam ? 'Ergebnisse Probe-Arbeiten' : 'Ergebnisse Tagestests'} ({list.length})</Text>
+      {shown.map(w => {
+        const kid = data.children.find(c => c.id === w.childId);
+        const on = openId === w.id;
+        const r = w.exam ? examScore(w, w.results ?? []) : null;
+        const day = new Date((w.doneAt ?? w.date) + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' });
+        return (
+          <View key={w.id} style={{ gap: 6 }}>
+            <Pressable onPress={() => setOpenId(on ? null : w.id)} accessibilityRole="button" accessibilityState={{ expanded: on }}
+              style={[s.row, { flexWrap: 'nowrap', gap: 8, padding: 10, borderRadius: 12, backgroundColor: on ? C.accentSoft : C.bg }]}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: kid?.color ?? C.accent }} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[s.text, { fontWeight: '700', fontSize: 14 }]} numberOfLines={1}>{w.title}</Text>
+                <Text style={[s.muted, { fontSize: 12 }]}>{kid?.name} · {day}{w.retryOf ? ' · Wiederholung' : ''}</Text>
+              </View>
+              {r ? <Text style={{ fontWeight: '800', fontSize: 12, color: r.note <= 2 ? C.ok : r.note >= 4 ? C.danger : C.warn }}>Note ca. {r.note}</Text> : w.understanding ? <UnderstandingChip u={w.understanding} /> : null}
+              <Text style={{ color: C.muted }}>{on ? '▾' : '›'}</Text>
+            </Pressable>
+            {on && <SheetResult sheet={w} />}
+          </View>
+        );
+      })}
+      {list.length > 5 && <Button ghost title={all ? 'Weniger zeigen' : `Alle ${list.length} zeigen`} onPress={() => setAll(x => !x)} />}
+    </View>
+  );
+}
