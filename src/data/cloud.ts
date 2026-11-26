@@ -32,6 +32,8 @@ function friendly(e: { message?: string } | null): Error {
   if (m.includes('unknown_code')) return new Error('Diesen Familiencode gibt es nicht.');
   if (m.includes('Invalid login')) return new Error('E-Mail oder Passwort stimmt nicht.');
   if (m.includes('Email not confirmed')) return new Error('Bitte zuerst den Link in der Bestätigungs-Mail öffnen.');
+  if (m.includes('same_password') || m.includes('different from the old')) return new Error('Das neue Passwort muss anders sein als das alte.');
+  if (m.includes('rate limit') || m.includes('over_email_send_rate_limit')) return new Error('Zu viele Mails. Bitte in einer Minute noch einmal versuchen.');
   if (m.includes('already registered')) return new Error('Für diese E-Mail gibt es schon ein Konto. Bitte anmelden.');
   if (m.includes('Anonymous sign-ins are disabled')) return new Error('Kindergeräte sind im Server noch nicht freigeschaltet (Anonymous sign-ins).');
   if (m.includes('parent_needs_account')) return new Error('Eltern brauchen ein Konto mit E-Mail.');
@@ -52,6 +54,23 @@ export async function parentSignUp(email: string, password: string): Promise<boo
   const { data, error } = await sb().auth.signUp({ email, password, options: { emailRedirectTo } });
   if (error) throw friendly(error);
   return !data.session;
+}
+const RESET_KEY = 'famelio:reset';
+/** „Passwort vergessen“: schickt eine Mail mit Link zurück auf diese Seite. */
+export async function requestPasswordReset(email: string) {
+  const redirectTo = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : undefined;
+  try { localStorage.setItem(RESET_KEY, '1'); } catch { /* egal */ }
+  const { error } = await sb().auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw friendly(error);
+}
+/** true, wenn die Rückkehr per ?code=… von einer Reset-Mail kommt (gleiches Gerät, gleicher Browser). */
+export function recoveryPending(): boolean {
+  try { return localStorage.getItem(RESET_KEY) === '1'; } catch { return false; }
+}
+export async function setNewPassword(password: string) {
+  const { error } = await sb().auth.updateUser({ password });
+  if (error) throw friendly(error);
+  try { localStorage.removeItem(RESET_KEY); } catch { /* egal */ }
 }
 /** Welche Anmeldewege im Server eingeschaltet sind (Supabase › Authentication › Providers). */
 export async function oauthProviders(): Promise<{ google: boolean; apple: boolean }> {

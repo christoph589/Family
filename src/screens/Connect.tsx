@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { createFamily, DeviceLink, finishOAuth, joinFamily, oauthProviders, myParentFamily, parentOAuth, parentSignIn, parentSignUp, sb, setLink } from '../data/cloud';
+import { createFamily, DeviceLink, finishOAuth, joinFamily, oauthProviders, myParentFamily, parentOAuth, parentSignIn, parentSignUp, recoveryPending, requestPasswordReset, sb, setLink, setNewPassword } from '../data/cloud';
 import { localStore } from '../data/store';
 import { FamilyData } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
@@ -25,7 +25,7 @@ function readInvite(): string {
   } catch { return ''; }
 }
 
-type Step = 'start' | 'eltern' | 'neu' | 'kind' | 'kindWahl';
+type Step = 'start' | 'eltern' | 'neu' | 'kind' | 'kindWahl' | 'reset';
 
 /** Erster Start mit Server: Familien-Pad (Eltern-Konto) oder Kindergerät (Familiencode). */
 export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
@@ -47,7 +47,7 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
   // Rückkehr von „Mit Google/Apple anmelden“
   useEffect(() => {
     setBusy(true);
-    finishOAuth().then(ok => { if (ok) { setStep('eltern'); return afterParentLogin(); } })
+    finishOAuth().then(ok => { if (ok) { if (recoveryPending()) { setStep('reset'); return; } setStep('eltern'); return afterParentLogin(); } })
       .catch(e => { setStep('eltern'); setErr(e.message); }).finally(() => setBusy(false));
   }, []);
 
@@ -100,7 +100,21 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
         } else await parentSignIn(email.trim(), pw);
         await afterParentLogin();
       })} />
+    {mode === 'login' && <Button ghost title="Passwort vergessen?" disabled={busy || !email.includes('@')}
+      onPress={() => run(async () => { await requestPasswordReset(email.trim()); setInfo('Mail ist unterwegs. Öffne den Link darin auf diesem Gerät, dann kannst du ein neues Passwort setzen.'); })} />}
+    {mode === 'login' && !email.includes('@') && <Text style={s.muted}>Für „Passwort vergessen?“ erst oben deine E-Mail eintragen.</Text>}
     {back}
+  </>);
+
+  if (step === 'reset') return box(<>
+    <Text style={s.h1}>Neues Passwort</Text>
+    <View style={s.card}>
+      <Text style={s.label}>Neues Passwort (mindestens 8 Zeichen)</Text>
+      <TextInput style={s.input} value={pw} onChangeText={setPw} secureTextEntry autoComplete="new-password" />
+    </View>
+    {error}
+    <Button title={busy ? 'Moment …' : 'Passwort speichern'} disabled={busy || pw.length < 8}
+      onPress={() => run(async () => { await setNewPassword(pw); setPw(''); await afterParentLogin(); })} />
   </>);
 
   if (step === 'neu') return (
