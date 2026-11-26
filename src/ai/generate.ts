@@ -47,7 +47,7 @@ function serverSample(): SampleFn {
     const images = await Promise.all(((opts?.images ?? []) as Blob[]).map(blobToDataUrl));
     const signal: AbortSignal | undefined = opts?.signal;
     if (signal?.aborted) throw { code: 'cancelled' };
-    const req = sb().functions.invoke('familie', { body: { action: 'ai', prompt: input, images } }).then(async ({ data, error }) => {
+    const req = sb().functions.invoke('familie', { body: { action: 'ai', prompt: input, images, ...(opts?.fast ? { fast: true } : {}) } }).then(async ({ data, error }) => {
       if (error) {
         let code = '';
         try { code = (await (error as any).context?.json?.())?.error ?? ''; } catch { /* egal */ }
@@ -557,6 +557,43 @@ Antworte nur mit JSON: {"items":[{"date":"YYYY-MM-DD","slot":"abend","title":"..
     steps: x?.isNew ? str(x?.steps, 2000) || undefined : undefined,
     why: str(x?.why, 80) || undefined,
   })).filter((x: { date: string; slot: string; title: string }) => x.title && ok.has(x.date + x.slot));
+  if (!items.length) throw { code: 'invalid_json' };
+  return items;
+}
+
+/**
+ * Rezeptvorschläge: ein einziger Aufruf mit dem günstigen Modell (fast).
+ * Schickt nur Gerichtsnamen, Bewertungen, Monat und anonyme Unverträglichkeiten (keine Namen, keine Fotos).
+ */
+export async function suggestDishes(input: {
+  month: string; people: number; diet: string; liked: string[]; disliked: string[]; have: string[]; planned: string[]; wish?: string; n?: number;
+}, signal?: AbortSignal): Promise<import('../data/types').DishIdea[]> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const n = input.n ?? 6;
+  const prompt = `Schlage ${n} NEUE Gerichte für eine deutsche Familie mit ${input.people} Personen (Kinder dabei) vor.
+Monat: ${input.month} (Saison in Deutschland beachten: Gemüse und Obst, das jetzt Saison hat, passende Jahreszeit-Küche).
+Einschränkungen (unbedingt einhalten, auch versteckte Zutaten wie Butter, Sahne, Ei, Mehl, Sojasauce):
+${input.diet || 'keine'}
+Das mag die Familie besonders (Geschmack treffen, aber nicht kopieren): ${input.liked.slice(0, 15).join(', ') || 'noch unbekannt'}
+Das mag sie eher nicht: ${input.disliked.slice(0, 10).join(', ') || 'nichts bekannt'}
+Diese Woche schon geplant (Abwechslung dazu, keine gleiche Hauptzutat oder Beilage): ${input.planned.slice(0, 14).join(', ') || 'nichts'}
+Gibt es schon, NICHT wieder vorschlagen: ${input.have.slice(0, 80).join(', ') || 'nichts'}
+${input.wish ? `Wunsch der Eltern: ${input.wish.slice(0, 200)}\n` : ''}Regeln:
+- Alltagstauglich: unter 45 Minuten Arbeit, normale Supermarkt-Zutaten, kindertauglich.
+- Bunt gemischt: höchstens ein Nudel- und ein Reisgericht, mindestens ein vegetarisches, möglichst ein Gemüse- oder Ofengericht.
+- Deutsche Gerichtsnamen, kurz (max. 5 Wörter).
+- Zutaten mit Menge für ${input.people} Personen, kurze Zubereitung in 3 bis 6 nummerierten Schritten.
+- "why": kurzer freundlicher Grund (max. 8 Wörter), z. B. "Saisonal: Kürbis" oder "Ofen, wenig Arbeit".
+- "time": Gesamtdauer, z. B. "30 Min.".
+Antworte nur mit JSON: {"items":[{"title":"...","why":"...","time":"30 Min.","ingredients":["400 g ..."],"steps":"1. ...\\n2. ..."}]}`;
+  const res = await sample.json<any>(prompt, { signal, cache: false, fast: true });
+  const have = new Set(input.have.map(x => x.trim().toLowerCase()));
+  const items = (Array.isArray(res?.items) ? res.items : []).map((x: any, i: number) => ({
+    id: `${Date.now().toString(36)}${i}`, title: str(x?.title, 80), why: str(x?.why, 80) || undefined, time: str(x?.time, 20) || undefined,
+    ingredients: (Array.isArray(x?.ingredients) ? x.ingredients : []).map((y: unknown) => str(y, 120)).filter(Boolean).slice(0, 30),
+    steps: str(x?.steps, 2000) || undefined,
+  })).filter((x: { title: string; ingredients: string[] }) => x.title && x.ingredients.length && !have.has(x.title.toLowerCase())).slice(0, n);
   if (!items.length) throw { code: 'invalid_json' };
   return items;
 }

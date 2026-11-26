@@ -78,26 +78,62 @@ async function fetchPage(raw: string, accept: string, max: number): Promise<{ by
 const toB64 = (b: Uint8Array) => { let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s); };
 const unHtml = (t: string) => t.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/\s+/g, ' ').trim();
 
-function findRecipe(node: any): any {
-  if (!node || typeof node !== 'object') return null;
-  if (Array.isArray(node)) { for (const x of node) { const r = findRecipe(x); if (r) return r; } return null; }
-  const t = node['@type'];
-  if (t === 'Recipe' || (Array.isArray(t) && t.includes('Recipe'))) return node;
-  return findRecipe(node['@graph']) ?? findRecipe(node.mainEntity) ?? null;
+const isRecipeType = (t: unknown) => (Array.isArray(t) ? t : [t]).some(x => typeof x === 'string' && /(^|[/#])Recipe$/i.test(x));
+function findRecipe(node: any, depth = 0): any {
+  if (!node || typeof node !== 'object' || depth > 8) return null;
+  if (Array.isArray(node)) { for (const x of node) { const r = findRecipe(x, depth + 1); if (r) return r; } return null; }
+  if (isRecipeType(node['@type'])) return node;
+  return findRecipe(node['@graph'], depth + 1) ?? findRecipe(node.mainEntity, depth + 1) ?? findRecipe(node.mainEntityOfPage, depth + 1) ?? findRecipe(node.itemListElement, depth + 1) ?? findRecipe(node.item, depth + 1) ?? null;
 }
+/** HTML-Text mit Zeilenumbrüchen an Absätzen und Listen, Entities aufgelöst */
+const lineHtml = (t: string) => t.replace(/<\/?(br|p|li|div|ol|ul)\b[^>]*>/gi, '\n');
+const unEnt = (t: string) => t.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0*39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 function stepsOf(x: any): string[] {
   if (!x) return [];
-  if (typeof x === 'string') return x.split(/\n+/).map(unHtml).filter(Boolean);
+  if (typeof x === 'string') return lineHtml(x).split(/\n+/).map(unHtml).filter(Boolean);
   if (Array.isArray(x)) return x.flatMap(stepsOf);
   if (x.itemListElement) return stepsOf(x.itemListElement);
-  if (x.text) return [unHtml(String(x.text))];
+  if (x.text) return stepsOf(String(x.text));
+  if (x.name && typeof x.name === 'string' && /HowToStep/i.test(String(x['@type']))) return [unHtml(x.name)];
   return [];
 }
 function imageOf(x: any): string | undefined {
   if (!x) return undefined;
   if (typeof x === 'string') return x;
-  if (Array.isArray(x)) return imageOf(x[0]);
+  if (Array.isArray(x)) {
+    // das größte Bild bevorzugen, wenn Maße angegeben sind
+    const withW = x.map(imageOf).filter(Boolean) as string[];
+    const sized = x.filter((i: any) => i && typeof i === 'object' && Number(i.width) > 0).sort((a: any, b: any) => Number(b.width) - Number(a.width))[0];
+    return (sized && imageOf(sized)) || withW[0];
+  }
   return x.url ?? x.contentUrl;
+}
+/** Zutaten: neues (recipeIngredient) und altes Schema (ingredients), Text oder Liste */
+function ingredientsOf(rec: any): string[] {
+  const raw = rec?.recipeIngredient ?? rec?.ingredients ?? [];
+  const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? lineHtml(raw).split(/\n+/) : [];
+  return list.flatMap((x: any) => (typeof x === 'string' ? [x] : typeof x?.text === 'string' ? [x.text] : typeof x?.name === 'string' ? [x.name] : []))
+    .map((x: string) => unHtml(x).slice(0, 120)).filter(Boolean).slice(0, 60);
+}
+/** ISO-Dauer wie PT1H30M als „1 Std. 30 Min.“ */
+function durationOf(x: unknown): string | undefined {
+  const m = /^P(?:\d+D)?T?(?:(\d+)H)?(?:(\d+)M)?/i.exec(String(x ?? ''));
+  if (!m || (!m[1] && !m[2])) return undefined;
+  return [m[1] && `${m[1]} Std.`, m[2] && `${m[2]} Min.`].filter(Boolean).join(' ');
+}
+/** Reservewege, wenn die Seite kein JSON-LD hat: Microdata (itemprop) und Standard-Überschriften */
+function microdataRecipe(html: string): any | null {
+  const props = (name: string) => [...html.matchAll(new RegExp(`<[^>]+itemprop=["']${name}["'][^>]*>([\\s\\S]*?)</(?:li|span|p|div|h\\d)>`, 'gi'))].map(m => unHtml(m[1])).filter(Boolean);
+  const ing = props('recipeIngredient').length ? props('recipeIngredient') : props('ingredients');
+  if (!ing.length) return null;
+  const steps = props('recipeInstructions');
+  return { '@type': 'Recipe', name: props('name')[0], recipeIngredient: ing, recipeInstructions: steps };
+}
+/** JSON-LD tolerant lesen: kaputte Zeilenumbrüche in Texten, HTML-Kommentare und CDATA drumherum */
+function parseLd(raw: string): unknown {
+  const t = raw.trim().replace(/^<!--|-->$/g, '').replace(/^\/\*<!\[CDATA\[\*\/|\/\*\]\]>\*\/$/g, '').trim();
+  try { return JSON.parse(t); } catch { /* nächster Versuch */ }
+  return JSON.parse(t.replace(/[\u0000-\u001f]+/g, ' '));
 }
 
 async function recipeImport(body: any) {
@@ -106,28 +142,33 @@ async function recipeImport(body: any) {
   let page;
   try { page = await fetchPage(url, 'text/html,application/xhtml+xml', 4_000_000); }
   catch (e) { return json({ error: (e as Error).message === 'host_not_allowed' ? 'host_not_allowed' : 'fetch_failed' }, 400); }
-  const html = new TextDecoder().decode(page.bytes);
+  const charset = /charset=["']?([\w-]+)/i.exec(page.type)?.[1] ?? /<meta[^>]+charset=["']?([\w-]+)/i.exec(new TextDecoder('latin1').decode(page.bytes.subarray(0, 4000)))?.[1] ?? 'utf-8';
+  let html: string;
+  try { html = new TextDecoder(charset).decode(page.bytes); } catch { html = new TextDecoder().decode(page.bytes); }
   let rec: any = null;
   for (const m of html.matchAll(/<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
-    try { rec = findRecipe(JSON.parse(m[1].trim())); } catch { /* nächster Block */ }
+    try { rec = findRecipe(parseLd(m[1])); } catch { /* nächster Block */ }
     if (rec) break;
   }
-  const meta = (prop: string) => new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i').exec(html)?.[1]
-    ?? new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i').exec(html)?.[1];
-  const title = unHtml(String(rec?.name ?? meta('og:title') ?? '')).slice(0, 80);
-  const ingredients = (Array.isArray(rec?.recipeIngredient) ? rec.recipeIngredient : []).map((x: unknown) => unHtml(String(x)).slice(0, 120)).filter(Boolean).slice(0, 60);
+  if (!rec) rec = microdataRecipe(html);
+  const meta = (prop: string) => { const v = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i').exec(html)?.[1]
+    ?? new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i').exec(html)?.[1]; return v ? unEnt(v) : undefined; };
+  const title = unHtml(String(rec?.name ?? meta('og:title') ?? '')).replace(/\s*[|–-]\s*(Chefkoch|Rezept).*$/i, '').slice(0, 80);
+  const ingredients = ingredientsOf(rec);
   const steps = stepsOf(rec?.recipeInstructions).slice(0, 30).map((x, i) => `${i + 1}. ${x}`).join('\n').slice(0, 4000);
+  const yieldTxt = unHtml(String(Array.isArray(rec?.recipeYield) ? rec.recipeYield[0] : rec?.recipeYield ?? '')).slice(0, 40);
+  const time = durationOf(rec?.totalTime) ?? durationOf(rec?.cookTime) ?? durationOf(rec?.prepTime);
   let image: string | undefined;
-  const imgUrl = imageOf(rec?.image) ?? meta('og:image');
+  const imgUrl = imageOf(rec?.image) ?? meta('og:image') ?? meta('twitter:image');
   if (imgUrl && body.withImage !== false) {
     try {
-      const img = await fetchPage(new URL(imgUrl, page.url).toString(), 'image/jpeg,image/webp,image/png,image/*', 3_000_000);
+      const img = await fetchPage(new URL(unEnt(imgUrl), page.url).toString(), 'image/jpeg,image/webp,image/png,image/*', 3_000_000);
       const type = img.type.split(';')[0].trim();
       if (/^image\/(jpeg|png|webp|gif)$/.test(type)) image = `data:${type};base64,${toB64(img.bytes)}`;
     } catch { /* ohne Bild weiter */ }
   }
   if (!title && !ingredients.length) return json({ error: 'no_recipe' }, 422);
-  return json({ title, ingredients, steps, image, source: new URL(page.url).hostname.replace(/^www\./, ''), structured: !!rec });
+  return json({ title, ingredients, steps, image, servings: yieldTxt || undefined, time, source: new URL(page.url).hostname.replace(/^www\./, ''), structured: !!rec });
 }
 
 // ---------- Export: Familientermine als iCal ----------
@@ -253,6 +294,8 @@ export function parseIcs(text: string, fromIso: string, toIso: string): Out[] {
 
 const AI_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const AI_MODEL = 'claude-opus-5-5';
+/** Günstiges Modell für einfache Textaufgaben (Rezeptvorschläge), per body.fast */
+const FAST_MODEL = 'claude-haiku-5-5';
 const AI_DAILY = 30;
 const IMG = /^data:(image\/(?:jpeg|png|webp|gif)|application\/pdf);base64,([A-Za-z0-9+/=]+)$/;
 const berlinDay = () => new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(new Date());
@@ -310,6 +353,16 @@ async function runAi(body: any, userId: string, admin: any) {
 
   const client = new Anthropic({ apiKey: AI_KEY });
   try {
+    if (body.fast === true && !images.length) {
+      const q = await client.messages.create({
+        model: FAST_MODEL, max_tokens: 6000,
+        system: 'Du hilfst einer Familie. Antworte ausschließlich mit gültigem JSON, ohne Markdown-Codeblock und ohne weiteren Text.',
+        messages: [{ role: 'user', content: prompt }],
+      } as any);
+      if (q.stop_reason === 'max_tokens') return json({ error: 'invalid_json' }, 502);
+      await track(admin, fid, q.model ?? FAST_MODEL, q.usage);
+      return json({ text: q.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(''), left: limit - used - 1 });
+    }
     const msg = await client.beta.messages.stream({
       model: AI_MODEL,
       max_tokens: 16000,
