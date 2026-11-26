@@ -124,7 +124,7 @@ export function badgeMetrics(d: FamilyData, child: Child, date = today()): Recor
     streak: bestStreak(d, id, date),
     tooth: toothStreak(d, id, date),
     stars: lifetimeStars(d, id),
-    mastered: (d.vocab ?? []).filter(v => v.childId === id).reduce((n, v) => n + masteredCount(v), 0),
+    mastered: (d.vocab ?? []).filter(v => v.childId === id && !v.prepId).reduce((n, v) => n + masteredCount(v), 0),
     learnDays: vs?.learnDays ?? Object.keys(vs?.days ?? {}).length,
     right: vs?.total ?? 0,
     tests: (d.worksheets ?? []).filter(w => w.childId === id && w.status !== 'offen').length,

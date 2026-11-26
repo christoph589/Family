@@ -12,7 +12,7 @@ import { askTopic, QA, AI_ERROR, generateQuiz, getSample } from '../ai/generate'
 import { PRACTICE_POINTS, Question, Topic } from '../data/types';
 import { sanitizeSvg } from '../ui/Math';
 import { Button, Segmented } from '../ui/Button';
-import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
+import { DoneSheets, KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
 import { C, s, SHADOW } from '../ui/theme';
 import { VocabReset, Vocab } from './Vocab';
 import { collectPhotos } from './PhotoCollector';
@@ -96,6 +96,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
       {tabs}
       {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
       <ExamPrepScreen childIds={childIds} parent={parent} meId={meId} onSolve={parent ? undefined : setSolveId} />
+      {parent && <DoneSheets childIds={childIds} exam />}
       {admin && <Grades />}
     </View>
   );
@@ -173,6 +174,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
         {topics.length > 5 && <Button ghost title={allTopics ? 'Weniger zeigen' : `Alle ${topics.length} Themen zeigen`} onPress={() => setAllTopics(x => !x)} />}
       </View>
     </View>
+    {parent && <DoneSheets childIds={childIds} exam={false} />}
     </View>
   );
 }
@@ -195,10 +197,10 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
     // Konkrete Liste: was genau offen ist, mit Art und direktem Sprung in den richtigen Reiter
     const items: { icon: string; text: string; sub: string; go: 'themen' | 'klassenarbeit'; tone: 'warn' | 'info' }[] = [
       ...ws.filter(w => w.status === 'abgegeben').map(w => ({ icon: '✍️', text: w.title, sub: `${w.exam ? 'Probe-Arbeit' : 'Tagestest'} abgegeben, bitte prüfen`, go: (w.exam ? 'klassenarbeit' : 'themen') as 'themen' | 'klassenarbeit', tone: 'warn' as const })),
-      ...ws.filter(w => w.status === 'offen').map(w => ({ icon: '📝', text: w.title, sub: `${w.exam ? 'Probe-Arbeit' : 'Tagestest'}, ${k.name} hat noch nicht gelöst (${ago(w.date)})`, go: (w.exam ? 'klassenarbeit' : 'themen') as 'themen' | 'klassenarbeit', tone: 'info' as const })),
+      ...ws.filter(w => w.status === 'offen').map(w => ({ icon: '📝', text: w.title, sub: `${w.retryOf ? (w.exam ? 'Schwachstellen nochmal' : 'Falsches nochmal') : w.exam ? 'Probe-Arbeit' : 'Tagestest'}, ${k.name} hat noch nicht gelöst (${ago(w.date)})`, go: (w.exam ? 'klassenarbeit' : 'themen') as 'themen' | 'klassenarbeit', tone: 'info' as const })),
       ...fixList.map(e => ({ icon: '⚠️', text: `${e.subject}${e.title ? ': ' + e.title : ''}`, sub: !e.date ? 'Klassenarbeit ohne Datum' : 'Rechtschreibung im Titel prüfen', go: 'klassenarbeit' as const, tone: 'warn' as const })),
     ];
-    return { k, check, open, next, days, fixme, items, vocab: dueCount(data, k.id) };
+    return { k, check, open, next, days, fixme, items, vocab: dueCount(data, k.id), claims: (data.vocabClaims ?? []).filter(c => c.childId === k.id).length };
   });
   const Pill = ({ text, color, bg, onPress }: { text: string; color: string; bg: string; onPress?: () => void }) => (
     <Pressable onPress={onPress} disabled={!onPress} style={{ backgroundColor: bg, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -211,7 +213,7 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
         <Text style={[s.text, { fontWeight: '800' }]}>Überblick</Text>
         {focus ? <Pressable onPress={() => setFocus('')}><Text style={{ color: C.accent, fontWeight: '800', fontSize: 13 }}>Alle Kinder zeigen</Text></Pressable> : <Text style={[s.muted, { fontSize: 12 }]}>Kind antippen zum Filtern</Text>}
       </View>
-      {rows.map(({ k, check, open, next, days, fixme, items, vocab }) => {
+      {rows.map(({ k, check, open, next, days, fixme, items, vocab, claims }) => {
         const on = focus === k.id, dim = !!focus && !on;
         return (
           <View key={k.id}>
@@ -227,8 +229,9 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
                 {open > 0 && <Pill text={`📝 ${open} ${open === 1 ? 'Test' : 'Tests'} beim Kind offen`} color={C.accent} bg={C.accentSoft} />}
                 {next && <Pill text={`📅 ${next.subject} ${days === 0 ? 'heute' : days === 1 ? 'morgen' : `in ${days} T.`}`} color={days !== null && days <= 3 ? C.danger : C.fg} bg={days !== null && days <= 3 ? '#fde3e6' : C.surface2} onPress={() => { setFocus(k.id); onGo('klassenarbeit'); }} />}
                 {fixme > 0 && <Pill text={`⚠️ ${fixme} unvollständig`} color={C.warn} bg={C.warnSoft} onPress={() => { setFocus(k.id); onGo('klassenarbeit'); }} />}
+                {claims > 0 && <Pill text={`✋ ${claims} Vokabel-Einspruch`} color={C.warn} bg={C.warnSoft} onPress={() => { setFocus(k.id); onGo('vokabeln'); }} />}
                 {vocab > 0 && <Pill text={`🔤 ${vocab} Vokabeln`} color={C.fg} bg={C.surface2} />}
-                {!check && !open && !next && !vocab && !fixme && <Text style={[s.muted, { fontSize: 12 }]}>Nichts offen ✓</Text>}
+                {!check && !open && !next && !vocab && !fixme && !claims && <Text style={[s.muted, { fontSize: 12 }]}>Nichts offen ✓</Text>}
               </View>
             </View>
           </Pressable>

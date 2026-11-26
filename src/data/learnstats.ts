@@ -90,9 +90,11 @@ export function summarize(d: FamilyData, childId: string, n: number, end = today
   const prepBySubj: Record<string, number> = {};
   for (const e of d.ledger) {
     if (e.childId !== childId || !e.at || !inRange(e.at.slice(0, 10))) continue;
-    const m = /^Vokabeln: (.*) \((\d+)\/(\d+)\)$/.exec(e.reason);
+    const m = /^(Vokabeln|Lernkarten): (.*) \((\d+)\/(\d+)\)$/.exec(e.reason);
     if (!m) continue;
-    const k = e.at.slice(0, 10), bag = prepTitles.has(m[1]) ? ledgerPrep : ledgerRounds, x = (bag[k] ??= { w: 0, ok: 0, r: 0 });
+    const prep = m[1] === 'Lernkarten' || prepTitles.has(m[2]);
+    m.splice(1, 1);
+    const k = e.at.slice(0, 10), bag = prep ? ledgerPrep : ledgerRounds, x = (bag[k] ??= { w: 0, ok: 0, r: 0 });
     if (bag === ledgerPrep) { const sj = prepSubject(m[1]); prepBySubj[sj] = (prepBySubj[sj] ?? 0) + +m[3]; }
     x.ok += +m[2]; x.w += +m[3]; x.r++;
   }
