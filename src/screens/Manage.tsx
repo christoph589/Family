@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DateField } from '../ui/DateField';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { isSchoolTask, REPEAT_LABEL, today, uid } from '../data/logic';
@@ -19,6 +20,8 @@ export function Manage({ onReset }: { onReset?: () => void }) {
   const [time, setTime] = useState<DayTime | ''>('');
   const [selfCheck, setSelfCheck] = useState(false);
   const [school, setSchool] = useState(false);
+  const [special, setSpecial] = useState(false);
+  const [until, setUntil] = useState('');
   const [added, setAdded] = useState('');
   const has = (t: TaskTemplate) => !!data?.tasks.some(x => x.active && x.childId === childId && x.title === t.title && x.time === t.time);
   const addPack = () => {
@@ -90,10 +93,17 @@ export function Manage({ onReset }: { onReset?: () => void }) {
             <Text style={[s.text, { flex: 1 }]}>Gehört zur Schule (nur an Schultagen, pausiert in den Ferien)</Text>
           </Pressable>
         )}
+        <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: special }} onPress={() => { const v = !special; setSpecial(v); if (v) { setRepeat('einmal'); if ((Number(points) || 0) < 30) setPoints('30'); } }} style={[s.row, { flexWrap: 'nowrap', backgroundColor: special ? '#fff6d6' : 'transparent', borderRadius: 12, padding: special ? 8 : 0 }]}>
+          <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#f2b705', backgroundColor: special ? '#f2b705' : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+            {special && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
+          </View>
+          <Text style={[s.text, { flex: 1 }]}>⭐ Sonderaufgabe: Extra-Punkte, bleibt stehen, bis sie erledigt ist (z. B. Garage aufräumen)</Text>
+        </Pressable>
+        {special && <DateField value={until} onChange={setUntil} label="Frist (optional)" min={today()} clearable />}
         {repeat === 'einmal' && kind === 'hausaufgabe' && <Text style={[s.muted, { fontSize: 13 }]}>Einmalige Lernaufgaben erscheinen auch in den Ferien.</Text>}
         <Button title="Anlegen" disabled={!title.trim()} onPress={() => {
-          update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), childId, title: title.trim(), icon: icon.trim() || undefined, kind, time: time || undefined, selfCheck, school: school && kind !== 'hausaufgabe' && repeat !== 'einmal' ? true : undefined, repeat, points: Number(points) || 0, date: repeat === 'einmal' ? today() : undefined, active: true }] }));
-          setAdded(`${icon} ${title.trim()} hinzugefügt.`); setTitle(''); setIcon('');
+          update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), childId, title: title.trim(), icon: icon.trim() || undefined, kind, time: time || undefined, selfCheck, school: school && kind !== 'hausaufgabe' && repeat !== 'einmal' ? true : undefined, repeat, points: Number(points) || 0, date: repeat === 'einmal' || special ? today() : undefined, active: true, ...(special ? { repeat: 'einmal' as Repeat, selfCheck: false, special: until ? { until } : {} } : {}) }] }));
+          setAdded(`${special ? '⭐ ' : icon}${title.trim()} hinzugefügt.`); setTitle(''); setIcon(''); setSpecial(false); setUntil('');
         }} />
       </View>
       <View style={s.card}>
@@ -103,7 +113,7 @@ export function Manage({ onReset }: { onReset?: () => void }) {
           <View key={t.id} style={[s.row, { flexWrap: 'nowrap', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }]}>
             <View style={{ flex: 1 }}>
               <Text style={[s.text, { fontWeight: '700' }]}>{t.icon ? t.icon + ' ' : ''}{t.title}</Text>
-              <Text style={[s.muted, { fontSize: 12 }]}>{KIND_LABEL[t.kind]}{t.time ? ` · ${t.time}` : ''}{t.selfCheck ? ' · ohne Bestätigung' : ''} · {t.repeat === 'einmal' ? t.date : REPEAT_LABEL[t.repeat]}{isSchoolTask(t) ? ' · Schule' : ''} · {t.points} P</Text>
+              <Text style={[s.muted, { fontSize: 12 }]}>{KIND_LABEL[t.kind]}{t.time ? ` · ${t.time}` : ''}{t.selfCheck ? ' · ohne Bestätigung' : ''} · {t.special ? `⭐ Sonderaufgabe${t.special.until ? ' bis ' + t.special.until : ''}${data.completions.some(c => c.taskId === t.id && c.status === 'bestaetigt') ? ' · geschafft' : ''}` : t.repeat === 'einmal' ? t.date : REPEAT_LABEL[t.repeat]}{isSchoolTask(t) ? ' · Schule' : ''} · {t.points} P</Text>
             </View>
             <View style={{ alignItems: 'center', marginRight: 6 }}>
               <TextInput style={[s.input, { width: 56, paddingVertical: 6, paddingHorizontal: 6, textAlign: 'center', fontWeight: '800' }]} defaultValue={String(t.points)} keyboardType="number-pad" accessibilityLabel={`Punkte für ${t.title}`}

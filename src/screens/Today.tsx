@@ -85,17 +85,18 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
   const items = tasksFor(data!, child.id, date);
   const done = items.filter(i => i.completion?.status === 'bestaetigt').length;
   const pct = items.length ? (done / items.length) * 100 : 0;
-  const group = (kind: TaskKind, label: string) => {
-    const list = items.filter(i => i.task.kind === kind).sort((a, b) => TIME_ORDER[a.task.time ?? ''] - TIME_ORDER[b.task.time ?? '']);
+  const group = (kind: TaskKind | 'special', label: string) => {
+    const list = items.filter(i => (kind === 'special' ? !!i.task.special : !i.task.special && i.task.kind === kind)).sort((a, b) => TIME_ORDER[a.task.time ?? ''] - TIME_ORDER[b.task.time ?? '']);
     if (!list.length) return null;
     return (
       <View style={{ gap: 8 }}>
         <Text style={s.label}>{label}</Text>
         {list.map(({ task, completion }) => {
           const st = completion?.status;
-          const bg = st === 'wartet' ? C.warnSoft : C.surface2;
+          const sp = task.special, late = !!sp?.until && sp.until < date && st !== 'bestaetigt';
+          const bg = st === 'wartet' ? C.warnSoft : sp ? '#fff6d6' : C.surface2;
           return (
-            <View key={task.id} style={[s.row, { backgroundColor: bg, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 18, flexWrap: 'nowrap', gap: 12, borderWidth: 1.5, borderColor: st === 'wartet' ? C.warn + '88' : 'transparent', opacity: st === 'bestaetigt' ? 0.6 : 1 }]}>
+            <View key={task.id} style={[s.row, { backgroundColor: bg, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 18, flexWrap: 'nowrap', gap: 12, borderWidth: sp ? 2 : 1.5, borderColor: st === 'wartet' ? C.warn + '88' : sp ? '#f2b705' : 'transparent', opacity: st === 'bestaetigt' ? 0.6 : 1 }]}>
               <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: !!st }} accessibilityLabel={task.title}
                 onPress={() => update(d => (st === 'bestaetigt' && !task.selfCheck ? (parent ? undoConfirm(d, task, date) : d) : toggleByChild(d, task, date)))}
                 style={[{ width: 46, height: 46, borderRadius: 23, borderWidth: st ? 0 : 2.5, borderColor: child.color + '88', backgroundColor: st === 'bestaetigt' ? C.ok : st === 'wartet' ? C.warn : C.surface, alignItems: 'center', justifyContent: 'center' }, st ? SHADOW.sm : null]}>
@@ -103,7 +104,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[s.text, { fontWeight: '700', textDecorationLine: st === 'bestaetigt' ? 'line-through' : 'none' }]} numberOfLines={2}>{task.title}</Text>
-                <Text style={[s.muted, { fontSize: 12, color: st === 'wartet' ? C.warn : C.muted, fontWeight: st === 'wartet' ? '700' : '400' }]}>{st === 'wartet' ? 'Wartet auf Eltern' : st === 'bestaetigt' ? (task.selfCheck ? 'Erledigt' : 'Bestätigt') : task.time ? TIME_LABEL[task.time] : task.repeat === 'einmal' ? 'Heute' : REPEAT_LABEL[task.repeat]}</Text>
+                <Text style={[s.muted, { fontSize: 12, color: st === 'wartet' ? C.warn : C.muted, fontWeight: st === 'wartet' || late ? '700' : '400' }, late ? { color: C.danger } : null]}>{st === 'wartet' ? 'Wartet auf Eltern' : sp && st !== 'bestaetigt' ? `⭐ Sonderaufgabe${sp.until ? (late ? ' · Frist vorbei' : ` · bis ${sp.until.slice(8, 10)}.${sp.until.slice(5, 7)}.`) : ''}` : st === 'bestaetigt' ? (task.selfCheck ? 'Erledigt' : 'Bestätigt') : task.time ? TIME_LABEL[task.time] : task.repeat === 'einmal' ? 'Heute' : REPEAT_LABEL[task.repeat]}</Text>
               </View>
               {parent && st !== 'bestaetigt' ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={`${task.title} bestätigen, plus ${task.points} Punkte`} onPress={() => update(d => confirm(d, task, date))}
@@ -193,6 +194,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
           </View>
         );
       })()}
+      {group('special', '⭐ Sonderaufgaben')}
       {group('routine', 'Routinen')}
       {group('hausaufgabe', 'Schule')}
       {group('pflicht', 'Haushalt')}

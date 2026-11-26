@@ -70,6 +70,8 @@ export interface Task {
   subject?: string;
   /** Nur in geraden oder ungeraden Kalenderwochen (z. B. Schwimmen abwechselnd Mädchen/Jungs) */
   weeks?: 'gerade' | 'ungerade';
+  /** Sonderaufgabe: einmalig, Extra-Punkte, bleibt ab date stehen, bis sie erledigt ist. until = optionale Frist. */
+  special?: { until?: string };
 }
 export interface Completion { id: string; taskId: string; childId: string; date: string; status: 'wartet' | 'bestaetigt' }
 export interface LedgerEntry { id: string; childId: string; points: number; reason: string; at: string; /** Einzahlung in einen Gemeinschaftstopf */ potId?: string }

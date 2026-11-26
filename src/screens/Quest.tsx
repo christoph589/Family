@@ -115,7 +115,7 @@ function QuestModal({ child, parent, onClose }: { child: Child; parent: boolean;
                   <View key={b.id} accessibilityLabel={`${b.title}: ${b.hint}${has ? '' : ', noch nicht geschafft'}`}
                     style={{ width: 100, padding: 8, borderRadius: 16, alignItems: 'center', gap: 2, backgroundColor: has ? C.accentSoft : C.surface2, opacity: has ? 1 : 0.45, borderWidth: isNew ? 2 : 0, borderColor: C.accent2 }}>
                     <Text style={{ fontSize: 28 }}>{has ? b.icon : '🔒'}</Text>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: C.fg, textAlign: 'center', alignSelf: 'stretch', ...({ hyphens: 'auto', wordBreak: 'normal', overflowWrap: 'normal' } as any) }} numberOfLines={2}>{b.title.replace(/(Sternen|Wochen|Unaufhalt|Wort|Strahle)(?=[a-zäöü])/, '$1\u00ad')}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: C.fg, textAlign: 'center', alignSelf: 'stretch', ...({ hyphens: 'auto', wordBreak: 'normal', overflowWrap: 'normal' } as any) }} numberOfLines={2}>{b.title.replace(/(Sternen|Wochen|Unaufhalt|Wort|Strahle|Sonder)(?=[a-zäöü])/, '$1\u00ad')}</Text>
                     <Text style={{ fontSize: 11, color: isNew ? C.accent2 : C.muted, textAlign: 'center', fontWeight: isNew ? '800' : '400' }} numberOfLines={2}>{isNew ? 'Neu!' : b.hint}</Text>
                   </View>
                 );

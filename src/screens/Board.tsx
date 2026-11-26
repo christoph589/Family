@@ -95,7 +95,7 @@ function BathColumn({ data, child, date, part, toggle, rowH }: { data: FamilyDat
               {completion && <Text style={{ color: '#fff', fontWeight: '900', fontSize: box * 0.55 }}>✓</Text>}
             </View>
             <Text style={{ flex: 1, fontSize: fs, fontWeight: '700', color: C.fg, textDecorationLine: completion ? 'line-through' : 'none' }} numberOfLines={rowH < 46 ? 1 : 2}>
-              {task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}
+              {task.special ? '⭐ ' : ''}{task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}
             </Text>
             <Text style={{ fontSize: 13, color: completion && !ok ? C.warn : C.muted, fontWeight: '700' }}>{completion && !ok ? 'wartet' : TIME_ICON[task.time ?? '']?.trim() ?? ''}</Text>
           </Pressable>
@@ -360,7 +360,7 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
       {open.map(({ task, completion }) => (
         <View key={task.id} style={[s.row, { flexWrap: 'nowrap' }]}>
           <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: completion ? C.warn : child.color, backgroundColor: completion ? C.warn : 'transparent' }} />
-          <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>{task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}{TIME_ICON[task.time ?? ''] ?? ''}</Text>
+          <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>{task.special ? '⭐ ' : ''}{task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}{TIME_ICON[task.time ?? ''] ?? ''}</Text>
           {completion && <Text style={{ color: C.warn, fontSize: 12, fontWeight: '700' }}>wartet</Text>}
         </View>
       ))}

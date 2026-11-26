@@ -59,6 +59,12 @@ const schoolDay = (d: FamilyData | undefined, date: string, childId?: string) =>
  */
 export function isDueOn(t: Task, date: string, d?: FamilyData): boolean {
   if (!t.active) return false;
+  if (t.special) {
+    // Erledigt: nur am Erledigt-Tag. Offen: nur heute (ab Starttag), damit vergangene Tage die Serie nicht verderben.
+    const c = d?.completions.find(c => c.taskId === t.id);
+    if (c) return c.date === date;
+    return date === today() && date >= (t.date ?? date);
+  }
   if (t.repeat === 'einmal') return t.date === date;
   if (t.repeat === 'vorSchultag') return schoolDay(d, plusDays(date, 1), t.childId);
   if (t.repeat === 'vorFach') {

@@ -88,6 +88,8 @@ export const BADGES: Badge[] = [
   { id: 'vok100', icon: '📖', title: 'Wörterbuch', hint: '100 Vokabeln sitzen' },
   { id: 'test', icon: '✏️', title: 'Durchgezogen', hint: 'Ersten Test abgegeben' },
   { id: 'topf', icon: '🤝', title: 'Teamplayer', hint: 'In den Familien-Topf eingezahlt' },
+  { id: 'sonder1', icon: '🎯', title: 'Sonderauftrag', hint: 'Erste Sonderaufgabe geschafft' },
+  { id: 'sonder5', icon: '🦸', title: 'Sonderheld', hint: '5 Sonderaufgaben geschafft' },
 ];
 
 function toothStreak(d: FamilyData, childId: string, date: string) {
@@ -111,6 +113,9 @@ export function earnedBadges(d: FamilyData, child: Child, date = today()): Set<s
   if (m >= 10) out.add('vok10'); if (m >= 100) out.add('vok100');
   if ((d.worksheets ?? []).some(w => w.childId === id && w.status !== 'offen')) out.add('test');
   if (d.ledger.some(e => e.childId === id && e.potId)) out.add('topf');
+  const sp = new Set(d.tasks.filter(t => t.special && t.childId === id).map(t => t.id));
+  const nSp = d.completions.filter(c => c.childId === id && c.status === 'bestaetigt' && sp.has(c.taskId)).length;
+  if (nSp >= 1) out.add('sonder1'); if (nSp >= 5) out.add('sonder5');
   return out;
 }
 
