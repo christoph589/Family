@@ -87,7 +87,8 @@ export interface Topic { id: string; childId: string; subject: string; text: str
 /** Vokabeltrainer: Karteikasten nach Leitner. box 0 = neu, 5 = sitzt. */
 export interface VocabCard { id: string; front: string; back: string; box: number; due: string; right: number; wrong: number;
   /** Merkhilfe der KI, einmal erzeugt: Beispielsatz, Übersetzung, Eselsbrücke */ hint?: { ex: string; de: string; memo?: string };
-  /** Von der KI als richtig erkannte Antworten (nach Richtung), werden danach ohne KI akzeptiert */ ok?: { de?: string[]; fx?: string[] } }
+  /** Von der KI als richtig erkannte Antworten (nach Richtung), werden danach ohne KI akzeptiert */ ok?: { de?: string[]; fx?: string[] };
+  /** Zuletzt geübt (YYYY-MM-DD) */ seen?: string }
 export interface VocabDeck { id: string; childId: string; title: string; lang: string; cards: VocabCard[]; createdAt: string; by?: string; /** Lernkarten zu einer Klassenarbeit, nicht im Vokabeltrainer */ prepId?: string }
 /** Ganzes Vokabelverzeichnis eines Schulbuchs, zu Schuljahresbeginn importiert. Kinder wählen daraus einen Bereich zum Lernen. */
 export interface VocabBook { id: string; childId: string; title: string; lang: string; units: string[]; entries: { front: string; back: string; unit: string }[]; createdAt: string; by?: string }

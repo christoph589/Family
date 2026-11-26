@@ -282,6 +282,21 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
   const [flipped, setFlipped] = useState(false);
   const [typed, setTyped] = useState('');
   const [reward, setReward] = useState<Reward | null>(null);
+  // Abgebrochene Runde nicht verlieren: Beim Beenden oder Schließen zählen die schon beantworteten Wörter.
+  const pending = useRef<{ results: RoundResult[]; done: boolean }>({ results: [], done: false });
+  pending.current.results = results; pending.current.done = !!reward;
+  const savePartial = () => {
+    const p = pending.current;
+    if (p.done || !p.results.length) return;
+    p.done = true;
+    const res = p.results.slice(), free = round.free;
+    update(d => finishRound(d, deck.id, res, free, givePoints).data);
+  };
+  useEffect(() => {
+    const h = () => savePartial();
+    if (typeof window !== 'undefined') window.addEventListener('pagehide', h);
+    return () => { if (typeof window !== 'undefined') window.removeEventListener('pagehide', h); savePartial(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const pop = useRef(new Animated.Value(1)).current;
   const shake = useRef(new Animated.Value(0)).current;
   const L = langOf(deck.lang);
@@ -628,7 +643,7 @@ function VocabReport({ childId, name, limit }: { childId: string; name: string; 
   const shaky = cards.filter(c => c.box === 0 && (c.right || c.wrong)).length;
   const hard = [...cards].filter(c => c.wrong > 0).sort((a, b) => b.wrong - a.wrong || a.box - b.box).slice(0, 8);
   const days = data.vocabStats?.[childId]?.days ?? {};
-  const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(today() + 'T12:00:00'); d.setDate(d.getDate() - (6 - i)); const k = d.toISOString().slice(0, 10); return { k, n: days[k] ?? 0, wd: d.toLocaleDateString('de-DE', { weekday: 'short' }).slice(0, 2) }; });
+  const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(today() + 'T12:00:00'); d.setDate(d.getDate() - (6 - i)); const k = d.toISOString().slice(0, 10); return { k, n: Math.max(days[k] ?? 0, cards.filter(c => c.seen === k).length), wd: d.toLocaleDateString('de-DE', { weekday: 'short' }).slice(0, 2) }; });
   const max = Math.max(limit, ...week.map(w => w.n));
   const seg = (n: number, color: string) => n > 0 ? <View style={{ flex: n, backgroundColor: color }} /> : null;
   return (
@@ -676,7 +691,7 @@ function VocabReport({ childId, name, limit }: { childId: string; name: string; 
               <View style={{ height: 6, borderRadius: 3, backgroundColor: C.line, overflow: 'hidden' }}><View style={{ width: `${Math.round((k / Math.max(1, n)) * 100)}%`, height: '100%', backgroundColor: C.ok }} /></View>
             </View>
           ); })}
-          <Text style={[s.muted, { fontSize: 12 }]}>„Sitzen“ heißt: mindestens dreimal hintereinander gewusst, mit Abstand von Tagen. Tageslimit für {name}: {limit} Wörter.</Text>
+          <Text style={[s.muted, { fontSize: 12 }]}>„Sitzen“ heißt: mindestens dreimal hintereinander gewusst, mit Abstand von Tagen. Tageslimit für {name}: {limit} Wörter. Bisher {cards.filter(c => c.right || c.wrong).length} verschiedene Wörter geübt (Tageswerte zählen erst seit 26.11. abends).</Text>
         </>
       )}
     </View>

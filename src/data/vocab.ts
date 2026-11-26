@@ -148,10 +148,10 @@ export function finishRound(d: FamilyData, deckId: string, results: RoundResult[
   const cards = deck.cards.map(c => {
     if (!first.has(c.id)) return c;
     const ok = first.get(c.id)!;
-    if (free && ok) return { ...c, right: c.right + 1 };
+    if (free && ok) return { ...c, right: c.right + 1, seen: date };
     const box = ok ? Math.min(5, c.box + 1) : 0;
     if (box >= MASTERED && c.box < MASTERED) newlyMastered++;
-    return { ...c, box, due: addDays(date, ok ? INTERVALS[box] : 0), right: c.right + (ok ? 1 : 0), wrong: c.wrong + (ok ? 0 : 1) };
+    return { ...c, box, seen: date, due: addDays(date, ok ? INTERVALS[box] : 0), right: c.right + (ok ? 1 : 0), wrong: c.wrong + (ok ? 0 : 1) };
   });
   const right = [...first.values()].filter(Boolean).length;
   const total = first.size;
