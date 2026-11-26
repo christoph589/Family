@@ -136,13 +136,15 @@ function Row({ it, big }: { it: CalItem; big?: boolean }) {
 }
 
 /** Kalender in vier Ansichten. renderItem erlaubt z. B. Löschen im Eltern-Kalender. */
-export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat, onItemPress }: {
+export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat, onItemPress, fit }: {
   mode: CalMode; anchor: string; itemsFor: (date: string) => CalItem[];
   renderItem?: (it: CalItem, big: boolean) => ReactNode; onPickDay?: (date: string) => void;
   /** innerhalb einer Karte: Tage grau statt weiß */
   flat?: boolean;
   /** Tipp auf einen Termin im Stundenraster */
   onItemPress?: (it: CalItem, date: string) => void;
+  /** Stundenraster so stauchen, dass es in den freien Platz passt (Wandansicht, kein Scrollen) */
+  fit?: boolean;
 }) {
   const { width } = useWindowDimensions();
   const days = daysOf(mode, anchor);
@@ -201,7 +203,7 @@ export function CalViews({ mode, anchor, itemsFor, renderItem, onPickDay, flat, 
     );
   }
 
-  if (mode !== 'woche' || width >= 700) return <TimeGrid days={days} itemsFor={itemsFor} flat={flat} onItemPress={onItemPress} />;
+  if (mode !== 'woche' || width >= 700) return <TimeGrid days={days} itemsFor={itemsFor} flat={flat} onItemPress={onItemPress} fit={fit} />;
 
   return <Agenda days={days} itemsFor={itemsFor} onItemPress={onItemPress} onPickDay={onPickDay} />;
 }
@@ -253,15 +255,19 @@ function Agenda({ days, itemsFor, onItemPress, onPickDay }: { days: string[]; it
 const toMin = (t?: string) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
 /** Stundenraster wie ein Wandkalender: ganztägige Einträge oben, Termine als Blöcke nach Uhrzeit. */
-function TimeGrid({ days, itemsFor, flat, onItemPress }: { days: string[]; itemsFor: (d: string) => CalItem[]; flat?: boolean; onItemPress?: (it: CalItem, date: string) => void }) {
+const FIT_MIN = 16;
+
+function TimeGrid({ days, itemsFor, flat, onItemPress, fit }: { days: string[]; itemsFor: (d: string) => CalItem[]; flat?: boolean; onItemPress?: (it: CalItem, date: string) => void; fit?: boolean }) {
   const [now, setNow] = useState(new Date());
+  const [space, setSpace] = useState(0);
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t); }, []);
-  const H = 46;
   const all = days.map(d => itemsFor(d));
   const timed = all.flat().filter(i => i.time);
   const minH = Math.min(7, ...timed.map(i => Math.floor(toMin(i.time)! / 60)));
   const maxH = Math.max(21, ...timed.map(i => Math.ceil((toMin(i.end) ?? toMin(i.time)! + 60) / 60)));
   const hours = Array.from({ length: maxH - minH }, (_, i) => minH + i);
+  // fit: erst mit kleinster Höhe zeichnen, freien Platz messen, dann Stunden darauf verteilen
+  const H = fit ? Math.max(FIT_MIN, Math.floor((space || 0) / hours.length) || FIT_MIN) : 46;
   const t = today();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const GUTTER = 34;
@@ -292,7 +298,7 @@ function TimeGrid({ days, itemsFor, flat, onItemPress }: { days: string[]; items
   };
 
   return (
-    <View style={[s.card, { padding: flat ? 0 : 8, gap: 0, backgroundColor: flat ? 'transparent' : C.surface }]}>
+    <View style={[s.card, { padding: flat ? 0 : 8, gap: 0, backgroundColor: flat ? 'transparent' : C.surface }, fit && { flex: 1, minHeight: 0 }]}>
       <View style={{ flexDirection: 'row', paddingLeft: GUTTER }}>
         {days.map(d => (
           <View key={d} style={{ flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 6 }}>
@@ -316,7 +322,8 @@ function TimeGrid({ days, itemsFor, flat, onItemPress }: { days: string[]; items
           ))}
         </View>
       )}
-      <View style={{ flexDirection: 'row' }}>
+      <View style={[{ flexDirection: 'row' }, fit && { flex: 1, minHeight: hours.length * FIT_MIN }]}
+        onLayout={fit ? e => { const h = Math.floor(e.nativeEvent.layout.height); if (Math.abs(h - space) > 2) setSpace(h); } : undefined}>
         <View style={{ width: GUTTER }}>
           {hours.map(h => <View key={h} style={{ height: H }}><Text style={{ fontSize: 11, color: C.muted, textAlign: 'right', paddingRight: 6, marginTop: -7 }}>{h}</Text></View>)}
         </View>

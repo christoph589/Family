@@ -23,7 +23,7 @@ const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart
 /** Wandansicht: nur lesen, für ein Tablet an der Wand. Aktualisiert sich selbst. */
 export function Board({ onExit }: { onExit: () => void }) {
   const { data, update } = useFamily();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [now, setNow] = useState(new Date());
   const [ask, setAsk] = useState(false);
   const [pin, setPin] = useState('');
@@ -61,12 +61,14 @@ export function Board({ onExit }: { onExit: () => void }) {
   if (!data) return null;
   const date = iso(now);
   const wide = width >= 900;
+  // Querformat an der Wand: alles auf einen Bildschirm, das Stundenraster füllt den Rest
+  const fit = wide && width > height;
   const people = peopleOf(data);
   const holiday = holidayLabel(data, date);
   const open = (data.shopping ?? []).filter(i => !i.done).length;
 
   return (
-    <ScrollView onTouchStart={() => setTouched(x => x + 1)} style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: wide ? 24 : 16, gap: 16 }}>
+    <ScrollView onTouchStart={() => setTouched(x => x + 1)} style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: wide ? 24 : 16, gap: 16, flexGrow: 1 }}>
       <View style={[s.row, { justifyContent: 'space-between', alignItems: 'flex-end' }]}>
         <View>
           <Text style={{ fontSize: wide ? 64 : 44, fontWeight: '800', color: C.fg, lineHeight: wide ? 68 : 48 }}>
@@ -188,7 +190,7 @@ export function Board({ onExit }: { onExit: () => void }) {
       {pane === 'stundenplan' && <WallTimetable data={data} kids={data.children.filter(c => !filter.length || filter.includes(c.id))} date={date} />}
       {pane === 'essen' && <MealPlan who="Wandansicht" />}
       {pane === 'einkauf' && <Shopping who="Wandansicht" />}
-      {pane === 'kalender' && <View style={[s.card, { gap: 12 }]}>
+      {pane === 'kalender' && <View style={[s.card, { gap: 12 }, fit && { flex: 1, minHeight: 0 }]}>
         <CalNav mode={mode} anchor={anchor} onMode={m => { setMode(m); setAnchor(date); AsyncStorage.setItem('familienplaner:boardView', m).catch(() => {}); }} onAnchor={setAnchor}
           right={<View style={[s.row, { gap: 8 }]}>
             {eventTarget(data.settings) === 'both' && <Button ghost title="🍎 + iCloud" onPress={() => { setIcAdd(true); setSel(null); }} />}
@@ -208,10 +210,10 @@ export function Board({ onExit }: { onExit: () => void }) {
             </View>
           </Popup>
         )}
-        <CalViews flat mode={mode} anchor={anchor} itemsFor={d => [...baseItems(data, d, null), ...feedItems(d), ...icItems(d)].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).filter(i => matchesPeople(i, filter))}
+        <CalViews flat fit={fit} mode={mode} anchor={anchor} itemsFor={d => [...baseItems(data, d, null), ...feedItems(d), ...icItems(d)].sort((x, y) => (x.time ?? '99').localeCompare(y.time ?? '99')).filter(i => matchesPeople(i, filter))}
           onItemPress={(it, d) => { setSel({ it, date: d }); setConfirmDel(false); setAdding(false); }} onPickDay={d => { setAnchor(d); setMode('tag'); }} />
       </View>}
-      <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Aufgaben abhaken geht auf den Geräten der Kinder oder in der Eltern-Ansicht. Termine, Essen und Einkauf kann hier jeder eintragen.</Text>
+      {!fit && <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Aufgaben abhaken geht auf den Geräten der Kinder oder in der Eltern-Ansicht. Termine, Essen und Einkauf kann hier jeder eintragen.</Text>}
     </ScrollView>
   );
 }
