@@ -9,6 +9,7 @@ import { AnswerView, isAnswered, isCorrect, QuestionInput } from './QuestionView
 import { C, s } from '../ui/theme';
 import { PaperScore, ResultLine, scanAndGrade } from './Exam';
 import { printHtml, sheetHtml } from '../ui/Print';
+import { checkAnswers, getSample } from '../ai/generate';
 import { currentGrade } from '../data/logic';
 
 
@@ -120,8 +121,10 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
     </View>
   );
   const submit = <Button title="Abgeben" disabled={!complete} onPress={() => {
-    update(d => setSheet(d, { ...sheet, answers: answers.map(a => a.trim()), status: 'abgegeben' }));
+    const done = { ...sheet, answers: answers.map(a => a.trim()), status: 'abgegeben' as const };
+    update(d => setSheet(d, done));
     delete drafts[sheet.id]; onDone();
+    runCheck(done, update);
   }} />;
   return (
     <View style={{ flex: 1 }}>
@@ -231,9 +234,33 @@ function ReviewOne({ sheet, name }: { sheet: Worksheet; name: string }) {
   return <ReviewDigital sheet={sheet} name={name} />;
 }
 
-function ReviewDigital({ sheet, name }: { sheet: Worksheet; name: string }) {
+/** Freitext-Antworten, die nicht wörtlich passen, lässt die KI inhaltlich abgleichen. */
+const checking = new Set<string>();
+function needsCheck(sheet: Worksheet) {
+  return sheet.questions.some((q, i) => q.type !== 'choice' && !isCorrect(q, sheet.answers?.[i] ?? '') && (sheet.answers?.[i] ?? '').trim());
+}
+async function runCheck(sheet: Worksheet, update: (f: (d: any) => any) => void) {
+  if (checking.has(sheet.id) || !needsCheck(sheet)) return;
+  if (!(await getSample())) return;
+  checking.add(sheet.id);
+  try {
+    const aiCheck = await checkAnswers(sheet, sheet.answers ?? []);
+    update(d => { const cur = (d.worksheets ?? []).find((w: Worksheet) => w.id === sheet.id); return cur && cur.status === 'abgegeben' ? setSheet(d, { ...cur, aiCheck }) : d; });
+  } catch { /* Eltern prüfen dann selbst */ }
+  checking.delete(sheet.id);
+}
+
+function ReviewDigital(props: { sheet: Worksheet; name: string }) {
+  // neu aufbauen, sobald der KI-Abgleich da ist, damit die Vorschläge übernommen werden
+  return <ReviewDigitalInner key={props.sheet.aiCheck ? 'ki' : 'roh'} {...props} />;
+}
+
+function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string }) {
   const { data, update } = useFamily();
-  const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '')));
+  const ai = sheet.aiCheck;
+  const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '') || !!ai?.ok[i]));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (!ai && needsCheck(sheet)) { setBusy(true); runCheck(sheet, update).finally(() => setBusy(false)); } }, [sheet.id]);
   const bonus = data ? selfBonus(data, sheet, understandingOf(res.filter(Boolean).length, sheet.questions.length)) : 0;
   const score = sheet.exam ? examScore(sheet, res) : null;
   return (
@@ -244,6 +271,7 @@ function ReviewDigital({ sheet, name }: { sheet: Worksheet; name: string }) {
           <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
             <Text style={s.label}>{sheet.exam ? `Aufgabe ${i + 1}` : `Frage ${i + 1}`}</Text>
             <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} />
+            {ai?.notes[i] && !isCorrect(q, sheet.answers?.[i] ?? '') ? <Text style={{ fontSize: 13, color: ai.ok[i] ? C.ok : C.muted }}>🤖 {ai.notes[i]}</Text> : null}
           </View>
           <Pressable accessibilityRole="switch" accessibilityState={{ checked: res[i] }} onPress={() => setRes(r => r.map((x, j) => (j === i ? !x : x)))}
             style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: res[i] ? C.okSoft : '#f8dcd8', borderWidth: 1, borderColor: res[i] ? C.ok : C.danger }}>
@@ -258,7 +286,8 @@ function ReviewDigital({ sheet, name }: { sheet: Worksheet; name: string }) {
           <Text style={[s.muted, { fontSize: 12 }]}>Die Note ist nur ein Richtwert nach einem üblichen Schlüssel, jede Lehrkraft bewertet anders.</Text>
         </View>
       )}
-      <Text style={s.muted}>Gleiche Antworten sind schon als richtig markiert. Tippe zum Ändern. {name} bekommt {sheet.exam ? EXAM_PREP_POINTS : PRACTICE_POINTS} Punkte fürs Üben{bonus ? ` und ${bonus} Bonuspunkte fürs Verstehen${(data?.topics ?? []).find(t => t.id === sheet.topicId)?.by === sheet.childId ? ' und selbst Hochladen' : ''}` : ''} und sieht danach die richtigen Lösungen.</Text>
+      {busy && <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI gleicht die Antworten mit der Lösung ab …</Text></View>}
+      <Text style={s.muted}>{ai ? 'Die KI hat vorsortiert, auch anders formulierte Antworten. Bitte kurz drüberschauen.' : 'Gleiche Antworten sind schon als richtig markiert.'} Tippe auf Richtig/Falsch zum Ändern. {name} bekommt {sheet.exam ? EXAM_PREP_POINTS : PRACTICE_POINTS} Punkte fürs Üben{bonus ? ` und ${bonus} Bonuspunkte fürs Verstehen${(data?.topics ?? []).find(t => t.id === sheet.topicId)?.by === sheet.childId ? ' und selbst Hochladen' : ''}` : ''} und sieht danach die richtigen Lösungen.</Text>
       <View style={s.row}>
         {res.some(r => !r) && <Button title={sheet.exam ? 'Schwachstellen üben lassen' : 'Falsches nochmal üben lassen'} onPress={() => update(d => finishCheck(d, sheet, res, true))} />}
         <Button title={res.every(Boolean) ? 'Fertig, alles verstanden' : 'Fertig'} color={C.ok} onPress={() => update(d => finishCheck(d, sheet, res))} />

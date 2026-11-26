@@ -263,6 +263,27 @@ Antworte nur mit JSON: {"tasks":[{"pts":2,"note":"...","unsure":false}],"summary
   };
 }
 
+/** Prüft am Gerät getippte Antworten gegen die Musterlösung, auch wenn sie anders formuliert sind. Nur Text, keine Fotos. */
+export async function checkAnswers(sheet: { title: string; questions: Question[] }, answers: string[], signal?: AbortSignal): Promise<{ ok: boolean[]; notes: string[] }> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const list = sheet.questions.map((q, i) => `Aufgabe ${i + 1}: ${q.q}${q.options ? ` [Auswahl: ${q.options.join(' / ')}]` : ''}\n  Musterlösung: ${q.solution}\n  Antwort des Kindes: ${answers[i] || '(leer)'}`).join('\n');
+  const prompt = `Du bist eine faire Lehrkraft und gleichst die Antworten eines Kindes mit der Musterlösung ab: ${sheet.title}.
+
+${list}
+
+Regeln:
+- "ok": true, wenn die Antwort inhaltlich stimmt, auch mit anderen Worten, kleinen Rechtschreibfehlern, anderer Schreibweise (0,75 = 3/4) oder in Kindersprache.
+- Bei Teilaufgaben (a, b, ...) nur ok, wenn alle Teile im Kern stimmen.
+- "note": ein kurzer Satz an die Eltern, was stimmt oder fehlt.
+
+Antworte nur mit JSON: {"tasks":[{"ok":true,"note":"..."}]} mit genau ${sheet.questions.length} Einträgen in der Reihenfolge der Aufgaben.`;
+  const res = await sample.json<any>(prompt, { signal, cache: false });
+  const tasks: any[] = Array.isArray(res?.tasks) ? res.tasks : [];
+  if (tasks.length !== sheet.questions.length) throw { code: 'invalid_json' };
+  return { ok: tasks.map(x => x?.ok === true), notes: tasks.map(x => str(x?.note, 200)) };
+}
+
 const str = (v: unknown, max = 500) => String(v ?? '').trim().slice(0, max);
 
 /** Prüft eine Aufgabe der KI und wirft unbrauchbare Teile weg. */
