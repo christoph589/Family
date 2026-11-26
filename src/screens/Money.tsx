@@ -24,9 +24,56 @@ const project = (start: number, perMonth: number, rate: number, months: number) 
 export function Money({ childIds, parent }: { childIds: string[]; parent: boolean }) {
   const { data } = useFamily();
   if (!data) return null;
+  const kids = data.children.filter(c => childIds.includes(c.id));
+  if (parent && kids.length > 1) return <MoneyOverview kids={kids} />;
   return (
     <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
-      {data.children.filter(c => childIds.includes(c.id)).map(c => <Account key={c.id} child={c} parent={parent} />)}
+      {kids.map(c => <Account key={c.id} child={c} parent={parent} />)}
+    </View>
+  );
+}
+
+/** Eltern mit mehreren Kindern: eine kurze Karte pro Kind, Anfragen direkt entscheiden, Antippen öffnet das Konto. */
+function MoneyOverview({ kids }: { kids: Child[] }) {
+  const { data, update } = useFamily();
+  const [open, setOpen] = useState<string | null>(null);
+  if (!data) return null;
+  const sel = kids.find(k => k.id === open);
+  if (sel) return (
+    <View style={{ gap: 12 }}>
+      <Pressable onPress={() => setOpen(null)} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 }}>
+        <Text style={{ color: C.accent, fontWeight: '800', fontSize: 16 }}>← Alle Kinder</Text>
+      </Pressable>
+      <View style={[s.row, { alignItems: 'flex-start' }]}><Account child={sel} parent /></View>
+    </View>
+  );
+  return (
+    <View style={{ gap: 10 }}>
+      {kids.map(child => {
+        const acc = accountOf(data, child.id);
+        const bals = POTS.map(p => [p, moneyPot(data, child.id, p.id)] as const);
+        const reqs = acc.requests ?? [];
+        return (
+          <Pressable key={child.id} onPress={() => setOpen(child.id)} accessibilityRole="button" accessibilityLabel={`${child.name}: ${euro(balanceOf(data, child.id))}`}
+            style={[s.card, { padding: 14, gap: 10, borderLeftWidth: 6, borderLeftColor: child.color }]}>
+            <View style={[s.row, { flexWrap: 'nowrap', justifyContent: 'space-between' }]}>
+              <Text style={[s.text, { fontWeight: '800', fontSize: 17, flexShrink: 1 }]} numberOfLines={1}>{child.name}</Text>
+              <View style={[s.row, { gap: 6 }]}>
+                <Text style={{ fontWeight: '800', fontSize: 18, color: C.fg }}>{euro(balanceOf(data, child.id))}</Text>
+                <Text style={{ color: C.muted, fontSize: 22 }}>›</Text>
+              </View>
+            </View>
+            <Text style={[s.muted, { fontSize: 13 }]}>{bals.map(([p, v]) => `${p.icon} ${euro(v)}`).join('   ')}{acc.goal ? `   ·   Ziel: ${acc.goal.title}` : ''}</Text>
+            {reqs.map(q => (
+              <View key={q.id} style={[s.row, { flexWrap: 'nowrap', backgroundColor: C.warnSoft, borderRadius: 14, padding: 10, gap: 8 }]}>
+                <Text style={[s.text, { flex: 1, fontSize: 14, fontWeight: '700' }]}>{euro(q.cents)} von {potName(q.from).icon} {potName(q.from).name} nach {potName(q.to).icon} {potName(q.to).name}{q.note ? ` · ${q.note}` : ''}</Text>
+                <Button title="Ja" onPress={() => update(d => setAccount(movePot(d, child.id, q.cents, q.from, q.to, q.note || 'Umbuchung'), child.id, a => ({ ...a, requests: (a.requests ?? []).filter(x => x.id !== q.id) })))} style={{ paddingVertical: 6, paddingHorizontal: 12, minHeight: 0 }} />
+                <Button ghost title="Nein" onPress={() => update(d => setAccount(d, child.id, a => ({ ...a, requests: (a.requests ?? []).filter(x => x.id !== q.id) })))} style={{ paddingVertical: 6, paddingHorizontal: 12, minHeight: 0 }} />
+              </View>
+            ))}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

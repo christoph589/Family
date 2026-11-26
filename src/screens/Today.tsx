@@ -90,7 +90,7 @@ function KidOverview({ kids }: { kids: Child[] }) {
       <Pressable onPress={() => setOpen(null)} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 4 }}>
         <Text style={{ color: C.accent, fontWeight: '800', fontSize: 16 }}>← Alle Kinder</Text>
       </Pressable>
-      <ChildColumn child={sel} parent />
+      <View style={[s.row, { alignItems: 'flex-start' }]}><ChildColumn child={sel} parent /></View>
     </View>
   );
   return (

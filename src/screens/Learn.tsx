@@ -178,8 +178,16 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
     const open = ws.filter(w => w.status === 'offen').length;
     const next = (data.exams ?? []).filter(e => e.childId === k.id && e.date && e.date >= t0).sort((a, b) => a.date!.localeCompare(b.date!))[0];
     const days = next ? Math.round((new Date(next.date + 'T12:00:00').getTime() - new Date(t0 + 'T12:00:00').getTime()) / 864e5) : null;
-    const fixme = (data.exams ?? []).filter(e => e.childId === k.id && !e.grade && (!e.date || (e.spell?.fix && !e.spell.done))).length;
-    return { k, check, open, next, days, fixme, vocab: dueCount(data, k.id) };
+    const fixList = (data.exams ?? []).filter(e => e.childId === k.id && !e.grade && (!e.date || (e.spell?.fix && !e.spell.done)));
+    const fixme = fixList.length;
+    const ago = (d: string) => { const n = Math.round((new Date(t0 + 'T12:00:00').getTime() - new Date(d + 'T12:00:00').getTime()) / 864e5); return n <= 0 ? 'heute' : n === 1 ? 'seit gestern' : `seit ${n} Tagen`; };
+    // Konkrete Liste: was genau offen ist, mit Art und direktem Sprung in den richtigen Reiter
+    const items: { icon: string; text: string; sub: string; go: 'themen' | 'klassenarbeit'; tone: 'warn' | 'info' }[] = [
+      ...ws.filter(w => w.status === 'abgegeben').map(w => ({ icon: '✍️', text: w.title, sub: `${w.exam ? 'Probe-Arbeit' : 'Tagestest'} abgegeben, bitte prüfen`, go: (w.exam ? 'klassenarbeit' : 'themen') as 'themen' | 'klassenarbeit', tone: 'warn' as const })),
+      ...ws.filter(w => w.status === 'offen').map(w => ({ icon: '📝', text: w.title, sub: `${w.exam ? 'Probe-Arbeit' : 'Tagestest'}, ${k.name} hat noch nicht gelöst (${ago(w.date)})`, go: (w.exam ? 'klassenarbeit' : 'themen') as 'themen' | 'klassenarbeit', tone: 'info' as const })),
+      ...fixList.map(e => ({ icon: '⚠️', text: `${e.subject}${e.title ? ': ' + e.title : ''}`, sub: !e.date ? 'Klassenarbeit ohne Datum' : 'Rechtschreibung im Titel prüfen', go: 'klassenarbeit' as const, tone: 'warn' as const })),
+    ];
+    return { k, check, open, next, days, fixme, items, vocab: dueCount(data, k.id) };
   });
   const Pill = ({ text, color, bg, onPress }: { text: string; color: string; bg: string; onPress?: () => void }) => (
     <Pressable onPress={onPress} disabled={!onPress} style={{ backgroundColor: bg, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -192,10 +200,11 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
         <Text style={[s.text, { fontWeight: '800' }]}>Überblick</Text>
         {focus ? <Pressable onPress={() => setFocus('')}><Text style={{ color: C.accent, fontWeight: '800', fontSize: 13 }}>Alle Kinder zeigen</Text></Pressable> : <Text style={[s.muted, { fontSize: 12 }]}>Kind antippen zum Filtern</Text>}
       </View>
-      {rows.map(({ k, check, open, next, days, fixme, vocab }) => {
+      {rows.map(({ k, check, open, next, days, fixme, items, vocab }) => {
         const on = focus === k.id, dim = !!focus && !on;
         return (
-          <Pressable key={k.id} onPress={() => setFocus(on ? '' : k.id)} accessibilityRole="button" accessibilityState={{ selected: on }}
+          <View key={k.id}>
+          <Pressable onPress={() => setFocus(on ? '' : k.id)} accessibilityRole="button" accessibilityState={{ selected: on }}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: 14, backgroundColor: on ? C.accentSoft : 'transparent', opacity: dim ? 0.45 : 1 }}>
             <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: k.color, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: '#fff', fontWeight: '800' }}>{k.name[0]}</Text>
@@ -204,7 +213,7 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
               <Text style={[s.text, { fontWeight: '800', fontSize: 15 }]}>{k.name}</Text>
               <View style={[s.row, { gap: 6, flexWrap: 'wrap' }]}>
                 {check > 0 && <Pill text={`✍️ ${check} prüfen`} color={C.warn} bg={C.warnSoft} />}
-                {open > 0 && <Pill text={`📝 ${open} offen`} color={C.accent} bg={C.accentSoft} />}
+                {open > 0 && <Pill text={`📝 ${open} ${open === 1 ? 'Test' : 'Tests'} beim Kind offen`} color={C.accent} bg={C.accentSoft} />}
                 {next && <Pill text={`📅 ${next.subject} ${days === 0 ? 'heute' : days === 1 ? 'morgen' : `in ${days} T.`}`} color={days !== null && days <= 3 ? C.danger : C.fg} bg={days !== null && days <= 3 ? '#fde3e6' : C.surface2} onPress={() => { setFocus(k.id); onGo('klassenarbeit'); }} />}
                 {fixme > 0 && <Pill text={`⚠️ ${fixme} unvollständig`} color={C.warn} bg={C.warnSoft} onPress={() => { setFocus(k.id); onGo('klassenarbeit'); }} />}
                 {vocab > 0 && <Pill text={`🔤 ${vocab} Vokabeln`} color={C.fg} bg={C.surface2} />}
@@ -212,6 +221,22 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
               </View>
             </View>
           </Pressable>
+          {on && items.length > 0 && (
+            <View style={{ gap: 6, paddingLeft: 52, paddingRight: 4, paddingBottom: 6 }}>
+              {items.map((it, i) => (
+                <Pressable key={i} onPress={() => onGo(it.go)} accessibilityRole="button"
+                  style={[s.row, { flexWrap: 'nowrap', gap: 10, padding: 10, borderRadius: 12, backgroundColor: it.tone === 'warn' ? C.warnSoft : C.surface2 }]}>
+                  <Text style={{ fontSize: 18 }}>{it.icon}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[s.text, { fontWeight: '800', fontSize: 14 }]} numberOfLines={2}>{it.text}</Text>
+                    <Text style={[s.muted, { fontSize: 12 }]}>{it.sub}</Text>
+                  </View>
+                  <Text style={{ color: C.muted, fontSize: 18 }}>›</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          </View>
         );
       })}
     </View>
