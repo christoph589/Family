@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { currentGrade, today, uid } from '../data/logic';
+import { activeTimer } from '../data/learnstats';
 import { VocabCard, VocabDeck } from '../data/types';
 import {
   LANGS, MASTERED, Reward, RoundResult, buildRound, checkTyped, choicesFor, dueCards, finishRound, langOf, levelOf,
@@ -284,13 +285,15 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
   const [reward, setReward] = useState<Reward | null>(null);
   // Abgebrochene Runde nicht verlieren: Beim Beenden oder Schließen zählen die schon beantworteten Wörter.
   const pending = useRef<{ results: RoundResult[]; done: boolean }>({ results: [], done: false });
+  const timer = useRef(activeTimer()).current;
   pending.current.results = results; pending.current.done = !!reward;
   const savePartial = () => {
     const p = pending.current;
     if (p.done || !p.results.length) return;
     p.done = true;
     const res = p.results.slice(), free = round.free;
-    update(d => finishRound(d, deck.id, res, free, givePoints).data);
+    const secs = timer.take();
+    update(d => finishRound(d, deck.id, res, free, givePoints, undefined, secs).data);
   };
   useEffect(() => {
     const h = () => savePartial();
@@ -345,6 +348,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
   function answer(ok: boolean, extra: { chosen?: string; typo?: boolean; note?: string; judged?: boolean } = {}) {
     if (!card || answered) return;
     setAnswered({ ok, ...extra });
+    timer.tick();
     setResults(r => [...r, { cardId: card.id, ok }]);
     if (ok) {
       const c = combo + 1;
@@ -373,9 +377,10 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
     setAnswered(null); setFlipped(false); setTyped('');
     if (idx + 1 < queue.length) { setIdx(idx + 1); return; }
     if (!data) return;
-    const res = finishRound(data, deck.id, results, round.free, givePoints);
+    const secs = timer.take();
+    const res = finishRound(data, deck.id, results, round.free, givePoints, undefined, secs);
     setReward(res.reward);
-    update(d => finishRound(d, deck.id, results, round.free, givePoints).data);
+    update(d => finishRound(d, deck.id, results, round.free, givePoints, undefined, secs).data);
   }
 
   // Richtig: automatisch weiter, damit es flott bleibt.
@@ -386,6 +391,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
   function again() {
     const fresh = (data?.vocab ?? []).find(v => v.id === deck.id) ?? deck;
     const r = buildRound(fresh);
+    timer.reset();
     setRound(r); setQueue(r.cards); setIdx(0); setResults([]); setCombo(0); setBestCombo(0); setReward(null);
   }
 

@@ -1,3 +1,4 @@
+import { logLearn, sheetSubject } from '../data/learnstats';
 import * as ImagePicker from 'expo-image-picker';
 import { PhotoImg } from '../ui/PhotoImg';
 import { DeleteButton } from '../ui/DeleteButton';
@@ -35,8 +36,10 @@ export function pickPhotos(room: number, title = 'Fotos sammeln'): Promise<strin
 /** Fotos der fertig geschriebenen Arbeit speichern und die KI vorkorrigieren lassen. */
 export async function scanAndGrade(sheet: Worksheet, photos: string[], who: { name: string; grade?: string }, update: (f: (d: any) => any) => void, by?: string) {
   const at = new Date().toISOString();
-  const base: Worksheet = { ...sheet, status: 'abgegeben', scan: { photos, at, by } };
-  update(d => setSheet(d, base));
+  const base: Worksheet = { ...sheet, status: 'abgegeben', doneAt: at.slice(0, 10), scan: { photos, at, by } };
+  // Auf Papier geschrieben: als Lernzeit zählt die vorgesehene Bearbeitungszeit, nur beim ersten Abfotografieren
+  const first = !sheet.scan && sheet.status === 'offen';
+  update(d => first ? logLearn(setSheet(d, base), sheet.childId, { t: 1, s: (sheet.exam?.minutes ?? 0) * 60, subject: sheetSubject(d, sheet) }) : setSheet(d, base));
   try {
     const ai = await gradePaper(sheet, photos, who);
     update(d => { const cur = (d.worksheets ?? []).find((w: Worksheet) => w.id === sheet.id); return cur?.scan?.at === at ? setSheet(d, { ...cur, scan: { ...cur.scan, ai, error: undefined } }) : d; });

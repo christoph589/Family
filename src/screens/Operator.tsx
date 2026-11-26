@@ -67,7 +67,7 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
   const real = all.some(f => f.usd30 !== undefined && f.usd30 !== null);
   const sum = (k: 'usd_today' | 'usd7' | 'usd30' | 'ai7' | 'ai30') => all.reduce((a, f) => a + Number(f[k] ?? 0), 0);
   const invite = () => {
-    const url = 'https://christoph589.github.io/Family/';
+    const url = BRAND.url;
     try { (navigator as any).clipboard?.writeText(`Probier mal ${BRAND.name}, unseren Familienplaner: ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { /* egal */ }
   };
   const more = (f: OpFamily) => <Pressable accessibilityLabel={`Mehr zu ${f.name}`} onPress={() => setEdit({ f, mode: 'menu', text: '', err: '' })} style={{ paddingHorizontal: 8, paddingVertical: 6 }}><Text style={{ color: C.muted, fontSize: 20, fontWeight: '800' }}>⋯</Text></Pressable>;

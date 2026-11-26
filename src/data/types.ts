@@ -95,6 +95,16 @@ export interface VocabBook { id: string; childId: string; title: string; lang: s
 export interface VocabStats { streak: number; last?: string; best: number; total: number;
   /** abgefragte Wörter pro Tag (letzte 14 Tage) */ days?: Record<string, number>; /** Tage mit Vokabeln insgesamt */ learnDays?: number; /** an diesem Tag haben Eltern über das Tageslimit hinaus freigegeben */ unlock?: string }
 
+/** Was ein Kind an einem Tag gelernt hat. Nur, was das Kind selbst gemacht hat. */
+export interface LearnDay {
+  /** aktive Lernzeit in Sekunden */ s?: number;
+  /** Vokabeln/Lernkarten abgefragt, davon beim ersten Versuch richtig, Runden */ w?: number; ok?: number; r?: number;
+  /** Lernkarten zu Klassenarbeiten: abgefragt, davon richtig */ kw?: number; kok?: number;
+  /** Wörter, die an diesem Tag neu „sitzen“ (Fach 3 erreicht) */ m?: number;
+  /** Tests und Probe-Arbeiten abgegeben */ t?: number;
+  /** Lernzeit in Sekunden je Fach (z. B. Englisch, Mathe) */ subj?: Record<string, number>;
+}
+
 export type Understanding = 'verstanden' | 'teilweise' | 'nochmal';
 export interface Question {
   q: string;
@@ -126,6 +136,8 @@ export interface Worksheet {
   /** Auf Papier geschrieben und abfotografiert: KI macht eine Vorkorrektur, Eltern bestätigen */
   /** KI-Abgleich digitaler Antworten mit der Lösung (Vorschlag für die Eltern) */
   aiCheck?: { ok: boolean[]; notes: string[]; pts?: number[] };
+  /** Tag, an dem das Kind abgegeben hat (YYYY-MM-DD) */
+  doneAt?: string;
   scan?: { photos: string[]; at: string; by?: string; ai?: { pts: number[]; notes: string[]; unsure: boolean[]; summary?: string }; error?: string };
 }
 
@@ -155,6 +167,16 @@ export interface CalEvent {
 
 /** Geschenke: Idee oder gekauft, gehört zu einem Anlass in einem bestimmten Jahr. Beträge in Cent. */
 export interface Gift { id: string; occ: string; year: number; forId?: string; title: string; cents?: number; status: 'idee' | 'gekauft'; by?: string; at: string }
+/** Wunschzettel: Kind trägt ein, Eltern geben frei. Nur status 'frei' erscheint auf dem Teilen-Link. */
+export interface Wish { id: string; childId: string; title: string; at: string;
+  /** Link zum Produkt (nur http/https) */ link?: string;
+  /** Foto vom Wunsch, nur in der App, nie auf dem Teilen-Link */ photo?: string;
+  /** Wie wichtig: 1 bis 3 Sterne */ prio: 1 | 2 | 3;
+  /** z. B. „Größe 140, in Blau“. Erscheint nach Freigabe auf dem Teilen-Link. */ note?: string;
+  /** neu = wartet auf Eltern, frei = auf der Liste, nein = nicht freigegeben */ status: 'neu' | 'frei' | 'nein';
+  /** ungefährer Preis in Cent (von den Eltern) */ cents?: number;
+  /** Hat es bekommen. Verschwindet dann vom Teilen-Link. */ done?: boolean;
+  /** Wer zuletzt entschieden hat (Person-ID) */ by?: string }
 /** Eigener jährlicher Anlass, z. B. Geburtstag Oma (md = MM-DD) */
 export interface GiftOccasion { id: string; title: string; md: string; forId?: string; icon?: string }
 
@@ -184,11 +206,14 @@ export interface FamilyData {
   vocab?: VocabDeck[];
   vocabBooks?: VocabBook[];
   vocabStats?: Record<string, VocabStats>;
+  /** Lern-Statistik je Kind und Tag (letzte 120 Tage), Schlüssel: Kind-ID, dann YYYY-MM-DD */
+  learnLog?: Record<string, Record<string, LearnDay>>;
   worksheets?: Worksheet[];
   exams?: ExamPrep[];
   events?: CalEvent[];
   gifts?: Gift[];
   giftOccasions?: GiftOccasion[];
+  wishes?: Wish[];
   settings?: { /** Einwilligung der Eltern zur KI-Verarbeitung von Fotos */ aiConsent?: { at: string; by?: string }; /** Bundesland, z. B. DE-NW (wenn keine automatischen Ferien gesetzt sind) */ region?: string; googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
     /** Automatische Ferien und Feiertage nach Bundesland */
     /** Eingebundene fremde Kalender (iCal-Links von iCloud, Google, Outlook, WebUntis) */

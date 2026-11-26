@@ -1,5 +1,6 @@
 import { FamilyData, VocabCard, VocabDeck, VocabStats } from './types';
 import { addPoints, today, uid } from './logic';
+import { logLearn } from './learnstats';
 
 /** Tage bis zur nächsten Abfrage je Fach im Karteikasten. */
 export const INTERVALS = [0, 1, 2, 4, 7, 14];
@@ -137,21 +138,22 @@ export interface RoundResult { cardId: string; ok: boolean }
 export interface Reward { points: number; streak: number; streakUp: boolean; streakBonus: number; perfect: boolean; capped: boolean; levelUp: boolean; level: number; newlyMastered: number }
 
 /** Bucht eine fertige Runde: Karten wandern im Kasten, Serie und Level steigen, Punkte gibt es nur fürs Kind selbst. */
-export function finishRound(d: FamilyData, deckId: string, results: RoundResult[], free: boolean, givePoints: boolean, date = today()): { data: FamilyData; reward: Reward } {
+export function finishRound(d: FamilyData, deckId: string, results: RoundResult[], free: boolean, givePoints: boolean, date = today(), secs = 0): { data: FamilyData; reward: Reward } {
   const deck = (d.vocab ?? []).find(x => x.id === deckId);
   const empty: Reward = { points: 0, streak: 0, streakUp: false, streakBonus: 0, perfect: false, capped: false, levelUp: false, level: 1, newlyMastered: 0 };
   if (!deck) return { data: d, reward: empty };
   // Pro Karte zählt die erste Antwort der Runde. Falsches wird in der Runde wiederholt, wandert aber zurück in Fach 0.
   const first = new Map<string, boolean>();
   for (const r of results) if (!first.has(r.cardId)) first.set(r.cardId, r.ok);
-  let newlyMastered = 0;
+  let newlyMastered = 0, newlySit = 0;
   const cards = deck.cards.map(c => {
     if (!first.has(c.id)) return c;
     const ok = first.get(c.id)!;
-    if (free && ok) return { ...c, right: c.right + 1, seen: date };
+    if (free && ok) return { ...c, right: c.right + 1, seen: givePoints ? date : c.seen };
     const box = ok ? Math.min(5, c.box + 1) : 0;
     if (box >= MASTERED && c.box < MASTERED) newlyMastered++;
-    return { ...c, box, seen: date, due: addDays(date, ok ? INTERVALS[box] : 0), right: c.right + (ok ? 1 : 0), wrong: c.wrong + (ok ? 0 : 1) };
+    if (box >= 3 && c.box < 3) newlySit++;
+    return { ...c, box, seen: givePoints ? date : c.seen, due: addDays(date, ok ? INTERVALS[box] : 0), right: c.right + (ok ? 1 : 0), wrong: c.wrong + (ok ? 0 : 1) };
   });
   const right = [...first.values()].filter(Boolean).length;
   const total = first.size;
@@ -159,6 +161,8 @@ export function finishRound(d: FamilyData, deckId: string, results: RoundResult[
   if (!givePoints) return { data, reward: { ...empty, newlyMastered, perfect: right === total && total > 0 } };
 
   const childId = deck.childId;
+  const subject = deck.prepId ? (d.exams ?? []).find(e => e.id === deck.prepId)?.subject ?? deck.lang : deck.lang;
+  data = logLearn(data, childId, deck.prepId ? { kw: total, kok: right, s: secs, subject } : { w: total, ok: right, r: 1, m: newlySit, s: secs, subject }, date);
   const old: VocabStats = d.vocabStats?.[childId] ?? { streak: 0, best: 0, total: 0 };
   const streakUp = old.last !== date;
   const streak = !streakUp ? old.streak : old.last === addDays(date, -1) ? old.streak + 1 : 1;
