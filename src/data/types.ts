@@ -36,6 +36,26 @@ export interface Child {
   schoolType?: string;
   /** Bundesland der Schule, falls anders als das der Familie (z. B. BW). Bestimmt Ferien und Lehrplan. */
   state?: string;
+  /** Regelmäßiger Schulweg mit dem Zug (Echtzeitprüfung auf Heute und Wand) */
+  commutes?: Commute[];
+}
+
+/** Ein Zug auf dem Schulweg. Der Server prüft ab 45 Min vor Abfahrt Verspätung, Ausfall und Gleiswechsel. */
+export interface Commute {
+  id: string;
+  /** Einstiegs-Halt (Anzeigename) und seine EVA-Nummer (Bahnhofsnummer der DB) */
+  from: string; fromEva: string;
+  /** Ziel-Halt (nur Anzeige) */
+  to: string;
+  /** Geplante Abfahrt HH:MM */
+  depart: string;
+  /** Linie wie "S3" (zum sicheren Finden des Zuges) */
+  line?: string;
+  /** Wochentage 1 = Mo … 5 = Fr (7 = So) */
+  days: number[];
+  /** Link der bahn.de-Verbindung, nur als Verweis (Antippen öffnet ihn) */
+  link?: string;
+  off?: boolean;
 }
 
 export interface Emergency { doctor?: string; doctorPhone?: string; allergies?: string; meds?: string; blood?: string; insurance?: string; school?: string; schoolPhone?: string; contacts?: string; notes?: string }

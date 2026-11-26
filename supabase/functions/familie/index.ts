@@ -473,6 +473,7 @@ async function tick(body: any, admin: any) {
     }
   }
   await admin.from('push_sent').delete().lt('sent_at', new Date(Date.now() - 14 * 864e5).toISOString());
+  try { total += await trainTick(admin, now); } catch (e) { console.error('trainTick', (e as Error).message ?? e); }
   return json({ ok: true, sent: total });
 }
 
@@ -493,6 +494,154 @@ async function pushAction(body: any, userId: string, admin: any) {
   if (body.action === 'push_test') {
     const n = await sendTo(admin, [{ endpoint: sub.endpoint, sub }], { title: '🔔 Familienplaner', body: 'So sehen Erinnerungen an Termine aus.', tag: 'test' });
     return json({ ok: n > 0 });
+  }
+  return json({ error: 'unknown_action' }, 400);
+}
+
+// ---------- Zugprüfung (Schulweg) ----------
+// Quelle: inoffizielle Abfahrtstafel von bahnhof.de (ohne Schlüssel, ohne Vertrag). Nur für den Familientest gedacht.
+// Das Antwortformat ist NICHT gegen die echte Schnittstelle geprüft: parseBoard() sucht deshalb mehrere übliche Feldnamen.
+// Zum Austauschen der Quelle nur fetchBoard() und parseBoard() ersetzen, der Rest arbeitet mit Dep.
+type Dep = { line: string; dest: string; planned: number | null; actual: number | null; plat?: string; platPlanned?: string; cancelled: boolean };
+const TRAIN_URL = Deno.env.get('TRAIN_BOARD_URL') ?? 'https://www.bahnhof.de/api/boards/departures';
+
+const dig = (o: any, ...keys: string[]) => {
+  for (const k of keys) { const v = k.split('.').reduce((a: any, p) => (a == null ? undefined : a[p]), o); if (v !== undefined && v !== null && v !== '') return v; }
+  return undefined;
+};
+const ms = (v: any) => { if (v == null) return null; const t = typeof v === 'number' ? v : Date.parse(String(v)); return Number.isFinite(t) ? t : null; };
+
+function parseBoard(j: any): Dep[] {
+  const list: any[] = Array.isArray(j) ? j : (dig(j, 'entries', 'departures', 'items', 'journeys') ?? []);
+  return list.map((e: any): Dep => {
+    const cat = dig(e, 'transport.category', 'transport.type', 'category', 'train.category');
+    const num = dig(e, 'transport.number', 'transport.line', 'number', 'line', 'train.number');
+    const label = dig(e, 'transport.label', 'transport.name', 'lineName', 'name', 'train.name');
+    const planned = ms(dig(e, 'timeSchedule', 'timeScheduled', 'scheduledTime', 'plannedWhen', 'time.planned', 'departure.timeSchedule', 'time'));
+    const actual = ms(dig(e, 'timePredicted', 'timeExpected', 'predictedTime', 'when', 'time.predicted', 'departure.timePredicted'));
+    return {
+      line: String(label ?? [cat, num].filter(x => x != null).join(' ')).trim(),
+      dest: String(dig(e, 'transport.destination.name', 'transport.destination', 'destination.name', 'destination', 'direction') ?? ''),
+      planned,
+      actual: actual ?? null,
+      plat: dig(e, 'platformPredicted', 'platform', 'platform.actual', 'platformActual') != null ? String(dig(e, 'platformPredicted', 'platform', 'platform.actual', 'platformActual')) : undefined,
+      platPlanned: dig(e, 'platformSchedule', 'platformScheduled', 'plannedPlatform', 'platform.planned') != null ? String(dig(e, 'platformSchedule', 'platformScheduled', 'plannedPlatform', 'platform.planned')) : undefined,
+      cancelled: !!dig(e, 'canceled', 'cancelled', 'isCancelled', 'departureCancelled'),
+    };
+  }).filter(d => d.planned !== null || d.actual !== null);
+}
+
+async function fetchBoard(eva: string): Promise<{ deps: Dep[]; status: number; raw?: string; station?: string }> {
+  const r = await fetch(`${TRAIN_URL}?evaNumbers=${encodeURIComponent(eva)}&duration=120&locale=de`, { headers: { Accept: 'application/json', 'User-Agent': 'Famelio/1.0' } });
+  const text = await r.text();
+  let j: any; try { j = JSON.parse(text); } catch { return { deps: [], status: r.status, raw: text.slice(0, 300) }; }
+  const deps = r.ok ? parseBoard(j) : [];
+  const first = (Array.isArray(j) ? j : dig(j, 'entries', 'departures', 'items') ?? [])[0];
+  const station = dig(first, 'venue.name', 'station.name', 'stationName') as string | undefined;
+  return { deps, status: r.status, raw: deps.length || r.ok && Object.keys(j ?? {}).length === 0 ? undefined : text.slice(0, 300), station };
+}
+
+const normLine = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
+const berlinHm = (t: number) => new Intl.DateTimeFormat('de-DE', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(t));
+const berlinMinOf = (t: number) => { const [h, m] = berlinHm(t).split(':').map(Number); return (h % 24) * 60 + m; };
+
+/** Den Zug zur geplanten Abfahrt finden: gleiche Minute (±1) und, falls angegeben, passende Linie. */
+function findTrain(deps: Dep[], depart: string, line?: string) {
+  const want = hm(depart)!;
+  const near = deps.filter(d => d.planned !== null && Math.abs(berlinMinOf(d.planned) - want) <= 1);
+  if (!near.length) return undefined;
+  const l = line ? normLine(line) : '';
+  return (l && near.find(d => { const x = normLine(d.line); return x.includes(l) || l.includes(x); })) ?? (l ? undefined : near[0]);
+}
+
+type TStatus = { state: string; planned?: string; actual?: string; delay?: number; platform?: string; platformPlanned?: string; line?: string; dest?: string; checkedAt: string; notified?: { state: string; delay: number; plat?: string } };
+
+function evalTrain(d: Dep | undefined, boardNonEmpty: boolean, minsToDep: number): TStatus {
+  const checkedAt = new Date().toISOString();
+  if (!d) return { state: boardNonEmpty ? 'missing' : 'unknown', checkedAt };
+  const planned = d.planned ?? d.actual!, actual = d.actual ?? planned;
+  const delay = Math.round((actual - planned) / 60000);
+  const platChanged = !!d.plat && !!d.platPlanned && d.plat !== d.platPlanned;
+  const state = d.cancelled ? 'cancelled' : delay >= 3 ? 'delay' : platChanged ? 'platform' : 'ok';
+  return { state, planned: berlinHm(planned), actual: berlinHm(actual), delay: Math.max(0, delay), platform: d.plat, platformPlanned: d.platPlanned, line: d.line, dest: d.dest, checkedAt };
+}
+
+const TRAIN_NAME = (c: any) => `${c.line ? c.line + ' ' : ''}${c.depart} ab ${c.from}`;
+
+/** Wird von tick() aufgerufen: prüft alle Züge im Fenster und schickt bei Änderungen Push an Kind und Eltern. */
+async function trainTick(admin: any, nowMin: number) {
+  const date = minIso(nowMin), wd = new Date(date + 'T12:00:00Z').getUTCDay() || 7, mNow = nowMin - dayMin(date);
+  if (mNow < 4 * 60 || mNow > 20 * 60) return 0;
+  const { data: states } = await admin.from('family_state').select('family_id, data');
+  const boards = new Map<string, Promise<{ deps: Dep[] }>>();
+  let pushed = 0;
+  for (const st of states ?? []) {
+    const d = st.data as any;
+    if (!d?.children || d.settings?.holiday?.on) continue;
+    const jobs: { child: any; c: any }[] = [];
+    for (const child of d.children) {
+      if (child.schoolChange?.[date]?.off) continue;
+      for (const c of child.commutes ?? []) {
+        const m = hm(c.depart);
+        if (c.off || m === null || !Array.isArray(c.days) || !c.days.includes(wd) || !/^\d{6,8}$/.test(String(c.fromEva))) continue;
+        if (mNow >= m - 45 && mNow <= m + 5) jobs.push({ child, c });
+      }
+    }
+    if (!jobs.length) continue;
+    const { data: subs } = await admin.from('push_subs').select('endpoint, person_id, sub').eq('family_id', st.family_id);
+    const parentIds = new Set<string>((d.parents ?? []).map((p: any) => p.id));
+    for (const { child, c } of jobs) {
+      try {
+        if (!boards.has(c.fromEva)) boards.set(c.fromEva, fetchBoard(String(c.fromEva)));
+        const { deps } = await boards.get(c.fromEva)!;
+        const res = evalTrain(findTrain(deps, c.depart, c.line), deps.length > 0, hm(c.depart)! - mNow);
+        const { data: prev } = await admin.from('train_status').select('data').eq('family_id', st.family_id).eq('route_id', c.id).eq('date', date).maybeSingle();
+        const last = (prev?.data as TStatus | undefined)?.notified;
+        const lastState = last?.state ?? 'ok', lastDelay = last?.delay ?? 0, lastPlat = last?.plat;
+        // Nur bei echter Änderung melden. 'unknown' (keine Daten) und 'missing' nur kurz vor Abfahrt.
+        let msg: string | null = null;
+        if (res.state === 'cancelled' && lastState !== 'cancelled') msg = `❌ ${TRAIN_NAME(c)} fällt aus.`;
+        else if (res.state === 'delay' && (lastState !== 'delay' || Math.abs((res.delay ?? 0) - lastDelay) >= 3)) msg = `⚠️ ${TRAIN_NAME(c)}: ${res.delay} Min später, ab ${res.actual}.`;
+        else if (res.state === 'platform' && res.platform !== lastPlat && lastState !== 'platform') msg = `🔀 ${TRAIN_NAME(c)}: Gleis ${res.platform} statt ${res.platformPlanned}.`;
+        else if (res.state === 'ok' && ['delay', 'cancelled', 'platform'].includes(lastState)) msg = `✅ ${TRAIN_NAME(c)} ist wieder pünktlich.`;
+        else if (res.state === 'missing' && lastState !== 'missing' && hm(c.depart)! - mNow <= 20) msg = `❓ ${TRAIN_NAME(c)} steht nicht in der Abfahrtstafel. Bitte in der DB-App prüfen.`;
+        const notified = msg ? { state: res.state, delay: res.delay ?? 0, plat: res.platform } : last;
+        const row: TStatus = { ...res, notified };
+        const { error } = await admin.from('train_status').upsert({ family_id: st.family_id, route_id: c.id, date, data: row, updated_at: new Date().toISOString() });
+        if (error) throw error;
+        if (msg) {
+          const target = (subs ?? []).filter((r: any) => !r.person_id || r.person_id === child.id || parentIds.has(r.person_id));
+          pushed += await sendTo(admin, target, { title: `🚆 ${child.name}`, body: msg, tag: `train|${c.id}|${date}` });
+        }
+      } catch (e) { console.error('trainTick', (e as Error).message ?? e); }
+    }
+  }
+  await admin.from('train_status').delete().lt('date', minIso(nowMin - 3 * 1440));
+  return pushed;
+}
+
+async function trainAction(body: any, userId: string, admin: any) {
+  const m0 = await memberOf(admin, userId);
+  if (!m0) return json({ error: 'not_member' }, 403);
+  if (body.action === 'train_status') {
+    const date = minIso(berlinNowMin());
+    const { data, error } = await admin.from('train_status').select('route_id, data').eq('family_id', m0.family_id).eq('date', date);
+    if (error) return json({ error: 'train_sql', detail: error.message }, 500);
+    const statuses: Record<string, unknown> = {};
+    for (const r of data ?? []) { const { notified: _n, ...pub } = r.data ?? {}; statuses[r.route_id] = pub; }
+    return json({ statuses });
+  }
+  if (body.action === 'train_test') {
+    if (m0.role !== 'eltern') return json({ error: 'parents_only' }, 403);
+    const eva = String(body.eva ?? '').trim();
+    if (!/^\d{6,8}$/.test(eva)) return json({ error: 'train_bad_input' }, 400);
+    try {
+      const b = await fetchBoard(eva);
+      const sample = b.deps.slice(0, 5).map(d => ({ line: d.line, dest: d.dest, planned: d.planned ? berlinHm(d.planned) : '?', actual: d.actual ? berlinHm(d.actual) : undefined, platform: d.plat }));
+      const hit = /^\d\d:\d\d$/.test(String(body.depart ?? '')) ? findTrain(b.deps, String(body.depart), body.line ? String(body.line) : undefined) : undefined;
+      return json({ ok: b.status >= 200 && b.status < 300 && b.deps.length > 0, status: b.status, raw: b.raw, count: b.deps.length, stationName: b.station, sample,
+        match: hit ? { line: hit.line, planned: berlinHm(hit.planned ?? hit.actual!), actual: hit.actual ? berlinHm(hit.actual) : undefined, platform: hit.plat, cancelled: hit.cancelled } : undefined });
+    } catch (e) { return json({ error: 'train_failed', detail: (e as Error).message }, 502); }
   }
   return json({ error: 'unknown_action' }, 400);
 }
@@ -1156,6 +1305,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       if ((body.action === 'import' || body.action === 'recipe_import') && !await memberOf(admin, user.user.id)) return json({ error: 'not_member' }, 403);
       if (body.action === 'ai') return await runAi(body, user.user.id, admin);
       if (body.action === 'judge') return await runJudge(body, user.user.id, admin);
+      if (String(body.action).startsWith('train_')) return await trainAction(body, user.user.id, admin);
       if (String(body.action).startsWith('push_')) return await pushAction(body, user.user.id, admin);
       if (String(body.action).startsWith('icloud_')) return await icloudAction(body, user.user.id, admin);
       if (String(body.action).startsWith('google_')) return await googleAction(body, user.user.id, admin);
