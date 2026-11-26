@@ -149,11 +149,11 @@ export function finishRound(d: FamilyData, deckId: string, results: RoundResult[
   const cards = deck.cards.map(c => {
     if (!first.has(c.id)) return c;
     const ok = first.get(c.id)!;
-    if (free && ok) return { ...c, right: c.right + 1, seen: date };
+    if (free && ok) return { ...c, right: c.right + 1, seen: givePoints ? date : c.seen };
     const box = ok ? Math.min(5, c.box + 1) : 0;
     if (box >= MASTERED && c.box < MASTERED) newlyMastered++;
     if (box >= 3 && c.box < 3) newlySit++;
-    return { ...c, box, seen: date, due: addDays(date, ok ? INTERVALS[box] : 0), right: c.right + (ok ? 1 : 0), wrong: c.wrong + (ok ? 0 : 1) };
+    return { ...c, box, seen: givePoints ? date : c.seen, due: addDays(date, ok ? INTERVALS[box] : 0), right: c.right + (ok ? 1 : 0), wrong: c.wrong + (ok ? 0 : 1) };
   });
   const right = [...first.values()].filter(Boolean).length;
   const total = first.size;
@@ -162,7 +162,7 @@ export function finishRound(d: FamilyData, deckId: string, results: RoundResult[
 
   const childId = deck.childId;
   const subject = deck.prepId ? (d.exams ?? []).find(e => e.id === deck.prepId)?.subject ?? deck.lang : deck.lang;
-  data = logLearn(data, childId, { w: total, ok: right, r: 1, m: newlySit, s: secs, subject }, date);
+  data = logLearn(data, childId, deck.prepId ? { kw: total, kok: right, s: secs, subject } : { w: total, ok: right, r: 1, m: newlySit, s: secs, subject }, date);
   const old: VocabStats = d.vocabStats?.[childId] ?? { streak: 0, best: 0, total: 0 };
   const streakUp = old.last !== date;
   const streak = !streakUp ? old.streak : old.last === addDays(date, -1) ? old.streak + 1 : 1;
