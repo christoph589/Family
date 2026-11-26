@@ -6,6 +6,7 @@ import { printHtml } from '../ui/Print';
 import { Grades } from './Grades';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { currentGrade, setSheet, today, topicUnderstanding, uid, SELF_BONUS, SELF_BONUS_PER_DAY } from '../data/logic';
 import { askTopic, QA, AI_ERROR, generateQuiz, getSample } from '../ai/generate';
@@ -242,7 +243,7 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
                   style={[s.row, { flexWrap: 'nowrap', gap: 10, padding: 10, borderRadius: 12, backgroundColor: it.tone === 'warn' ? C.warnSoft : C.surface2 }]}>
                   <Text style={{ fontSize: 18 }}>{it.icon}</Text>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[s.text, { fontWeight: '800', fontSize: 14 }]} numberOfLines={2}>{it.text}</Text>
+                    <Clip style={[s.text, { fontWeight: '800', fontSize: 14 }]} lines={2} longPress>{it.text}</Clip>
                     <Text style={[s.muted, { fontSize: 12 }]}>{it.sub}</Text>
                   </View>
                   <Text style={{ color: C.muted, fontSize: 18 }}>›</Text>

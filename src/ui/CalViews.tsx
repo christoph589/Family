@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Clip } from './Clip';
 import { birthdaysOn, eventsOn, extraStates, isDueOn, peopleOf, schoolOn, today } from '../data/logic';
 import { FamilyData } from '../data/types';
 import { Button, Segmented } from './Button';
@@ -238,8 +239,8 @@ function Agenda({ days, itemsFor, onItemPress, onPickDay }: { days: string[]; it
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderLeftWidth: 4, borderLeftColor: it.color, backgroundColor: it.color + '14', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8 }}>
                   <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: C.muted, width: 50, flexShrink: 0 }}>{it.time ?? 'ganzt.'}</Text>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: 14.5, fontWeight: '700', color: C.fg }} numberOfLines={1}>{it.title}</Text>
-                    {(it.tag || it.drive) ? <Text style={{ fontSize: 12, color: C.muted }} numberOfLines={1}>{[it.tag, it.drive].filter(Boolean).join(' · ')}</Text> : null}
+                    <Clip style={{ fontSize: 14.5, fontWeight: '700', color: C.fg }} lines={1} longPress>{it.title}</Clip>
+                    {(it.tag || it.drive) ? <Clip style={{ fontSize: 12, color: C.muted }} lines={1} longPress>{[it.tag, it.drive].filter(Boolean).join(' · ')}</Clip> : null}
                   </View>
                 </Pressable>
               ))}

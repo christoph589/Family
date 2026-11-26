@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
+import { Clip } from './Clip';
 import { useFamily } from '../data/FamilyContext';
 import { findPlace, useWeather, WeatherTip } from '../data/weather';
 import { Button } from './Button';
@@ -47,7 +48,7 @@ function WeatherPillView({ tip, big }: { tip: WeatherTip; big?: boolean }) {
       <Text style={{ fontSize: big ? 38 : 30 }}>{tip.icon}</Text>
       <View style={{ flexShrink: 1 }}>
         <Text style={{ fontSize: big ? 22 : 18, fontWeight: '800', color: C.fg }}>{tip.temp}° <Text style={{ fontSize: 13, color: C.muted, fontWeight: '700' }}>{tip.label} · {tip.min}° bis {tip.max}°</Text></Text>
-        <Text style={{ fontSize: big ? 17 : 15, fontWeight: '700', color: C.fg }} numberOfLines={2}>{tip.lines.map(l => l.split(' ')[0]).join(' ')} {tip.short}</Text>
+        <Clip style={{ fontSize: big ? 17 : 15, fontWeight: '700', color: C.fg }} lines={2}>{tip.lines.map(l => l.split(' ')[0]).join(' ')} {tip.short}</Clip>
       </View>
     </View>
   );

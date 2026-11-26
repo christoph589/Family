@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { examScore, today, UNDERSTANDING_LABEL } from '../data/logic';
 import { fmtMin, pct, shiftDay, Summary, summarize, TIME_SINCE } from '../data/learnstats';
@@ -178,7 +179,7 @@ function KidDetail({ kid, sum, prev, days, onGo }: { kid: Child; sum: Summary; p
               <Pressable onPress={() => (w.status === 'geprueft' ? setOpenTest(openTest === w.id ? null : w.id) : onGo(w.exam ? 'klassenarbeit' : 'themen'))} accessibilityRole="button"
                 style={[s.row, { flexWrap: 'nowrap', gap: 8, padding: 8, borderRadius: 10, backgroundColor: openTest === w.id ? C.accentSoft : C.bg }]}>
                 <Text style={{ fontSize: 15 }}>{w.exam ? '📄' : '📝'}</Text>
-                <Text style={[s.text, { flex: 1, minWidth: 0, fontSize: 14 }]} numberOfLines={1}>{w.title}</Text>
+                <Clip style={[s.text, { flex: 1, minWidth: 0, fontSize: 14 }]} lines={1} longPress>{w.title}</Clip>
                 <Text style={{ fontSize: 12, fontWeight: '800', color: tone }} numberOfLines={1}>{tag}</Text>
               </Pressable>
               {openTest === w.id && <SheetResult sheet={w} />}
