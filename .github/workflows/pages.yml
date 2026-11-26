@@ -20,6 +20,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: echo "EXPO_PUBLIC_BUILD=$(TZ=Europe/Berlin date +'%d.%m. %H:%M')" >> $GITHUB_ENV
       - run: npx expo export -p web
         env:
           EXPO_OFFLINE: '1'

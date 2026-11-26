@@ -20,6 +20,15 @@ import { useIcloudItems } from '../data/icloud';
 
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 
+/** Lädt die Seite frisch vom Server, am Cache vorbei. So kommen Updates auch auf Wand-Tablets an. */
+function hardReload() {
+  if (typeof location === 'undefined') return;
+  const p = new URLSearchParams(location.search);
+  p.set('v', String(Date.now()));
+  location.replace(location.pathname + '?' + p.toString().replace(/=(?=&|$)/g, ''));
+}
+const BUILD = process.env.EXPO_PUBLIC_BUILD ?? '';
+
 /** Wandansicht: nur lesen, für ein Tablet an der Wand. Aktualisiert sich selbst. */
 export function Board({ onExit }: { onExit: () => void }) {
   const { data, update } = useFamily();
@@ -77,6 +86,7 @@ export function Board({ onExit }: { onExit: () => void }) {
           <Text style={{ fontSize: wide ? 22 : 18, color: C.muted, fontWeight: '600' }}>
             {now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })} · {data.family.name}
           </Text>
+          {!!BUILD && <Text style={{ fontSize: 11, color: C.muted, opacity: 0.6 }}>Stand {BUILD}</Text>}
         </View>
         {holiday && (
           <View style={{ backgroundColor: C.warnSoft, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 8 }}>
@@ -103,6 +113,10 @@ export function Board({ onExit }: { onExit: () => void }) {
             );
           })}
         </View>
+        {!ask && <Pressable accessibilityRole="button" accessibilityLabel="Neu laden" onPress={hardReload}
+            style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 22 }}>🔄</Text>
+          </Pressable>}
         {!ask ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Wandansicht beenden (Eltern-PIN)" onPress={() => setAsk(true)}
             style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.55 }}>
