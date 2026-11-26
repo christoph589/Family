@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PhotoImg } from '../ui/PhotoImg';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Image, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
@@ -37,7 +38,7 @@ export async function pickDishPhoto(): Promise<string | null> {
 export function DishLine({ title, icon, photo, size = 20 }: { title: string; icon: string; photo?: string; size?: number }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      {photo ? <Image source={{ uri: photo }} style={{ width: size * 3.6, height: size * 2.7, borderRadius: 12 }} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
+      {photo ? <PhotoImg uri={photo} style={{ width: size * 3.6, height: size * 2.7, borderRadius: 12 }} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
       <Text style={[s.text, { fontWeight: '800', fontSize: size, flex: 1 }]} numberOfLines={2}>{icon} {title}</Text>
     </View>
   );
@@ -107,7 +108,7 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                   return (
                     <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
                       style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent' }}>
-                      {m && dishPhoto(data, m.title) ? <Image source={{ uri: dishPhoto(data, m.title) }} style={{ width: '100%', height: 54, borderRadius: 8, marginBottom: 4 }} resizeMode="cover" /> : null}
+                      {m && dishPhoto(data, m.title) ? <PhotoImg uri={dishPhoto(data, m.title)} style={{ width: '100%', height: 54, borderRadius: 8, marginBottom: 4 }} resizeMode="cover" /> : null}
                       <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
                       <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? '–' : '+')}</Text>
                     </Pressable>
@@ -129,7 +130,7 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                 return (
                   <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
                     style={{ backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, padding: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent', borderStyle: m ? 'solid' : 'dashed' }}>
-                    {m && dishPhoto(data, m.title) ? <Image source={{ uri: dishPhoto(data, m.title) }} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 8, marginBottom: 6 }} resizeMode="cover" /> : null}
+                    {m && dishPhoto(data, m.title) ? <PhotoImg uri={dishPhoto(data, m.title)} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 8, marginBottom: 6 }} resizeMode="cover" /> : null}
                     <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
                     <Text style={{ fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? 'noch offen' : '+ eintragen')}</Text>
                   </Pressable>
@@ -201,7 +202,7 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
       <TextInput style={[s.input, { minHeight: 60 }]} multiline value={ingredients} onChangeText={setIngredients} placeholder="Zutaten, mit Komma getrennt (optional): Nudeln, Hackfleisch, Tomaten" />
       {known && <Text style={[s.muted, { fontSize: 13 }]}>Bekanntes Gericht, Zutaten übernommen.</Text>}
       <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
-        {photo ? <Image source={{ uri: photo }} style={{ width: 96, height: 72, borderRadius: 10 }} resizeMode="cover" /> : null}
+        {photo ? <PhotoImg uri={photo} style={{ width: 96, height: 72, borderRadius: 10 }} resizeMode="cover" /> : null}
         <Button ghost title={photoBusy ? 'Lädt …' : photo ? '📷 Anderes Foto' : '📷 Foto vom Gericht'} disabled={photoBusy}
           onPress={async () => { setPhotoBusy(true); try { const p = await pickDishPhoto(); if (p) setPhoto(p); } finally { setPhotoBusy(false); } }} />
         {photo && <Button ghost title="Foto entfernen" onPress={() => setPhoto(undefined)} />}

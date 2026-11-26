@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { PhotoImg } from '../ui/PhotoImg';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { printHtml } from '../ui/Print';
 import { Grades } from './Grades';
@@ -104,7 +105,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
           <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
             {photos.map((ph, i) => (
               <View key={i} style={{ width: 110 }}>
-                <Image source={{ uri: ph }} style={{ width: 110, height: 150, borderRadius: 8, backgroundColor: C.surface2 }} resizeMode="cover" />
+                <PhotoImg uri={ph} style={{ width: 110, height: 150, borderRadius: 8, backgroundColor: C.surface2 }} resizeMode="cover" />
                 <Pressable accessibilityLabel={`Seite ${i + 1} entfernen`} onPress={() => setPhotos(p => p.filter((_, j) => j !== i))}
                   style={{ position: 'absolute', top: 4, right: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ color: '#fff', fontWeight: '800' }}>✕</Text>
@@ -181,7 +182,7 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
     <View style={[s.row, { backgroundColor: C.bg, padding: 12, borderRadius: 12, flexWrap: 'nowrap', alignItems: 'flex-start' }]}>
       {photosOf(topic).length ? (
         <View>
-          <Image source={{ uri: photosOf(topic)[0] }} style={{ width: 56, height: 56, borderRadius: 8 }} />
+          <PhotoImg uri={photosOf(topic)[0]} style={{ width: 56, height: 56, borderRadius: 8 }} />
           {photosOf(topic).length > 1 && <Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>{photosOf(topic).length} Seiten</Text>}
         </View>
       ) : null}

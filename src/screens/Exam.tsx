@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import { PhotoImg } from '../ui/PhotoImg';
 import { DeleteButton } from '../ui/DeleteButton';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -124,7 +125,7 @@ function PrepForm({ childIds, meId, onDone }: { childIds: string[]; meId?: strin
         <ScrollView horizontal contentContainerStyle={{ gap: 6 }}>
           {photos.map((p, i) => (
             <Pressable key={i} onPress={() => setPhotos(x => x.filter((_, j) => j !== i))} accessibilityLabel={`Foto ${i + 1} entfernen`}>
-              <Image source={{ uri: p }} style={{ width: 64, height: 86, borderRadius: 8 }} />
+              <PhotoImg uri={p} style={{ width: 64, height: 86, borderRadius: 8 }} />
               <Text style={{ position: 'absolute', top: 2, right: 4, color: '#fff', fontWeight: '800', textShadowColor: '#000', textShadowRadius: 3 }}>✕</Text>
             </Pressable>
           ))}

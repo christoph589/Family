@@ -1,5 +1,6 @@
 import { Question, Topic } from '../data/types';
 import { cloudEnabled, getLink, sb } from '../data/cloud';
+import { loadPhotos } from '../ui/PhotoImg';
 
 /**
  * KI-Anbindung, Stufe 1: Im Web-Test läuft die App als claude.ai-Artifact und
@@ -102,7 +103,7 @@ export async function askTopic(topic: Topic, photos: string[], childName: string
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
-  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(photos.slice(0, limits.images?.maxCount ?? 0))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
   const prompt = `Du bist eine freundliche, geduldige Nachhilfelehrkraft. ${childName}${grade ? ` (Klasse ${grade})` : ''} hat eine Frage zum heutigen Unterricht.
 Fach: ${topic.subject}. Thema: ${topic.text}.${images.length ? ' Die Fotos zeigen das Heft, die Tafel oder das Arbeitsblatt von heute.' : ''}
 
@@ -122,7 +123,7 @@ export async function generateQuiz(topic: Topic, photos: string[], childName: st
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
   const max = limits.images?.maxCount ?? 0;
-  const images = photos.slice(0, max).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(photos.slice(0, max))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
 
   const prompt = `Du bist eine geduldige Nachhilfelehrkraft an einer deutschen Schule.
 Erstelle einen kurzen Verständnis-Test (keine Note!) für ${childName}${grade ? `, Klasse ${grade}` : ''}.
@@ -165,7 +166,7 @@ export async function generateCards(e: { subject: string; title: string }, photo
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
-  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(photos.slice(0, limits.images?.maxCount ?? 0))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
   const prompt = `Du bist eine geduldige Lehrkraft. Erstelle LERNKARTEN zur Vorbereitung auf eine Klassenarbeit für ${who.name}${who.grade ? `, Klasse ${who.grade}` : ''}${who.schoolType ? `, ${who.schoolType}` : ''}.
 Fach: ${e.subject}. Thema: ${e.title}.
 ${images.length ? `Dazu ${images.length} Foto(s) mit den Unterlagen. Die Karten decken genau diesen Stoff ab, verteilt über alle Seiten.` : ''}
@@ -192,7 +193,7 @@ export async function generateExam(e: { subject: string; title: string }, photos
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
-  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(photos.slice(0, limits.images?.maxCount ?? 0))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
   const g = parseInt(who.grade ?? '', 10);
   const prompt = `Du bist eine erfahrene Lehrkraft${who.state ? ` in ${who.state}` : ' in Deutschland'}${who.schoolType ? ` an einem/einer ${who.schoolType}` : ''}.
 Erstelle eine realistische PROBE-KLASSENARBEIT zur Vorbereitung für ${who.name}${who.grade ? `, Klasse ${who.grade}` : ''}.
@@ -234,7 +235,7 @@ export async function gradePaper(sheet: { title: string; questions: Question[]; 
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
-  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(photos.slice(0, limits.images?.maxCount ?? 0))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
   if (!images.length) throw { code: 'unavailable' };
   const pts = sheet.exam?.points ?? sheet.questions.map(() => 1);
   const list = sheet.questions.map((q, i) => `Aufgabe ${i + 1} (${pts[i]} P.): ${q.q}${q.type === 'table' && q.table ? ` [Tabelle: ${q.table.header.join(' | ')}]` : ''}${q.options ? ` [Auswahl: ${q.options.join(' / ')}]` : ''}\n  Erwartete Lösung: ${q.solution}${q.paper ? '\n  (Zeichnung: Maße und Messergebnis prüfen, 1 bis 2 mm oder 1 bis 2 Grad Abweichung sind ok)' : ''}`).join('\n');
@@ -330,7 +331,7 @@ export async function extractVocabBook(photos: string[], langHint: string, lastU
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
-  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(photos.slice(0, limits.images?.maxCount ?? 0))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
   if (!images.length) throw { code: 'image_rejected' };
   const prompt = `Die Fotos zeigen Seiten aus dem Vokabelverzeichnis eines Schulbuchs (${langHint || 'Englisch'}), in der Reihenfolge der Seiten.
 Lies ALLE Vokabeln vollständig ab und ordne jede ihrer Unit, Lektion oder ihrem Kapitel zu.
@@ -353,7 +354,7 @@ export async function extractRecipe(photos: string[], signal?: AbortSignal): Pro
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
-  const images = photos.slice(0, Math.min(6, limits.images?.maxCount ?? 0)).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(photos.slice(0, Math.min(6, limits.images?.maxCount ?? 0)))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
   if (!images.length) throw { code: 'image_rejected' };
   const prompt = `Auf den Bildern ist ein Kochrezept (Foto aus einem Kochbuch oder Screenshot einer App oder Webseite, z. B. Cookidoo/Thermomix).
 Schreib es vollständig ab, nichts erfinden:
@@ -372,7 +373,7 @@ export async function extractVocab(photos: string[], langHint: string, signal?: 
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
-  const images = photos.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(photos.slice(0, limits.images?.maxCount ?? 0))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
   if (!images.length) throw { code: 'image_rejected' };
   const prompt = `Auf den Fotos ist eine Vokabelliste aus einem Schulbuch oder Vokabelheft eines deutschen Schulkinds.
 Lies ALLE Vokabeln vollständig ab, in der Reihenfolge der Seite.
@@ -399,7 +400,7 @@ export async function extractLetter(files: string[], kids: { name: string; grade
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
-  const images = files.slice(0, limits.images?.maxCount ?? 0).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const images = (await loadPhotos(files.slice(0, limits.images?.maxCount ?? 0))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
   const body = text.trim().slice(0, 15000);
   if (!images.length && !body) throw { code: 'image_rejected' };
   const prompt = `${images.length ? 'Anbei ein Elternbrief, eine Einladung oder ein Aushang (Schule, Kita, Verein) als Foto oder PDF.' : 'Unten steht der Text eines Elternbriefs, einer Einladung oder eines Aushangs (Schule, Kita, Verein).'}

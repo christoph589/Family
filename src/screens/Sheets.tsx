@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PhotoImg } from '../ui/PhotoImg';
 import { ActivityIndicator, Image, Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { examScore, finishCheck, selfBonus, EXAM_PREP_POINTS, setSheet, today, uid, understandingOf, UNDERSTANDING_LABEL } from '../data/logic';
@@ -200,14 +201,14 @@ function ScanReview({ sheet, name }: { sheet: Worksheet; name: string }) {
         <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
           {scan.photos.map((p, i) => (
             <Pressable key={i} onPress={() => setBig(p)} accessibilityLabel={`Seite ${i + 1} groß ansehen`}>
-              <Image source={{ uri: p }} style={{ width: 96, height: 128, borderRadius: 10, backgroundColor: C.line }} />
+              <PhotoImg uri={p} style={{ width: 96, height: 128, borderRadius: 10, backgroundColor: C.line }} />
             </Pressable>
           ))}
         </ScrollView>
       )}
       <Modal visible={!!big} transparent animationType="fade" onRequestClose={() => setBig(null)}>
         <Pressable onPress={() => setBig(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', padding: 12 }}>
-          {big && <Image source={{ uri: big }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />}
+          {big && <PhotoImg uri={big} resizeMode="contain" style={{ width: '100%', height: '100%' }} />}
         </Pressable>
       </Modal>
       {pending && <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI korrigiert vor. Das dauert etwa eine Minute.</Text></View>}

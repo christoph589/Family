@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, Platform, Text, View } from 'react-native';
 import { Button } from './Button';
+import { PhotoImg } from './PhotoImg';
 import { C, grad, s } from './theme';
 
 /** Rundes Profilbild: Foto, sonst Anfangsbuchstabe auf der Personenfarbe. */
@@ -8,7 +9,7 @@ export function Avatar({ name, color, photo, size = 44 }: { name: string; color:
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: photo ? 2 : 0, borderColor: color }}>
       {photo
-        ? <Image source={{ uri: photo }} style={{ width: size, height: size }} accessibilityLabel={name} />
+        ? <PhotoImg uri={photo} style={{ width: size, height: size }} accessibilityLabel={name} />
         : <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.42 }}>{name[0]?.toUpperCase() ?? '?'}</Text>}
     </View>
   );
