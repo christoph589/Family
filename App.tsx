@@ -28,6 +28,7 @@ import { OperatorEntry } from './src/ui/OperatorEntry';
 import { PhotoCollector } from './src/screens/PhotoCollector';
 import { loadHolidays } from './src/data/holidays';
 import { MoneyTab } from './src/screens/Gifts';
+import { PublicWishes } from './src/screens/Wishes';
 import { Food } from './src/screens/Food';
 import { Calendar } from './src/screens/Calendar';
 import { Learn } from './src/screens/Learn';
@@ -59,6 +60,8 @@ export default function App() {
 
 /** ?start zeigt die Startseite auch auf verbundenen Geräten (zum Ansehen und Teilen). */
 const wantsStart = () => Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]start\b/.test(location.search);
+/** ?wunsch=<token> zeigt einen geteilten Wunschzettel ohne Anmeldung. */
+const wishToken = () => (Platform.OS === 'web' && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('wunsch') : null);
 const wantsOperator = () => Platform.OS === 'web' && typeof location !== 'undefined' && /[?&]operator\b/.test(location.search);
 const cleanUrl = () => { try { history.replaceState(null, '', location.pathname); } catch { /* egal */ } };
 
@@ -71,6 +74,8 @@ function CloudApp() {
   const reload = () => Promise.all([getLink(), supportBack()]).then(([l, b]) => { setLinkState(l); setBack(b); }, () => setLinkState(null));
   useEffect(() => { reload(); }, []);
   const store = useMemo(() => (link ? cloudStore(link.familyId) : null), [link?.familyId]);
+  const wish = wishToken();
+  if (wish) return <SafeAreaView style={s.screen}><StatusBar style="dark" /><PublicWishes token={wish} /></SafeAreaView>;
   if (start) return <Landing onNew={leave} onLogin={leave} onKid={leave} />;
   if (op && link) return <SafeAreaView style={s.screen}><Operator onClose={() => { cleanUrl(); setOp(false); }} onEntered={() => { cleanUrl(); setOp(false); reload(); }} /></SafeAreaView>;
   if (link === undefined) return <View style={[s.screen, { justifyContent: 'center' }]}><ActivityIndicator color={C.accent} /></View>;
@@ -259,9 +264,10 @@ function Root() {
   const sheetBadge = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === (parent ? 'abgegeben' : 'offen')).length
     + (parent ? (data.topics ?? []).filter(t => !(data.worksheets ?? []).some(w => w.topicId === t.id)).length : 0);
   const reqBadge = admin ? (data.requests ?? []).length + (data.ideas ?? []).length : 0;
+  const wishBadge = admin ? (data.wishes ?? []).filter(w => w.status === 'neu').length : 0;
   const tabs: { value: Tab; label: string; badge?: number }[] = [
     { value: 'heute', label: 'Heute' }, { value: 'kalender', label: 'Kalender' },
-    { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge }, { value: 'geld', label: 'Geld' }, { value: 'essen', label: 'Essen' },
+    { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge }, { value: 'geld', label: 'Geld', badge: wishBadge }, { value: 'essen', label: 'Essen' },
   ];
   const shownTabs = tabs.filter(t => (!parent || admin || !['punkte', 'geld'].includes(t.value)) && (t.value === 'heute' || isOn(t.value as Feature, flags)));
   const wide = winW >= 700;

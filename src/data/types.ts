@@ -155,6 +155,16 @@ export interface CalEvent {
 
 /** Geschenke: Idee oder gekauft, gehört zu einem Anlass in einem bestimmten Jahr. Beträge in Cent. */
 export interface Gift { id: string; occ: string; year: number; forId?: string; title: string; cents?: number; status: 'idee' | 'gekauft'; by?: string; at: string }
+/** Wunschzettel: Kind trägt ein, Eltern geben frei. Nur status 'frei' erscheint auf dem Teilen-Link. */
+export interface Wish { id: string; childId: string; title: string; at: string;
+  /** Link zum Produkt (nur http/https) */ link?: string;
+  /** Foto vom Wunsch, nur in der App, nie auf dem Teilen-Link */ photo?: string;
+  /** Wie wichtig: 1 bis 3 Sterne */ prio: 1 | 2 | 3;
+  /** z. B. „Größe 140, in Blau“. Erscheint nach Freigabe auf dem Teilen-Link. */ note?: string;
+  /** neu = wartet auf Eltern, frei = auf der Liste, nein = nicht freigegeben */ status: 'neu' | 'frei' | 'nein';
+  /** ungefährer Preis in Cent (von den Eltern) */ cents?: number;
+  /** Hat es bekommen. Verschwindet dann vom Teilen-Link. */ done?: boolean;
+  /** Wer zuletzt entschieden hat (Person-ID) */ by?: string }
 /** Eigener jährlicher Anlass, z. B. Geburtstag Oma (md = MM-DD) */
 export interface GiftOccasion { id: string; title: string; md: string; forId?: string; icon?: string }
 
@@ -185,6 +195,7 @@ export interface FamilyData {
   events?: CalEvent[];
   gifts?: Gift[];
   giftOccasions?: GiftOccasion[];
+  wishes?: Wish[];
   settings?: { /** Einwilligung der Eltern zur KI-Verarbeitung von Fotos */ aiConsent?: { at: string; by?: string }; /** Bundesland, z. B. DE-NW (wenn keine automatischen Ferien gesetzt sind) */ region?: string; googleCalendarId?: string; googleCalendarName?: string; holiday?: { on: boolean; until?: string };
     /** Automatische Ferien und Feiertage nach Bundesland */
     /** Eingebundene fremde Kalender (iCal-Links von iCloud, Google, Outlook, WebUntis) */
