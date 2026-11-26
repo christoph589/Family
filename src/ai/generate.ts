@@ -509,3 +509,50 @@ export async function judgeAnswer(word: string, solution: string, answer: string
   const r = await Promise.race([req, timeout]);
   return r && typeof r.ok === 'boolean' ? { ok: r.ok, note: r.note ? String(r.note).slice(0, 120) : undefined } : null;
 }
+
+/**
+ * Wochenplan-Vorschlag: ein einziger KI-Aufruf für alle freien Plätze der Woche.
+ * Schickt nur Gerichtsnamen, Bewertungen und anonyme Unverträglichkeiten (keine Namen).
+ */
+export async function suggestWeek(input: {
+  slots: { date: string; slot: 'mittag' | 'abend' | 'fruehstueck'; weekday: string }[];
+  planned: string[];
+  recipes: { title: string; score: number; last?: string }[];
+  diet: string;
+  people: number;
+  wish?: string;
+}, signal?: AbortSignal): Promise<import('../data/types').MealIdea[]> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const fam = input.recipes.slice(0, 60).map(r => `- ${r.title}${r.score ? ` (Bewertung ${r.score > 0 ? '+' : ''}${r.score})` : ''}${r.last ? `, zuletzt ${r.last}` : ''}`).join('\n') || '(noch keine)';
+  const prompt = `Plane abwechslungsreiche Familienessen für ${input.people} Personen (Kinder dabei).
+Freie Plätze (nur diese füllen):
+${input.slots.map(x => `- ${x.date} (${x.weekday}) ${x.slot}`).join('\n')}
+Schon geplant diese Woche: ${input.planned.join(', ') || 'nichts'}
+
+Lieblingsgerichte der Familie (positive Bewertung = beliebt, negative = eher meiden):
+${fam}
+
+Einschränkungen (unbedingt einhalten, auch versteckte Zutaten):
+${input.diet || 'keine'}
+${input.wish ? `Wunsch der Eltern: ${input.wish.slice(0, 300)}\n` : ''}
+Regeln:
+- Etwa zwei Drittel aus den Lieblingsgerichten, der Rest neue, kindertaugliche Ideen (unter 45 Minuten, normale Supermarkt-Zutaten).
+- Abwechslung: nicht zweimal dieselbe Beilage hintereinander, höchstens 2× Nudeln, mindestens die Hälfte mit Gemüse, ein Fischgericht wenn die Einschränkungen es erlauben, mindestens ein vegetarischer Tag.
+- Mittags eher schnell und leicht, abends darf es aufwendiger sein.
+- Kein Gericht doppelt in der Woche. Lieblingsgerichte genau so schreiben wie in der Liste.
+- Bei neuen Ideen: Zutaten mit Menge für die Personenzahl und kurze Zubereitung in 3 bis 6 nummerierten Schritten.
+- "why": ein kurzer, freundlicher Grund (max. 8 Wörter), z. B. "Gemüse-Tag" oder "lange nicht gegessen".
+Antworte nur mit JSON: {"items":[{"date":"YYYY-MM-DD","slot":"abend","title":"...","isNew":false,"why":"..."},{"date":"...","slot":"mittag","title":"...","isNew":true,"ingredients":["400 g ..."],"steps":"1. ...\\n2. ...","why":"..."}]}`;
+  const res = await sample.json<any>(prompt, { signal, cache: false });
+  const ok = new Set(input.slots.map(x => x.date + x.slot));
+  const items = (Array.isArray(res?.items) ? res.items : []).map((x: any) => ({
+    date: str(x?.date, 10), slot: (['mittag', 'abend', 'fruehstueck'].includes(x?.slot) ? x.slot : 'abend') as 'mittag' | 'abend' | 'fruehstueck',
+    title: str(x?.title, 80), isNew: !!x?.isNew,
+    ingredients: x?.isNew && Array.isArray(x?.ingredients) ? x.ingredients.map((y: unknown) => str(y, 120)).filter(Boolean).slice(0, 30) : undefined,
+    steps: x?.isNew ? str(x?.steps, 2000) || undefined : undefined,
+    why: str(x?.why, 80) || undefined,
+  })).filter((x: { date: string; slot: string; title: string }) => x.title && ok.has(x.date + x.slot));
+  if (!items.length) throw { code: 'invalid_json' };
+  return items;
+}

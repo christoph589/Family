@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { PhotoImg } from '../ui/PhotoImg';
-import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Image, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
@@ -12,6 +10,8 @@ import { Button, Segmented } from '../ui/Button';
 import { addDays, daysOf, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 import { Recipes, recipeScore } from './Recipes';
+import { ConflictNote, DietEditor, DishTile, pickDishPhoto, WeekCheck, WeekPlanner } from './FoodPlus';
+import { recipeOf } from '../data/food';
 
 const SLOTS: { value: MealSlot; label: string; icon: string }[] = [
   { value: 'mittag', label: 'Mittag', icon: '☀️' }, { value: 'abend', label: 'Abend', icon: '🌙' },
@@ -22,23 +22,13 @@ export function mealsOn(d: FamilyData, date: string) { return (d.meals ?? []).fi
 /** Foto zum Gericht: hängt am Lieblingsrezept mit gleichem Namen, gilt also für jedes Mal, wenn es das gibt. */
 export const dishPhoto = (d: FamilyData, title: string) => (d.recipes ?? []).find(r => norm(r.title) === norm(title))?.photo;
 
-/** Foto auswählen und auf ca. 480 px klein rechnen (etwa 30 KB), damit die Familiendaten schlank bleiben. */
-export async function pickDishPhoto(): Promise<string | null> {
-  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true, aspect: [4, 3] });
-  if (res.canceled || !res.assets.length) return null;
-  const a = res.assets[0];
-  const ctx = ImageManipulator.manipulate(a.uri);
-  if (a.width > 480) ctx.resize({ width: 480 });
-  const img = await ctx.renderAsync();
-  const out = await img.saveAsync({ compress: 0.6, format: SaveFormat.JPEG, base64: true });
-  return out.base64 ? `data:image/jpeg;base64,${out.base64}` : out.uri;
-}
+export { pickDishPhoto, shrinkDishPhoto } from './FoodPlus';
 
 /** Gericht mit Foto (falls vorhanden) für die Wand und den Plan */
 export function DishLine({ title, icon, photo, size = 20 }: { title: string; icon: string; photo?: string; size?: number }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      {photo ? <PhotoImg uri={photo} style={{ width: size * 3.6, height: size * 2.7, borderRadius: 12 }} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
+      <DishTile title={title} photo={photo} style={{ width: size * 3.6, height: size * 2.7, borderRadius: 12 }} emojiSize={size * 1.4} />
       <Text style={[s.text, { fontWeight: '800', fontSize: size, flex: 1 }]} numberOfLines={2}>{icon} {title}</Text>
     </View>
   );
@@ -53,13 +43,15 @@ export function addToShopping(d: FamilyData, items: string[], by?: string): Fami
 }
 
 export function Food({ who, meId, parent = true }: { who: string; meId?: string; parent?: boolean }) {
-  const [tab, setTab] = useState<'plan' | 'rezepte' | 'liste'>('plan');
+  const [tab, setTab] = useState<'plan' | 'rezepte' | 'liste' | 'wer'>('plan');
   const { data, update } = useFamily();
   const open = (data?.shopping ?? []).filter(i => !i.done).length;
   const narrow = useWindowDimensions().width < 600;
   return (
     <View style={{ gap: 16 }}>
-      <Segmented value={tab} onChange={setTab} options={[{ value: 'plan', label: narrow ? '🍽️ Plan' : '🍽️ Essensplan' }, { value: 'rezepte', label: narrow ? '❤️ Rezepte' : '❤️ Lieblingsrezepte' }, { value: 'liste', label: `🛒 ${narrow ? 'Liste' : 'Einkaufsliste'}${open ? ` (${open})` : ''}` }]} />
+      <Segmented value={tab} onChange={setTab} options={narrow
+        ? [{ value: 'plan', label: 'Plan' }, { value: 'rezepte', label: 'Rezepte' }, { value: 'liste', label: `Liste${open ? ` (${open})` : ''}` }, { value: 'wer', label: 'Wer isst was' }]
+        : [{ value: 'plan', label: '🍽️ Essensplan' }, { value: 'rezepte', label: '❤️ Lieblingsrezepte' }, { value: 'liste', label: `🛒 Einkaufsliste${open ? ` (${open})` : ''}` }, { value: 'wer', label: '🥦 Wer isst was' }]} />
       {tab === 'plan' && <MealPlan who={who} readOnly={!parent} onWish={() => setTab('rezepte')} />}
       {tab === 'rezepte' && meId && (
         <Recipes meId={meId} parent={parent}
@@ -67,6 +59,7 @@ export function Food({ who, meId, parent = true }: { who: string; meId?: string;
           onPlan={(r, date, slot) => update(d => ({ ...d, meals: [...(d.meals ?? []).filter(m => !(m.date === date && m.slot === slot)), { id: uid(), date, slot, title: r.title }] }))} />
       )}
       {tab === 'liste' && <Shopping who={who} meId={meId} />}
+      {tab === 'wer' && <DietEditor parent={parent} meId={meId} />}
     </View>
   );
 }
@@ -76,9 +69,11 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
   const [anchor, setAnchor] = useState(today());
   const [edit, setEdit] = useState<{ date: string; slot: MealSlot } | null>(null);
   const [msg, setMsg] = useState('');
+  const [planning, setPlanning] = useState(false);
   const narrow = useWindowDimensions().width < 600;
   if (!data) return null;
   const days = daysOf('woche', anchor);
+  const hasIdeas = data.mealIdeas?.week === days[0] && data.mealIdeas.items.length > 0;
   const recipes = data.recipes ?? [];
   const weekMeals = (data.meals ?? []).filter(m => days.includes(m.date));
   const weekIngredients = weekMeals.flatMap(m => recipes.find(r => norm(r.title) === norm(m.title))?.ingredients ?? []);
@@ -92,6 +87,8 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
           {parse(days[0]).getDate()}.–{parse(days[6]).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
         </Text>
       </View>
+      {!readOnly && !planning && <Button ghost title={hasIdeas ? '✨ Vorschlag für die Woche ansehen' : '✨ Woche planen'} onPress={() => { setPlanning(true); setEdit(null); }} style={{ alignSelf: 'flex-start' }} />}
+      {!readOnly && planning && <WeekPlanner days={days} onDone={() => setPlanning(false)} />}
       {edit && <MealEditor key={edit.date + edit.slot} date={edit.date} slot={edit.slot} onDone={() => setEdit(null)} />}
       {narrow ? (
         <View style={[s.card, { padding: 6, gap: 0 }]}>
@@ -111,6 +108,7 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                       {m && dishPhoto(data, m.title) ? <PhotoImg uri={dishPhoto(data, m.title)} style={{ width: '100%', height: 54, borderRadius: 8, marginBottom: 4 }} resizeMode="cover" /> : null}
                       <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
                       <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? '–' : '+')}</Text>
+                      {m && <ConflictNote title={m.title} compact />}
                     </Pressable>
                   );
                 })}
@@ -130,9 +128,10 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                 return (
                   <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
                     style={{ backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, padding: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent', borderStyle: m ? 'solid' : 'dashed' }}>
-                    {m && dishPhoto(data, m.title) ? <PhotoImg uri={dishPhoto(data, m.title)} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 8, marginBottom: 6 }} resizeMode="cover" /> : null}
+                    {m ? <DishTile title={m.title} photo={dishPhoto(data, m.title)} ingredients={recipeOf(data, m.title)?.ingredients} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 8, marginBottom: 6 }} emojiSize={30} /> : null}
                     <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
                     <Text style={{ fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? 'noch offen' : '+ eintragen')}</Text>
+                    {m && <ConflictNote title={m.title} compact />}
                   </Pressable>
                 );
               })}
@@ -141,6 +140,7 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
         })}
       </View>
       )}
+      <WeekCheck days={days} readOnly={readOnly} />
       {readOnly && onWish && (
         <Pressable onPress={onWish} accessibilityRole="button" style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: C.accentSoft }]}>
           <Text style={{ fontSize: 26 }}>❤️</Text>
@@ -201,6 +201,7 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
       <TextInput style={s.input} value={title} onChangeText={t => { setTitle(t); const r = data.recipes?.find(x => norm(x.title) === norm(t)); if (r) { setIngredients(r.ingredients.join(', ')); setPhoto(r.photo); } }} placeholder="Was gibt es? z. B. Spaghetti Bolognese" autoFocus />
       <TextInput style={[s.input, { minHeight: 60 }]} multiline value={ingredients} onChangeText={setIngredients} placeholder="Zutaten, mit Komma getrennt (optional): Nudeln, Hackfleisch, Tomaten" />
       {known && <Text style={[s.muted, { fontSize: 13 }]}>Bekanntes Gericht, Zutaten übernommen.</Text>}
+      <ConflictNote title={title} ingredients={ingredients.split(/[,\n]/).map(x => x.trim()).filter(Boolean)} />
       <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
         {photo ? <PhotoImg uri={photo} style={{ width: 96, height: 72, borderRadius: 10 }} resizeMode="cover" /> : null}
         <Button ghost title={photoBusy ? 'Lädt …' : photo ? '📷 Anderes Foto' : '📷 Foto vom Gericht'} disabled={photoBusy}

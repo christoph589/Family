@@ -10,6 +10,26 @@ import { addDays, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
 import { AI_ERROR, extractRecipe, getSample } from '../ai/generate';
 import { pickPhotos } from './Exam';
+import { ConflictNote, DishTile, pickDishPhoto, shrinkDishPhoto } from './FoodPlus';
+import { cloudEnabled, sb } from '../data/cloud';
+
+/** Rezept von einer Webseite übernehmen (Server liest das eingebettete Rezept, ohne KI). */
+async function importFromLink(url: string): Promise<{ title: string; ingredients: string[]; steps: string; image?: string; source?: string }> {
+  if (!cloudEnabled) throw { code: 'unavailable' };
+  const { data, error } = await sb().functions.invoke('familie', { body: { action: 'recipe_import', url } });
+  if (error) {
+    let code = '';
+    try { code = (await (error as any).context?.json?.())?.error ?? ''; } catch { /* egal */ }
+    throw { code: code || 'server' };
+  }
+  return data as any;
+}
+const IMPORT_ERROR: Record<string, string> = {
+  unknown_action: 'Dafür muss die Server-Funktion „familie“ einmal neu eingespielt werden.',
+  no_recipe: 'Auf der Seite wurde kein Rezept gefunden. Dann lieber Screenshot und „Aus Foto übernehmen“.',
+  fetch_failed: 'Die Seite ließ sich nicht laden. Manche Seiten (z. B. mit Login) sperren das.',
+  host_not_allowed: 'Diese Adresse ist nicht erlaubt.', bad_url: 'Das ist kein gültiger Link.',
+};
 
 const norm = (t: string) => t.trim().toLowerCase();
 export const VOTES = [{ v: 2, icon: '❤️', label: 'Lieblingsessen' }, { v: 1, icon: '👍', label: 'Mag ich' }, { v: -1, icon: '👎', label: 'Lieber nicht' }];
@@ -69,8 +89,10 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
               <View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: i < 3 && score > 0 ? '#fff2e0' : C.surface2, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontWeight: '800', color: i < 3 && score > 0 ? '#c27100' : C.muted }}>{i + 1}</Text>
               </View>
+              <DishTile title={r.title} photo={r.photo} ingredients={r.ingredients} style={{ width: 72, height: 54 }} emojiSize={26} />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <Text style={[s.text, { fontWeight: '800' }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}</Text>
+                <Text style={[s.text, { fontWeight: '800' }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}{r.ai && <Text style={{ fontSize: 12, color: C.accent }}>  ✨ KI-Idee</Text>}</Text>
+                <ConflictNote title={r.title} compact />
                 {r.ingredients.length > 0 && <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>{r.ingredients.join(', ')}</Text>}
                 <Text style={[s.muted, { fontSize: 12 }]}>
                   {[by && `Vorschlag von ${by.name}`, last ? `zuletzt ${parse(last).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : 'noch nie im Plan'].filter(Boolean).join(' · ')}
@@ -108,6 +130,7 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
                 {r.ingredients.length > 0 && <Text style={s.text}><Text style={{ fontWeight: '800' }}>Zutaten{'\n'}</Text>{r.ingredients.map(x => `• ${x}`).join('\n')}</Text>}
                 {r.steps && <Text style={s.text}><Text style={{ fontWeight: '800' }}>Zubereitung{'\n'}</Text>{r.steps}</Text>}
                 {r.link && <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => Linking.openURL(r.link!)}>🔗 Originalrezept öffnen</Text>}
+                {r.photoSrc && <Text style={[s.muted, { fontSize: 11 }]}>Bild: {r.photoSrc}</Text>}
                 <Text style={{ color: C.muted, fontWeight: '700' }} onPress={() => setShow(null)}>Zuklappen</Text>
               </View>
             ) : <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => setShow(r.id)}>📖 Rezept ansehen</Text>)}
@@ -156,6 +179,9 @@ function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: bo
   const [ing, setIng] = useState(recipe?.ingredients.join('\n') ?? '');
   const [steps, setSteps] = useState(recipe?.steps ?? '');
   const [link, setLink] = useState(recipe?.link ?? '');
+  const [photo, setPhoto] = useState<string | undefined>(recipe?.photo);
+  const [photoSrc, setPhotoSrc] = useState<string | undefined>(recipe?.photoSrc);
+  const [linking, setLinking] = useState(false);
   const dup = !recipe && data?.recipes?.find(r => norm(r.title) === norm(title));
   const [ai, setAi] = useState(false);
   const [reading, setReading] = useState(false);
@@ -173,11 +199,23 @@ function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: bo
     } catch (e: any) { setErr(AI_ERROR[e?.code] ?? 'Das Rezept konnte nicht gelesen werden.'); }
     setReading(false);
   }
+  async function fromLink() {
+    setLinking(true); setErr('');
+    try {
+      const r = await importFromLink(link.trim());
+      if (r.title && !title.trim()) setTitle(r.title);
+      if (r.ingredients?.length) setIng(r.ingredients.join('\n'));
+      if (r.steps) setSteps(r.steps);
+      if (r.image) { const small = await shrinkDishPhoto(r.image).catch(() => null); if (small) { setPhoto(small); setPhotoSrc(r.source); } }
+      if (!r.ingredients?.length) setErr('Nur der Name wurde gefunden, Zutaten bitte selbst ergänzen.');
+    } catch (e: any) { setErr(IMPORT_ERROR[e?.code] ?? AI_ERROR[e?.code] ?? 'Übernehmen hat nicht geklappt.'); }
+    setLinking(false);
+  }
   const save = () => {
     const t = title.trim();
     if (!t) return;
     const ingredients = ing.split(/[,\n]/).map(x => x.trim()).filter(Boolean);
-    const extra = { steps: steps.trim() || undefined, link: /^https?:\/\/\S+$/i.test(link.trim()) ? link.trim() : undefined };
+    const extra = { steps: steps.trim() || undefined, link: /^https?:\/\/\S+$/i.test(link.trim()) ? link.trim() : undefined, photo, photoSrc: photo ? photoSrc : undefined };
     update(d => {
       const rs = d.recipes ?? [];
       if (recipe) return { ...d, recipes: rs.map(x => (x.id === recipe.id ? { ...x, title: t, ingredients, ...extra } : x)) };
@@ -207,7 +245,21 @@ function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: bo
         <TextInput style={[s.input, { minHeight: 120 }]} multiline value={steps} onChangeText={setSteps} placeholder={'1. Mehl, Eier und Milch glatt rühren\n2. 10 Minuten quellen lassen\n3. In der Pfanne goldbraun backen'} />
         <Text style={s.label}>Link zum Rezept (optional)</Text>
         <TextInput style={s.input} value={link} onChangeText={setLink} placeholder="https://cookidoo.de/... oder https://www.chefkoch.de/..." autoCapitalize="none" keyboardType="url" />
+        {/^https?:\/\/\S+\.\S+/i.test(link.trim()) && cloudEnabled && (
+          <View style={{ gap: 4 }}>
+            <Button ghost title={linking ? 'Lese Seite …' : '🔗 Zutaten, Schritte und Bild vom Link holen'} disabled={linking} onPress={fromLink} />
+            <Text style={[s.muted, { fontSize: 12 }]}>Kostenlos, ohne KI. Klappt bei den meisten Rezeptseiten. Das Bild wird nur für eure Familie gespeichert.</Text>
+          </View>
+        )}
       </>}
+      <Text style={s.label}>Bild</Text>
+      <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
+        <DishTile title={title || '?'} photo={photo} ingredients={ing.split(/[,\n]/)} style={{ width: 96, height: 72 }} emojiSize={30} />
+        <Button ghost title={photo ? '📷 Anderes Foto' : '📷 Eigenes Foto'} onPress={async () => { const p = await pickDishPhoto().catch(() => null); if (p) { setPhoto(p); setPhotoSrc(undefined); } }} />
+        {photo && <Button ghost title="Entfernen" onPress={() => { setPhoto(undefined); setPhotoSrc(undefined); }} />}
+      </View>
+      {!photo && <Text style={[s.muted, { fontSize: 12 }]}>Ohne Foto zeigt die App ein passendes Symbol. Am schönsten ist ein eigenes Foto vom fertigen Essen.</Text>}
+      <ConflictNote title={title} ingredients={ing.split(/[,\n]/).map(x => x.trim()).filter(Boolean)} />
       {dup && <Text style={[s.muted, { fontSize: 13 }]}>Das gibt es schon in der Sammlung. Speichern zählt es als dein Lieblingsessen.</Text>}
       <View style={s.row}>
         <Button title={recipe ? 'Speichern' : parent ? 'Hinzufügen' : 'Vorschlagen'} disabled={!title.trim()} onPress={save} />
