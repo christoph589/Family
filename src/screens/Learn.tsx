@@ -1,3 +1,4 @@
+import { isOn, useFlags } from '../data/flags';
 import * as ImagePicker from 'expo-image-picker';
 import { PhotoImg } from '../ui/PhotoImg';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -42,6 +43,8 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
   const [editing, setEditing] = useState<Topic | null>(null);
   const [solveId, setSolveId] = useState<string | null>(null);
   const [part, setPart] = useState<'themen' | 'klassenarbeit' | 'vokabeln'>('themen');
+  const flags = useFlags();
+  useEffect(() => { if (part === 'vokabeln' && !isOn('vokabeln', flags)) setPart('themen'); }, [flags, part]);
   const [focus, setFocus] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [allTopics, setAllTopics] = useState(false);
@@ -70,7 +73,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
     {parent && allIds.length > 1 && <ParentOverview ids={allIds} focus={focus} setFocus={setFocus} onGo={setPart} />}
     <View style={{ position: (Platform.OS === 'web' ? 'sticky' : 'relative') as any, top: 0, zIndex: 10, marginHorizontal: -4, paddingHorizontal: 4, paddingVertical: 4, backgroundColor: C.bg }}>
       <View style={{ flexDirection: 'row', backgroundColor: C.surface2, padding: 4, borderRadius: 14, gap: 4 }}>
-        {([['themen', 'Täglich', 0], ['klassenarbeit', 'Arbeiten', 0], ['vokabeln', 'Vokabeln', vocabDue]] as const).map(([v, label, n]) => {
+        {([['themen', 'Täglich', 0], ['klassenarbeit', 'Arbeiten', 0], ['vokabeln', 'Vokabeln', vocabDue]] as const).filter(([v]) => v !== 'vokabeln' || isOn('vokabeln', flags)).map(([v, label, n]) => {
           const on = part === v;
           return (
             <Pressable key={v} onPress={() => setPart(v)} accessibilityRole="tab" accessibilityState={{ selected: on }}

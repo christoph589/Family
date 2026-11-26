@@ -196,11 +196,13 @@ async function runAi(body: any, userId: string, admin: any) {
   const { data: mem } = await admin.from('members').select('family_id').eq('user_id', userId).limit(1);
   if (!mem?.length) return json({ error: 'not_member' }, 403);
   const fid = mem[0].family_id;
-  const { data: fam, error: famErr } = await admin.from('families').select('ai_day, ai_count').eq('id', fid).single();
-  if (famErr) return json({ error: 'no_sql' }, 500);
+  const fam = await famFlags(admin, fid);
+  if (!fam) return json({ error: 'no_sql' }, 500);
+  if (fam.features?.ki === false) return json({ error: 'disabled' }, 403);
+  const limit = fam.ai_limit ?? AI_DAILY;
   const day = berlinDay();
   const used = fam.ai_day === day ? fam.ai_count : 0;
-  if (used >= AI_DAILY) return json({ error: 'daily_limit' }, 429);
+  if (used >= limit) return json({ error: 'daily_limit' }, 429);
   await admin.from('families').update({ ai_day: day, ai_count: used + 1 }).eq('id', fid);
 
   const client = new Anthropic({ apiKey: AI_KEY });
@@ -217,7 +219,8 @@ async function runAi(body: any, userId: string, admin: any) {
     if (msg.stop_reason === 'refusal') return json({ error: 'refused' }, 422);
     if (msg.stop_reason === 'max_tokens') return json({ error: 'invalid_json' }, 502);
     const text = msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-    return json({ text, left: AI_DAILY - used - 1 });
+    await track(admin, fid, msg.model ?? AI_MODEL, msg.usage);
+    return json({ text, left: limit - used - 1 });
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) return json({ error: 'bad_key' }, 502);
     if (e instanceof Anthropic.RateLimitError) return json({ error: 'rate_limited' }, 429);
@@ -225,6 +228,24 @@ async function runAi(body: any, userId: string, admin: any) {
     if (e instanceof Anthropic.APIError) return json({ error: 'ai_down', status: e.status }, 502);
     throw e;
   }
+}
+
+// Preise in US-Dollar pro Million Tokens (Stand Nov. 2026), für die Kostenanzeige in der Operator-Ansicht
+const PRICES: [RegExp, number, number][] = [[/haiku/, 0.1, 0.5], [/sonnet/, 2, 10], [/opus/, 4, 20], [/fable|mythos/, 8, 40]];
+/** Schalter und KI-Limit der Familie. Fällt auf die alten Spalten zurück, solange fix-11 fehlt. */
+async function famFlags(admin: any, fid: string) {
+  const r = await admin.from('families').select('ai_day, ai_count, features, ai_limit').eq('id', fid).single();
+  if (!r.error) return r.data as { ai_day: string; ai_count: number; features?: Record<string, boolean>; ai_limit?: number | null };
+  const o = await admin.from('families').select('ai_day, ai_count').eq('id', fid).single();
+  return o.error ? null : o.data as { ai_day: string; ai_count: number; features?: Record<string, boolean>; ai_limit?: number | null };
+}
+/** Verbrauch pro Familie und Tag mitschreiben (Aufrufe, Tokens, Kosten in Mikro-Dollar). Fehler sind egal. */
+async function track(admin: any, fid: string, model: string, usage: any) {
+  try {
+    const i = (usage?.input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0) + (usage?.cache_read_input_tokens ?? 0), o = usage?.output_tokens ?? 0;
+    const p = PRICES.find(([re]) => re.test(model)) ?? PRICES[2];
+    await admin.rpc('ai_track', { fid, d: berlinDay(), tin: i, tout: o, micro: Math.round(i * p[1] + o * p[2]) });
+  } catch { /* egal */ }
 }
 
 // ---------- Vokabel-Schiedsrichter: kleines, schnelles Modell, eigenes Kontingent ----------
@@ -239,6 +260,8 @@ async function runJudge(body: any, userId: string, admin: any) {
   if (!word || !solution || !answer) return json({ error: 'bad_request' }, 400);
   const { data: mem } = await admin.from('members').select('family_id').eq('user_id', userId).limit(1);
   if (!mem?.length) return json({ error: 'not_member' }, 403);
+  const fam = await famFlags(admin, mem[0].family_id);
+  if (fam?.features?.ki === false || fam?.features?.vokabeln === false) return json({ error: 'disabled' }, 403);
   const key = mem[0].family_id + '|' + berlinDay();
   const n = judgeCount.get(key) ?? 0;
   if (n >= JUDGE_DAILY) return json({ error: 'daily_limit' }, 429);
@@ -250,6 +273,7 @@ Antworte nur mit JSON: {"ok": true|false, "note": "höchstens 12 Wörter, freund
   const client = new Anthropic({ apiKey: AI_KEY });
   try {
     const msg = await client.messages.create({ model: JUDGE_MODEL, max_tokens: 200, messages: [{ role: 'user', content: prompt }] } as any);
+    await track(admin, mem[0].family_id, msg.model ?? JUDGE_MODEL, msg.usage);
     const text = msg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
     return json({ text });
   } catch (e) {

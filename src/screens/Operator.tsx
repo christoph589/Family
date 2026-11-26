@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { OpFamily, currentFamilyId, signOut, switchFamily, opDelete, opEnter, opFamilies, opRename } from '../data/cloud';
+import { OpFamily, currentFamilyId, signOut, switchFamily, opDelete, opEnter, opFamilies, opRename, opSetFamily } from '../data/cloud';
+import { FEATURES } from '../data/flags';
 import { Popup } from '../ui/Popup';
 import { BRAND } from '../brand';
 import { Button } from '../ui/Button';
@@ -24,8 +25,14 @@ const STATUS: Record<Status, { label: string; fg: string; bg: string }> = {
   ruhend: { label: 'Ruhend', fg: '#b26b00', bg: '#fff1d6' },
   inaktiv: { label: 'Inaktiv', fg: '#6b7088', bg: '#eef0f8' },
 };
-const FEAT: Record<string, string> = { kalender: '📅', geld: '💶', lernen: '📚', essen: '🍽️', sync: '🔗' };
-const FEAT_NAME: Record<string, string> = { kalender: 'Kalender', geld: 'Geld', lernen: 'Lernen', essen: 'Essen', sync: 'Kalender-Sync' };
+const FEAT: Record<string, string> = Object.fromEntries(FEATURES.map(f => [f.key, f.icon]));
+const FEAT_NAME: Record<string, string> = Object.fromEntries(FEATURES.map(f => [f.key, f.name]));
+const PLANS: Record<string, { label: string; fg: string; bg: string }> = {
+  free: { label: 'Free', fg: '#6b7088', bg: '#eef0f8' }, pro: { label: 'Pro', fg: '#b26b00', bg: '#fff1d6' },
+  test: { label: 'Test', fg: '#0b7fa8', bg: '#dff3fb' }, intern: { label: 'Intern', fg: '#5b4cf0', bg: '#ecebff' },
+};
+const usd = (n?: number) => (n ? `${n < 0.01 ? '<0,01' : n.toFixed(2).replace('.', ',')} $` : '–');
+const offList = (f: OpFamily) => Object.entries(f.flags ?? {}).filter(([, v]) => v === false).map(([k]) => k);
 const days = (iso: string | null) => (iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : Infinity);
 const statusOf = (f: OpFamily): Status => (days(f.created_at) < 7 ? 'neu' : days(f.updated_at) < 7 ? 'aktiv' : days(f.updated_at) < 30 ? 'ruhend' : 'inaktiv');
 const AI_EUR = 0.02; // geschätzte Kosten pro KI-Aufruf (gemessen: 0,04 $ für die ersten Tests im Nov. 2026)
@@ -42,11 +49,12 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
   const [copied, setCopied] = useState(false);
   const [cur, setCur] = useState<string | null>(null);
   useEffect(() => { currentFamilyId().then(setCur, () => {}); }, []);
-  const [edit, setEdit] = useState<{ f: OpFamily; mode: 'menu' | 'rename' | 'delete'; text: string; err: string } | null>(null);
+  const [edit, setEdit] = useState<{ f: OpFamily; mode: 'menu' | 'rename' | 'delete' | 'flags'; text: string; err: string; flags?: Record<string, boolean>; plan?: string } | null>(null);
   const runEdit = async () => {
     if (!edit) return;
     try {
-      if (edit.mode === 'rename') await opRename(edit.f.id, edit.text);
+      if (edit.mode === 'flags') await opSetFamily(edit.f.id, edit.flags ?? {}, edit.plan ?? 'free', edit.text.trim() ? Number(edit.text) : null);
+      else if (edit.mode === 'rename') await opRename(edit.f.id, edit.text);
       else await opDelete(edit.f.id, edit.text);
       setEdit(null); load();
     } catch (e: any) { setEdit(x => x && { ...x, err: e.message }); }
@@ -56,6 +64,8 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
   const all = list ?? [];
   const shown = all.filter(f => (filter === 'alle' || statusOf(f) === filter) && f.name.toLowerCase().includes(q.trim().toLowerCase()));
   const aiToday = all.reduce((a, f) => a + f.ai_today, 0);
+  const real = all.some(f => f.usd30 !== undefined && f.usd30 !== null);
+  const sum = (k: 'usd_today' | 'usd7' | 'usd30' | 'ai7' | 'ai30') => all.reduce((a, f) => a + Number(f[k] ?? 0), 0);
   const invite = () => {
     const url = 'https://christoph589.github.io/Family/';
     try { (navigator as any).clipboard?.writeText(`Probier mal ${BRAND.name}, unseren Familienplaner: ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2500); } catch { /* egal */ }
@@ -69,6 +79,8 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
     <Button title={busy === f.id ? '…' : 'Öffnen →'} disabled={!!busy} style={{ paddingVertical: 8, paddingHorizontal: 14, minHeight: 0 }}
       onPress={() => { setBusy(f.id); opEnter(f.id).then(onEntered, e => { setErr(e.message); setBusy(''); }); }} />
   );
+  const PlanBadge = ({ p }: { p: string }) => <View style={{ alignSelf: 'flex-start', backgroundColor: PLANS[p]?.bg ?? C.surface2, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, marginTop: 2 }}><Text style={{ color: PLANS[p]?.fg ?? C.muted, fontWeight: '800', fontSize: 11 }}>{PLANS[p]?.label ?? p}</Text></View>;
+  const featText = (f: OpFamily) => { const off = offList(f); return [...(f.features ?? []).filter(x => !off.includes(x)).map(x => FEAT[x] ?? ''), ...(off.length ? [`🚫${off.length}`] : [])].join(' ') || '–'; };
   const Badge = ({ st }: { st: Status }) => <View style={{ alignSelf: 'flex-start', backgroundColor: STATUS[st].bg, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3 }}><Text style={{ color: STATUS[st].fg, fontWeight: '800', fontSize: 13 }}>{STATUS[st].label}</Text></View>;
   const COLS: [string, number, 'left' | 'right'][] = [['Familie', 2.2, 'left'], ['Status', 1, 'left'], ['Kinder · Geräte', 1.2, 'right'], ['Erledigt (7 T.)', 1.1, 'right'], ['Funktionen', 1.4, 'left'], ['KI heute', 0.8, 'right'], ['Zuletzt aktiv', 1.2, 'right'], ['', 1.7, 'right']];
 
@@ -102,7 +114,7 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
         {list && (
           <>
             <View style={[s.row, { gap: 12, alignItems: 'stretch' }]}>
-              {([['Familien', String(all.length)], ['Aktiv (7 Tage)', String(all.filter(f => days(f.updated_at) < 7).length)], ['Kinder', String(all.reduce((a, f) => a + f.children, 0))], ['KI heute', `${aiToday} · ≈ ${(aiToday * AI_EUR).toFixed(2).replace('.', ',')} €`], ['Kindergeräte', String(all.reduce((a, f) => a + f.kids, 0))]] as [string, string][]).map(([l, v]) => (
+              {([['Familien', String(all.length)], ['Aktiv (7 Tage)', String(all.filter(f => days(f.updated_at) < 7).length)], ['Kinder', String(all.reduce((a, f) => a + f.children, 0))], ['KI heute', real ? `${aiToday} · ${usd(sum('usd_today')) === '–' ? '0 $' : usd(sum('usd_today'))}` : `${aiToday} · ≈ ${(aiToday * AI_EUR).toFixed(2).replace('.', ',')} €`], ...(real ? [['KI 30 Tage', `${sum('ai30')} · ${usd(sum('usd30'))}`]] : []), ['Kindergeräte', String(all.reduce((a, f) => a + f.kids, 0))]] as [string, string][]).map(([l, v]) => (
                 <View key={l} style={[s.card, { flexGrow: 1, flexBasis: 150, gap: 2, padding: 16 }]}>
                   <Text style={s.label}>{l}</Text><Text style={{ fontSize: 24, fontWeight: '800', color: C.fg }}>{v}</Text>
                 </View>
@@ -129,13 +141,17 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
                       <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: C.accent, fontWeight: '800' }}>{f.name.replace(/^Familie\s+/i, '').slice(0, 2).toUpperCase()}</Text></View>
                       <View style={{ flexShrink: 1 }}>
                         <Text style={[s.text, { fontWeight: '800' }]} numberOfLines={1}>{f.name}</Text>
+                        {f.plan && f.plan !== 'free' ? <PlanBadge p={f.plan} /> : null}
                       </View>
                     </View>
                     <View style={{ flex: COLS[1][1] }}><Badge st={statusOf(f)} /></View>
                     <Text style={[s.text, { flex: COLS[2][1], textAlign: 'right' }]}>{f.children} · {f.kids}</Text>
                     <Text style={[s.text, { flex: COLS[3][1], textAlign: 'right', fontWeight: '700' }]}>{f.done7}</Text>
-                    <Text style={{ flex: COLS[4][1], fontSize: 18, paddingLeft: 16 }} accessibilityLabel={(f.features ?? []).map(x => FEAT_NAME[x]).join(', ') || 'keine'}>{(f.features ?? []).map(x => FEAT[x]).join(' ') || '–'}</Text>
-                    <Text style={[s.text, { flex: COLS[5][1], textAlign: 'right' }]}>{f.ai_today || '–'}</Text>
+                    <Text style={{ flex: COLS[4][1], fontSize: 18, paddingLeft: 16 }} accessibilityLabel={`Genutzt: ${(f.features ?? []).map(x => FEAT_NAME[x]).join(', ') || 'nichts'}. Aus: ${offList(f).map(x => FEAT_NAME[x]).join(', ') || 'nichts'}`}>{featText(f)}</Text>
+                    <View style={{ flex: COLS[5][1], alignItems: 'flex-end' }}>
+                      <Text style={s.text}>{f.ai_today || '–'}{f.ai_limit != null ? <Text style={s.muted}> / {f.ai_limit}</Text> : null}</Text>
+                      {real && !!f.ai30 && <Text style={[s.muted, { fontSize: 11 }]}>30 T.: {f.ai30} · {usd(f.usd30)}</Text>}
+                    </View>
                     <Text style={[s.muted, { flex: COLS[6][1], textAlign: 'right' }]}>{ago(f.updated_at)}</Text>
                     <View style={{ flex: COLS[7][1], alignItems: 'flex-end' }}>{help(f)}</View>
                   </View>
@@ -144,16 +160,16 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
             ) : shown.map(f => (
               <View key={f.id} style={[s.card, { gap: 8, padding: 16 }]}>
                 <View style={[s.row, { justifyContent: 'space-between' }]}>
-                  <Text style={[s.h2, { fontSize: 18, flexShrink: 1 }]}>{f.name}</Text><Badge st={statusOf(f)} />
+                  <Text style={[s.h2, { fontSize: 18, flexShrink: 1 }]}>{f.name}</Text><View style={[s.row, { gap: 6 }]}>{f.plan && f.plan !== 'free' ? <PlanBadge p={f.plan} /> : null}<Badge st={statusOf(f)} /></View>
                 </View>
-                <Text style={s.muted}>{f.children} Kinder · {f.kids} Kindergeräte · {f.done7} erledigt in 7 Tagen · KI heute {f.ai_today} · aktiv {ago(f.updated_at)}</Text>
+                <Text style={s.muted}>{f.children} Kinder · {f.kids} Kindergeräte · {f.done7} erledigt in 7 Tagen · KI heute {f.ai_today}{f.ai_limit != null ? `/${f.ai_limit}` : ''}{real && f.ai30 ? ` (30 T.: ${f.ai30} · ${usd(f.usd30)})` : ''} · aktiv {ago(f.updated_at)}</Text>
                 <View style={[s.row, { justifyContent: 'space-between' }]}>
-                  <Text style={{ fontSize: 18 }}>{(f.features ?? []).map(x => FEAT[x]).join(' ') || '–'}</Text>{help(f)}
+                  <Text style={{ fontSize: 18 }}>{featText(f)}</Text>{help(f)}
                 </View>
               </View>
             ))}
             {!shown.length && <Text style={s.muted}>Keine Familie passt zum Filter.</Text>}
-            <Text style={[s.muted, { fontSize: 12 }]}>Funktionen: 📅 Kalender · 💶 Geld · 📚 Lernen · 🍽️ Essen · 🔗 Kalender-Sync. KI-Kosten grob geschätzt mit {AI_EUR.toFixed(2).replace('.', ',')} € pro Aufruf.</Text>
+            <Text style={[s.muted, { fontSize: 12 }]}>Genutzte Funktionen: {FEATURES.map(x => `${x.icon} ${x.name.replace(/ \(.*\)/, '')}`).join(' · ')}. 🚫 = vom Operator ausgeschaltet. {real ? 'KI-Kosten echt aus den Tokens (Anthropic-Preise in US-Dollar).' : `KI-Kosten grob geschätzt mit ${AI_EUR.toFixed(2).replace('.', ',')} € pro Aufruf, echte Kosten nach fix-11 und neuem Server-Deploy.`}</Text>
           </>
         )}
       </ScrollView>
@@ -163,8 +179,38 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
             <Text style={s.h2}>{edit.f.name}</Text>
             {edit.mode === 'menu' && (
               <>
+                <Button ghost title="⚙️ Funktionen, Plan und KI-Limit" onPress={() => setEdit({ ...edit, mode: 'flags', flags: { ...(edit.f.flags ?? {}) }, plan: edit.f.plan ?? 'free', text: edit.f.ai_limit != null ? String(edit.f.ai_limit) : '' })} />
                 <Button ghost title="✏️ Umbenennen" onPress={() => setEdit({ ...edit, mode: 'rename', text: edit.f.name })} />
                 {edit.f.id !== cur && <Button ghost title="🗑️ Familie löschen" onPress={() => setEdit({ ...edit, mode: 'delete', text: '' })} />}
+              </>
+            )}
+            {edit.mode === 'flags' && (
+              <>
+                <Text style={s.label}>Funktionen</Text>
+                {FEATURES.map(ft => {
+                  const on = edit.flags?.[ft.key] !== false;
+                  return (
+                    <Pressable key={ft.key} accessibilityRole="switch" accessibilityState={{ checked: on }} onPress={() => setEdit({ ...edit, err: '', flags: { ...(edit.flags ?? {}), [ft.key]: !on } })}
+                      style={[s.row, { flexWrap: 'nowrap', justifyContent: 'space-between', paddingVertical: 4 }]}>
+                      <Text style={[s.text, { flex: 1, opacity: on ? 1 : 0.5 }]}>{ft.icon} {ft.name}</Text>
+                      <View style={{ width: 46, height: 28, borderRadius: 14, backgroundColor: on ? C.ok : C.line, padding: 3, alignItems: on ? 'flex-end' : 'flex-start' }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+                      </View>
+                    </Pressable>
+                  );
+                })}
+                <Text style={s.label}>Plan</Text>
+                <View style={[s.row, { gap: 6 }]}>
+                  {Object.entries(PLANS).map(([k, p]) => (
+                    <Pressable key={k} onPress={() => setEdit({ ...edit, plan: k, err: '' })} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99, backgroundColor: edit.plan === k ? p.fg : p.bg }}>
+                      <Text style={{ color: edit.plan === k ? '#fff' : p.fg, fontWeight: '800' }}>{p.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={s.label}>KI-Aufrufe pro Tag</Text>
+                <TextInput style={s.input} value={edit.text} onChangeText={x => setEdit({ ...edit, text: x.replace(/\D/g, '').slice(0, 4), err: '' })} placeholder="leer = Standard (30)" keyboardType="number-pad" />
+                <Text style={[s.muted, { fontSize: 12 }]}>Ausgeschaltete Bereiche verschwinden in der App der Familie beim nächsten Öffnen. KI und Vokabel-Prüfung sperrt zusätzlich der Server. Daten bleiben erhalten.</Text>
+                <Button title="Speichern" onPress={runEdit} />
               </>
             )}
             {edit.mode === 'rename' && (

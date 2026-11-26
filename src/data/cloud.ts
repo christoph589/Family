@@ -178,10 +178,11 @@ export function cloudStore(fid: string): DataStore {
 
 // Operator-Ansicht und Support-Zugang ------------------------------------------
 
-export interface OpFamily { id: string; name: string; created_at: string; parents: number; kids: number; children: number; updated_at: string | null; ai_today: number; support_until: string | null; mine: boolean; done7: number; features: string[] | null }
+export interface OpFamily { id: string; name: string; created_at: string; parents: number; kids: number; children: number; updated_at: string | null; ai_today: number; support_until: string | null; mine: boolean; done7: number; features: string[] | null;
+  flags?: Record<string, boolean> | null; plan?: string; ai_limit?: number | null; ai7?: number; ai30?: number; usd7?: number; usd30?: number; usd_today?: number }
 const rpcErr = (e: { message?: string } | null) => {
   const m = e?.message ?? '';
-  if (/Could not find the function|PGRST202|does not exist/i.test(m)) return new Error('Funktion fehlt in der Datenbank: bitte fix-08-operator-verwalten.sql im SQL Editor ausführen.');
+  if (/op_set_family/.test(m) || /Could not find the function|PGRST202|does not exist/i.test(m)) return new Error('Funktion fehlt in der Datenbank: bitte fix-11-operator-funktionen.sql im SQL Editor ausführen.');
   if (/not_operator/.test(m)) return new Error('Dieses Konto ist kein Operator.');
   if (/no_support_access/.test(m)) return new Error('Diese Familie hat den Support-Zugang nicht freigegeben.');
   if (/name_mismatch/.test(m)) return new Error('Der Name stimmt nicht genau.');
@@ -191,6 +192,15 @@ const rpcErr = (e: { message?: string } | null) => {
   if (/function .* does not exist|Could not find the function/i.test(m)) return new Error('Bitte zuerst das SQL „fix-07-operator“ in Supabase ausführen.');
   return friendly(e);
 };
+/** Schalter der Familie (vom Betreiber gesetzt). Leer, wenn die Spalte noch fehlt. */
+export async function familyFlags(fid: string): Promise<Record<string, boolean>> {
+  const { data, error } = await sb().from('families').select('features').eq('id', fid).single();
+  return error ? {} : ((data as { features?: Record<string, boolean> }).features ?? {});
+}
+export async function opSetFamily(fid: string, feats: Record<string, boolean>, plan: string, limit: number | null) {
+  const { error } = await sb().rpc('op_set_family', { fid, feats, new_plan: plan, new_limit: limit });
+  if (error) throw rpcErr(error);
+}
 export async function opFamilies(): Promise<OpFamily[]> {
   const { data, error } = await sb().rpc('op_families');
   if (error) throw rpcErr(error);

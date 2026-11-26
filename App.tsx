@@ -6,7 +6,8 @@ import { useUntisSync } from './src/data/untis';
 import { googleReturn } from './src/data/icloud';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { cloudEnabled, cloudStore, DeviceLink, getLink, leaveSupport, signOut, supportBack } from './src/data/cloud';
+import { cloudEnabled, cloudStore, DeviceLink, familyFlags, getLink, leaveSupport, signOut, supportBack } from './src/data/cloud';
+import { Feature, isOn, setFlags, useFlags } from './src/data/flags';
 import { FamilyProvider, useFamily } from './src/data/FamilyContext';
 import { Connect } from './src/screens/Connect';
 import { Landing } from './src/screens/Landing';
@@ -120,6 +121,19 @@ function Root() {
   const [section, setSection] = useState<Section>('familie');
   const [menu, setMenu] = useState(true); // Handy: erst Liste der Bereiche, dann ein Bereich
   const [askOut, setAskOut] = useState(false);
+  // Vom Betreiber geschaltete Funktionen: beim Start und beim Zurückkommen in die App neu holen
+  const flags = useFlags();
+  const fidForFlags = cloud?.link.familyId;
+  useEffect(() => {
+    if (!fidForFlags) { setFlags({}); return; }
+    const go = () => { familyFlags(fidForFlags).then(setFlags, () => {}); };
+    go();
+    if (typeof document === 'undefined') return;
+    const h = () => { if (document.visibilityState === 'visible') go(); };
+    document.addEventListener('visibilitychange', h);
+    return () => document.removeEventListener('visibilitychange', h);
+  }, [fidForFlags]);
+  useEffect(() => { if (['kalender', 'lernen', 'punkte', 'geld', 'essen'].includes(tab) && !isOn(tab as Feature, flags)) setTab('heute'); }, [flags, tab]);
   // Zurück von der Google-Kalender-Freigabe: nach der Eltern-PIN direkt zu Einstellungen › Kalender
   useEffect(() => { if (profile?.kind === 'eltern' && googleReturn) { setTab('aufgaben'); setSection('kalender'); setMenu(false); } }, [profile]);
   const { width: winW } = useWindowDimensions();
@@ -246,7 +260,7 @@ function Root() {
     { value: 'heute', label: 'Heute' }, { value: 'kalender', label: 'Kalender' },
     { value: 'lernen', label: 'Lernen', badge: sheetBadge }, { value: 'punkte', label: 'Punkte', badge: reqBadge }, { value: 'geld', label: 'Geld' }, { value: 'essen', label: 'Essen' },
   ];
-  const shownTabs = tabs.filter(t => !parent || admin || !['punkte', 'geld'].includes(t.value));
+  const shownTabs = tabs.filter(t => (!parent || admin || !['punkte', 'geld'].includes(t.value)) && (t.value === 'heute' || isOn(t.value as Feature, flags)));
   const wide = winW >= 700;
   const me = peopleOf(data).find(p => p.id === profile.id) ?? { name: 'Eltern', color: C.accent };
   const dateStr = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -288,7 +302,7 @@ function Root() {
         {tab === 'essen' && <Food who={me.name} meId={profile.id} parent={parent} />}
         {tab === 'aufgaben' && admin && !narrowSet && (
           <View style={[s.row, { gap: 8 }]} accessibilityRole="tablist">
-            {SETTINGS.filter(x => cloud || !x.cloud).map(x => (
+            {SETTINGS.filter(x => (cloud || !x.cloud) && !(x.value === 'geld' && !isOn('geld', flags))).map(x => (
               <Pressable key={x.value} accessibilityRole="tab" accessibilityState={{ selected: section === x.value }} onPress={() => setSection(x.value)}
                 style={[s.chip, { paddingHorizontal: 16, paddingVertical: 11, backgroundColor: section === x.value ? C.fg : C.surface }, section === x.value ? null : SHADOW.sm]}>
                 <Text style={{ fontWeight: '700', color: section === x.value ? '#fff' : C.fg }}>{x.label}</Text>
@@ -298,7 +312,7 @@ function Root() {
         )}
         {tab === 'aufgaben' && admin && narrowSet && menu && (
           <View style={[s.card, { padding: 0, gap: 0, overflow: 'hidden' }]}>
-            {SETTINGS.filter(x => cloud || !x.cloud).map((x, i) => (
+            {SETTINGS.filter(x => (cloud || !x.cloud) && !(x.value === 'geld' && !isOn('geld', flags))).map((x, i) => (
               <Pressable key={x.value} accessibilityRole="button" onPress={() => { setSection(x.value); setMenu(false); scroller.current?.scrollTo?.({ y: 0, animated: false }); }}
                 style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 18, gap: 12, backgroundColor: pressed ? C.surface2 : 'transparent', borderTopWidth: i ? 1 : 0, borderTopColor: C.line }]}>
                 <Text style={{ fontSize: 26 }}>{x.label.split(' ')[0]}</Text>
@@ -325,10 +339,10 @@ function Root() {
         {tab === 'aufgaben' && admin && showSec && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
         {tab === 'aufgaben' && admin && showSec && section === 'schule' && <Timetable childIds={childIds} parent />}
         {tab === 'aufgaben' && admin && showSec && section === 'schule' && <PackSetup />}
-        {tab === 'aufgaben' && admin && showSec && section === 'schule' && cloud && <UntisSetup />}
+        {tab === 'aufgaben' && admin && showSec && section === 'schule' && cloud && isOn('sync', flags) && <UntisSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'geld' && <MoneySettings />}
         {tab === 'aufgaben' && admin && showSec && section === 'ferien' && <Holiday />}
-        {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <IcloudSetup />}
+        {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && isOn('sync', flags) && <IcloudSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
         {tab === 'aufgaben' && admin && showSec && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
         {tab === 'aufgaben' && admin && cloud && (
