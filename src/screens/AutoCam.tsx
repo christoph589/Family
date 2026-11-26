@@ -83,6 +83,8 @@ export function AutoCam({ count, max, onShot, onClose }: { count: number; max: n
     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000', zIndex: 50 }}>
       {/* eslint-disable-next-line react/no-unknown-property */}
       <video ref={video} playsInline muted autoPlay style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' } as any} />
+      {/* Rahmen: Seite hier hinein. Wird grün, während sie ruhig liegt. */}
+      <View pointerEvents="none" style={{ position: 'absolute', top: '17%', bottom: '19%', left: '7%', right: '7%', borderWidth: 3, borderRadius: 18, borderColor: err ? 'transparent' : still > 0 ? C.ok : 'rgba(255,255,255,0.85)', borderStyle: still > 0 ? 'solid' : 'dashed' }} />
       {flash && <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', opacity: 0.7 }} />}
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 16, paddingTop: 50, backgroundColor: 'rgba(0,0,0,0.45)', gap: 6 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

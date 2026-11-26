@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
     <title>Famelio – der Familienplaner</title>
     <meta name="description" content="Famelio bringt Termine, Aufgaben, Taschengeld, Stundenplan und Essen der ganzen Familie auf einen Bildschirm. Läuft im Browser auf euren vorhandenen Geräten." />
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
@@ -25,11 +25,12 @@
       }
       /* iPhone als Home-Screen-App: Höhe an den echten Bildschirm koppeln, nicht an 100 % (das bleibt nach der Tastatur manchmal zu klein) */
       @supports (height: 100dvh) { html, body { height: 100dvh; } }
-      #root { position: fixed; top: 0; left: 0; right: 0; bottom: 0; height: auto; }
+      #root { position: fixed; top: env(safe-area-inset-top, 0px); left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); bottom: env(safe-area-inset-bottom, 0px); height: auto; }
     </style>
     <link rel="manifest" href="/Family/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/Family/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Famelio" />
     <meta name="theme-color" content="#5b4cf0" />
     <script>

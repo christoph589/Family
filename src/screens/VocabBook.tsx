@@ -160,7 +160,7 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
       {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI liest {prog || 'die Seiten'}. Pro Paket etwa eine Minute. Bereits Gelesenes ist schon gespeichert.</Text></View>}
       {!!msg && <Text style={{ color: /Nicht geklappt|Limit|nicht erreichbar/.test(msg) ? C.danger : C.ok, fontWeight: '700', fontSize: 13 }}>{msg}</Text>}
       <View style={s.row}>
-        {ai && !busy && <Button ghost title={book.entries.length ? '+ Weitere Seiten' : `Seiten auswählen (bis ${MAX_PAGES} auf einmal)`} onPress={importPages} />}
+        {ai && !busy && <Button ghost title={book.entries.length ? '+ Weitere Seiten' : '📸 Seiten scannen'} onPress={importPages} />}
         {busy && <Button ghost title="Abbrechen" onPress={() => ctl.current?.abort()} />}
         {!busy && <DeleteButton parent={parent} confirm="Buch wirklich löschen" onDelete={() => update(d => ({ ...d, vocabBooks: (d.vocabBooks ?? []).filter(b => b.id !== book.id) }))} />}
       </View>
