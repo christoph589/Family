@@ -77,7 +77,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
       {admin && <Grades />}
     </View>
   );
-  if (part === 'vokabeln') return <View style={{ gap: 16 }}>{tabs}<Vocab childIds={childIds} parent={parent} meId={meId} />{admin && <VocabReset />}</View>;
+  if (part === 'vokabeln') return <View style={{ gap: 16 }}>{tabs}<Vocab childIds={childIds} parent={parent} meId={meId} />{admin && <VocabReset childIds={childIds} />}</View>;
 
   return (
     <View style={{ gap: 16 }}>

@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { DeleteButton } from '../ui/DeleteButton';
+import { DeleteButton, parentPinOk } from '../ui/DeleteButton';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
@@ -459,24 +459,74 @@ function Done({ reward, right, total, bestCombo, givePoints, free, onAgain, onCl
   );
 }
 
-/** Eltern: alle Vokabeln, Bücher und Lernstände löschen, um neu anzufangen. Sterne und Punkte bleiben. */
-export function VocabReset() {
+/**
+ * Eltern setzen den Vokabeltrainer zurück, für alle oder ein Kind, mit Eltern-PIN.
+ * "Nur Level und Serie" lässt Kästen und Bücher stehen. "Alles" löscht auch Kästen, Bücher und Lernstand.
+ * Lernkarten zu Klassenarbeiten und Punkte bleiben immer.
+ */
+export function VocabReset({ childIds }: { childIds: string[] }) {
   const { data, update } = useFamily();
-  const [ask, setAsk] = useState(false);
-  const [done, setDone] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [who, setWho] = useState<string>('alle');
+  const [all, setAll] = useState(false);
+  const [pin, setPin] = useState('');
+  const [bad, setBad] = useState(false);
+  const [done, setDone] = useState('');
   if (!data) return null;
-  const n = (data.vocab ?? []).reduce((a, d) => a + d.cards.length, 0), books = (data.vocabBooks ?? []).length;
-  if (done) return <Text style={{ color: C.ok, fontWeight: '700', textAlign: 'center' }}>Vokabeln sind zurückgesetzt. Ihr könnt neu anfangen.</Text>;
-  if (!n && !books) return null;
+  const kids = data.children.filter(c => childIds.includes(c.id));
+  const targets = who === 'alle' ? kids : kids.filter(k => k.id === who);
+  const ids = targets.map(k => k.id);
+  const decks = (data.vocab ?? []).filter(d => ids.includes(d.childId) && !d.prepId);
+  const books = (data.vocabBooks ?? []).filter(b => ids.includes(b.childId));
+  const cards = decks.reduce((a, d) => a + d.cards.length, 0);
+  const close = () => { setOpen(false); setPin(''); setBad(false); };
+  const tryPin = (v: string) => {
+    setPin(v); setBad(false);
+    if (v.length < 4) return;
+    if (!parentPinOk(data, v)) { setBad(true); return; }
+    update(d => {
+      const stats = { ...(d.vocabStats ?? {}) };
+      ids.forEach(id => delete stats[id]);
+      if (!all) return { ...d, vocabStats: stats };
+      return { ...d, vocabStats: stats, vocab: (d.vocab ?? []).filter(x => x.prepId || !ids.includes(x.childId)), vocabBooks: (d.vocabBooks ?? []).filter(b => !ids.includes(b.childId)) };
+    });
+    setDone(`${targets.map(k => k.name).join(', ')}: ${all ? 'Vokabeln komplett zurückgesetzt' : 'Level und Serie auf Anfang'}.`);
+    close();
+  };
+  if (!open) return (
+    <View style={{ alignItems: 'center', gap: 4 }}>
+      <Pressable onPress={() => { setOpen(true); setDone(''); }} style={{ padding: 8 }}><Text style={{ color: C.muted, fontWeight: '700' }}>🔄 Vokabeln zurücksetzen</Text></Pressable>
+      {!!done && <Text style={{ color: C.ok, fontWeight: '700', fontSize: 13 }}>{done}</Text>}
+    </View>
+  );
+  const chip = (on: boolean) => [s.chip, { paddingVertical: 8, paddingHorizontal: 14, backgroundColor: on ? C.danger : C.surface2 }];
   return (
-    <View style={[s.card, { gap: 8, backgroundColor: C.surface2 }]}>
-      <Text style={[s.text, { fontWeight: '800' }]}>Neu anfangen</Text>
-      <Text style={[s.muted, { fontSize: 13 }]}>Löscht für alle Kinder {n} Vokabeln in {(data.vocab ?? []).length} Kästen{books ? ` und ${books} ${books === 1 ? 'Buch' : 'Bücher'}` : ''} samt Lernstand. Punkte und Sterne bleiben. Das lässt sich nicht rückgängig machen.</Text>
-      <View style={s.row}>
-        {ask
-          ? <><Button title="Ja, alles löschen" color={C.danger} onPress={() => { update(d => ({ ...d, vocab: [], vocabBooks: [], vocabStats: {} })); setDone(true); }} /><Button ghost title="Abbrechen" onPress={() => setAsk(false)} /></>
-          : <Button ghost title="Alle Vokabeln zurücksetzen" onPress={() => setAsk(true)} />}
+    <View style={[s.card, { gap: 10, borderWidth: 2, borderColor: C.danger }]}>
+      <Text style={s.h2}>Vokabeln zurücksetzen</Text>
+      <View style={[s.row, { gap: 6 }]}>
+        {[{ id: 'alle', name: 'Alle Kinder' }, ...kids].map(k => (
+          <Pressable key={k.id} onPress={() => setWho(k.id)} style={chip(who === k.id)}>
+            <Text style={{ fontWeight: '800', color: who === k.id ? '#fff' : C.fg }}>{k.name}</Text>
+          </Pressable>
+        ))}
       </View>
+      <Text style={s.text}>{targets.map(k => { const st = data.vocabStats?.[k.id]; return `${k.name}: Level ${levelOf(st?.total ?? 0).level}, ${liveStreak(data, k.id)} Tage`; }).join(' · ')}</Text>
+      <View style={[s.row, { gap: 6 }]}>
+        <Pressable onPress={() => setAll(false)} style={chip(!all)}><Text style={{ fontWeight: '800', color: !all ? '#fff' : C.fg }}>Nur Level und Serie</Text></Pressable>
+        <Pressable onPress={() => setAll(true)} style={chip(all)}><Text style={{ fontWeight: '800', color: all ? '#fff' : C.fg }}>Alles</Text></Pressable>
+      </View>
+      <Text style={[s.muted, { fontSize: 13 }]}>
+        {all
+          ? `Löscht Level, Serie, ${cards} Vokabeln in ${decks.length} ${decks.length === 1 ? 'Kasten' : 'Kästen'}${books.length ? ` und ${books.length} ${books.length === 1 ? 'Buch' : 'Bücher'}` : ''}.`
+          : 'Level und Serie fangen wieder bei 0 an. Vokabelkästen und Bücher bleiben.'}
+        {' '}Punkte und Lernkarten zu Klassenarbeiten bleiben. Das lässt sich nicht rückgängig machen. Zum Bestätigen die Eltern-PIN eingeben.
+      </Text>
+      <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}>
+        <TextInput style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="PIN"
+          accessibilityLabel="Eltern-PIN" onChangeText={x => tryPin(x.replace(/\D/g, '').slice(0, 4))} />
+        <Button ghost title="Abbrechen" onPress={close} />
+      </View>
+      {bad && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>PIN stimmt nicht.</Text>}
     </View>
   );
 }
