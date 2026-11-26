@@ -8,12 +8,13 @@ import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar } from '../ui/Avatar';
 import { driveText } from './Calendar';
 import { EmergencyCard } from './Emergency';
+import { WeatherCard } from '../ui/Weather';
 import { QuestStrip } from './Quest';
 import { shoppingFor, untilLabel } from './Food';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
 import { dueCount, liveStreak } from '../data/vocab';
 
-export function Today({ childIds, parent, meId }: { childIds: string[]; parent: boolean; meId?: string }) {
+export function Today({ childIds, parent, meId, admin }: { childIds: string[]; parent: boolean; meId?: string; admin?: boolean }) {
   const { data, update } = useFamily();
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
@@ -43,6 +44,7 @@ export function Today({ childIds, parent, meId }: { childIds: string[]; parent: 
           <Text style={[s.text, { fontWeight: '800', flex: 1 }]}>{holiday}. Schulaufgaben machen Pause.</Text>
         </View>
       )}
+      <WeatherCard admin={admin} />
       {events.length > 0 && (
         <View style={{ gap: 10 }}>
           <Text style={s.label}>Heute geplant</Text>
