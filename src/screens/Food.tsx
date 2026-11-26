@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PhotoImg } from '../ui/PhotoImg';
 import { Image, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
 import { FamilyData, MealSlot, Recipe, ShopItem } from '../data/types';
@@ -30,7 +31,7 @@ export function DishLine({ title, icon, photo, size = 20 }: { title: string; ico
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <DishTile title={title} photo={photo} style={{ width: size * 3.6, height: size * 2.7, borderRadius: 12 }} emojiSize={size * 1.4} />
-      <Text style={[s.text, { fontWeight: '800', fontSize: size, flex: 1 }]} numberOfLines={2}>{icon} {title}</Text>
+      <Clip style={[s.text, { fontWeight: '800', fontSize: size, flex: 1 }]} lines={2}>{icon} {title}</Clip>
     </View>
   );
 }
@@ -108,7 +109,7 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                       style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent' }}>
                       {m && dishPhoto(data, m.title) ? <PhotoImg uri={dishPhoto(data, m.title)} style={{ width: '100%', height: 54, borderRadius: 8, marginBottom: 4 }} resizeMode="cover" /> : null}
                       <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
-                      <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? '–' : '+')}</Text>
+                      <Clip lines={2} longPress style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? '–' : '+')}</Clip>
                       {m && <ConflictNote title={m.title} compact />}
                     </Pressable>
                   );

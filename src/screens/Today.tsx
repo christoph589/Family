@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { Button } from '../ui/Button';
 import { useFamily } from '../data/FamilyContext';
 import { confirm, eventsOn, holidayLabel, peopleOf, pointsOf, tasksFor, today, toggleByChild, undoConfirm, REPEAT_LABEL, schoolOn, schoolOff, setSchoolChange, gradeLabel, ageOf, birthdaysOn, giveBirthdayBonus, BIRTHDAY_BONUS } from '../data/logic';
@@ -58,13 +59,13 @@ export function Today({ childIds, parent, meId, admin }: { childIds: string[]; p
                     <Text style={{ color: '#fff', fontWeight: '800', fontSize: e.time ? 15 : 22 }}>{e.time ?? (e.icon || '📌')}</Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={[s.text, { fontWeight: '800' }]} numberOfLines={1}>{e.icon && e.time ? e.icon + ' ' : ''}{e.title}</Text>
+                    <Clip style={[s.text, { fontWeight: '800' }]} lines={1}>{e.icon && e.time ? e.icon + ' ' : ''}{e.title}</Clip>
                     <View style={[s.row, { gap: 4, marginTop: 4 }]}>
                       {ps.length ? ps.map(p => <Avatar key={p.id} name={p.name} color={p.color} photo={p.photo} size={20} />) : null}
                       <Text style={[s.muted, { fontSize: 12 }]} numberOfLines={1}>{ps.length ? ps.map(p => p.name).join(', ') : 'Ganze Familie'}{e.end ? ` · bis ${e.end}` : ''}</Text>
                     </View>
-                    {driveText(e, people) ? <Text style={[s.text, { fontSize: 13, fontWeight: '700', marginTop: 4 }]} numberOfLines={1}>{driveText(e, people)}</Text> : null}
-                    {e.note ? <Text style={[s.muted, { fontSize: 12, marginTop: 2 }]} numberOfLines={2}>📝 {e.note}</Text> : null}
+                    {driveText(e, people) ? <Clip style={[s.text, { fontSize: 13, fontWeight: '700', marginTop: 4 }]} lines={1}>{driveText(e, people)}</Clip> : null}
+                    {e.note ? <Clip style={[s.muted, { fontSize: 12, marginTop: 2 }]} lines={2}>📝 {e.note}</Clip> : null}
                   </View>
                 </View>
               );
@@ -161,7 +162,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
                 <Text style={{ color: st ? '#fff' : child.color + '55', fontWeight: '800', fontSize: st ? 22 : 20 }}>{st === 'bestaetigt' ? '✓' : st === 'wartet' ? '⏳' : task.icon ?? ''}</Text>
               </Pressable>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[s.text, { fontWeight: '700', textDecorationLine: st === 'bestaetigt' ? 'line-through' : 'none' }]} numberOfLines={2}>{task.title}</Text>
+                <Clip style={[s.text, { fontWeight: '700', textDecorationLine: st === 'bestaetigt' ? 'line-through' : 'none' }]} lines={2} longPress>{task.title}</Clip>
                 <Text style={[s.muted, { fontSize: 12, color: st === 'wartet' ? C.warn : C.muted, fontWeight: st === 'wartet' || late ? '700' : '400' }, late ? { color: C.danger } : null]}>{st === 'wartet' ? 'Wartet auf Eltern' : sp && st !== 'bestaetigt' ? `⭐ Sonderaufgabe${sp.until ? (late ? ' · Frist vorbei' : ` · bis ${sp.until.slice(8, 10)}.${sp.until.slice(5, 7)}.`) : ''}` : st === 'bestaetigt' ? (task.selfCheck ? 'Erledigt' : 'Bestätigt') : task.time ? TIME_LABEL[task.time] : task.repeat === 'einmal' ? 'Heute' : REPEAT_LABEL[task.repeat]}</Text>
               </View>
               {parent && st !== 'bestaetigt' ? (
@@ -224,7 +225,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
       <QuestStrip child={child} parent={parent} />
       {(() => {
         const lessons = (schoolOn(data!, child.id, date)?.lessons ?? []).filter(Boolean);
-        return lessons.length ? <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>📖 {lessons.join(' · ')}</Text> : null;
+        return lessons.length ? <Clip style={[s.muted, { fontSize: 13 }]} lines={2}>📖 {lessons.join(' · ')}</Clip> : null;
       })()}
       {(() => {
         const n = dueCount(data!, child.id), st = liveStreak(data!, child.id);

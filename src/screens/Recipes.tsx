@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DeleteButton } from '../ui/DeleteButton';
 import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
 import { FamilyData, MealSlot, Recipe } from '../data/types';
@@ -95,7 +96,7 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Text style={[s.text, { fontWeight: '800' }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}{r.ai && <Text style={{ fontSize: 12, color: C.accent }}>  ✨ KI-Idee</Text>}</Text>
                 <ConflictNote title={r.title} compact />
-                {r.ingredients.length > 0 && <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>{r.ingredients.join(', ')}</Text>}
+                {r.ingredients.length > 0 && <Clip style={[s.muted, { fontSize: 13 }]} lines={2}>{r.ingredients.join(', ')}</Clip>}
                 <Text style={[s.muted, { fontSize: 12 }]}>
                   {[by && `Vorschlag von ${by.name}`, last ? `zuletzt ${parse(last).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : 'noch nie im Plan'].filter(Boolean).join(' · ')}
                 </Text>

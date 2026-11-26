@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PhotoImg } from '../ui/PhotoImg';
 import { ActivityIndicator, Image, Modal, Pressable, SafeAreaView, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { examScore, finishCheck, selfBonus, EXAM_PREP_POINTS, setSheet, today, uid, understandingOf, UNDERSTANDING_LABEL } from '../data/logic';
 import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
@@ -195,7 +196,7 @@ export function ReviewSheets({ childIds }: { childIds: string[] }) {
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: on ? C.warnSoft : C.bg, borderRadius: 12, padding: 12 }}>
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: kid?.color ?? C.accent }} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[s.text, { fontWeight: '800', fontSize: 15 }]} numberOfLines={1}>{kid?.name}: {w.title}</Text>
+                  <Clip style={[s.text, { fontWeight: '800', fontSize: 15 }]} lines={1} longPress>{kid?.name}: {w.title}</Clip>
                   <Text style={[s.muted, { fontSize: 12 }]}>{kind} · {w.questions.length} Aufgaben</Text>
                 </View>
                 <Text style={{ color: C.accent, fontWeight: '800' }}>{on ? '▲' : 'Prüfen ›'}</Text>
@@ -407,7 +408,7 @@ export function DoneSheets({ childIds, exam }: { childIds: string[]; exam: boole
               style={[s.row, { flexWrap: 'nowrap', gap: 8, padding: 10, borderRadius: 12, backgroundColor: on ? C.accentSoft : C.bg }]}>
               <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: kid?.color ?? C.accent }} />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[s.text, { fontWeight: '700', fontSize: 14 }]} numberOfLines={1}>{w.title}</Text>
+                <Clip style={[s.text, { fontWeight: '700', fontSize: 14 }]} lines={1} longPress>{w.title}</Clip>
                 <Text style={[s.muted, { fontSize: 12 }]}>{kid?.name} · {day}{w.retryOf ? ' · Wiederholung' : ''}</Text>
               </View>
               {r ? <Text style={{ fontWeight: '800', fontSize: 12, color: r.note <= 2 ? C.ok : r.note >= 4 ? C.danger : C.warn }}>Note ca. {r.note}</Text> : w.understanding ? <UnderstandingChip u={w.understanding} /> : null}

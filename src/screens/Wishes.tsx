@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { cloudEnabled, currentFamilyId } from '../data/cloud';
 import { euro, uid } from '../data/logic';
@@ -73,8 +74,8 @@ function WishLine({ w, children, onPress }: { w: Wish; children?: React.ReactNod
       <Pressable onPress={onPress} disabled={!onPress} style={[s.row, { flexWrap: 'nowrap', gap: 10, alignItems: 'flex-start' }]} accessibilityRole={onPress ? 'button' : undefined}>
         {w.photo ? <PhotoImg uri={w.photo} style={{ width: 56, height: 42, borderRadius: 8 }} resizeMode="cover" /> : <Text style={{ fontSize: 28, width: 40, textAlign: 'center' }}>🎁</Text>}
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text style={[s.text, { fontWeight: '700', textDecorationLine: w.done ? 'line-through' : 'none' }]} numberOfLines={2}>{w.title}</Text>
-          {w.note ? <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>{w.note}</Text> : null}
+          <Clip style={[s.text, { fontWeight: '700', textDecorationLine: w.done ? 'line-through' : 'none' }]} lines={2} longPress>{w.title}</Clip>
+          {w.note ? <Clip style={[s.muted, { fontSize: 13 }]} lines={2} longPress>{w.note}</Clip> : null}
           <View style={[s.row, { gap: 8 }]}>
             <Stars value={w.prio} size={13} />
             {w.cents !== undefined && <Text style={{ fontSize: 13, fontWeight: '700', color: C.fg }}>ca. {euro(w.cents)}</Text>}

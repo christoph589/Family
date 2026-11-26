@@ -4,6 +4,7 @@ import { PhotoImg } from '../ui/PhotoImg';
 import { DeleteButton } from '../ui/DeleteButton';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { addPoints, currentGrade, examScore, finishCheck, regionOf, setSheet, today, uid, EXAM_PREP_POINTS } from '../data/logic';
 import { learnedShare, LEARN_GOAL, newCards } from '../data/vocab';
@@ -477,7 +478,7 @@ export function PaperScore({ sheet, onDone }: { sheet: Worksheet; onDone?: () =>
       {sheet.questions.map((q, i) => (
         <View key={i} style={{ gap: 4, paddingVertical: 6, borderTopWidth: i ? 1 : 0, borderTopColor: C.line }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={[s.text, { flex: 1, minWidth: 0, fontSize: 14 }]} numberOfLines={2}><Text style={{ fontWeight: '800' }}>{i + 1}. </Text>{sheet.exam?.skills[i] ?? q.q}</Text>
+          <Clip style={[s.text, { flex: 1, minWidth: 0, fontSize: 14 }]} lines={2}><Text style={{ fontWeight: '800' }}>{i + 1}. </Text>{sheet.exam?.skills[i] ?? q.q}</Clip>
           <Pressable accessibilityLabel={`Aufgabe ${i + 1} weniger`} onPress={() => set(i, (got[i] ?? pts[i]) - 0.5)} style={stepBtn}><Text style={stepTxt}>−</Text></Pressable>
           <Text style={{ width: 58, textAlign: 'center', fontWeight: '800', fontSize: 15, color: got[i] === null ? C.muted : C.fg }}>{got[i] === null ? '–' : fmtP(got[i]!)} / {pts[i]}</Text>
           <Pressable accessibilityLabel={`Aufgabe ${i + 1} mehr`} onPress={() => set(i, (got[i] ?? -0.5) + 0.5)} style={stepBtn}><Text style={stepTxt}>+</Text></Pressable>

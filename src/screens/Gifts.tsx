@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { euro, peopleOf, uid } from '../data/logic';
 import { daysUntil, giftsOf, Occ, parseEuro, yearPlan } from '../data/gifts';
@@ -76,7 +77,7 @@ export function Gifts({ meId }: { meId?: string }) {
             <Pressable key={o.key} onPress={() => setOpen(o.key)} accessibilityRole="button" accessibilityLabel={`${o.title} öffnen`}
               style={[s.row, { flexWrap: 'nowrap', backgroundColor: C.surface, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14 }]}>
               <Text style={{ fontSize: 20 }}>{o.icon}</Text>
-              <Text style={[s.text, { flex: 1, fontWeight: '700' }]} numberOfLines={1}>{o.title}</Text>
+              <Clip style={[s.text, { flex: 1, fontWeight: '700' }]} lines={1} longPress>{o.title}</Clip>
               <Text style={[s.muted, { fontSize: 13 }]}>{fmtDate(o.date)} · {when(n)}</Text>
               <Text style={{ color: C.accent, fontWeight: '800' }}>+</Text>
             </Pressable>
@@ -104,7 +105,7 @@ function OccCard({ o, gifts, days, meId, onRemoveOcc }: { o: Occ; gifts: Gift[];
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
         <Text style={{ fontSize: 26 }}>{o.icon}</Text>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[s.text, { fontWeight: '800', fontSize: 17 }]} numberOfLines={1}>{o.title}</Text>
+          <Clip style={[s.text, { fontWeight: '800', fontSize: 17 }]} lines={1}>{o.title}</Clip>
           <Text style={[s.muted, { fontSize: 13, color: days <= 14 ? C.danger : C.muted, fontWeight: days <= 14 ? '700' : '400' }]}>{fmtDate(o.date)} · {when(days)}</Text>
         </View>
         {sum > 0 && <Text style={{ fontWeight: '800', color: C.fg }}>{euro(sum)}</Text>}
@@ -118,7 +119,7 @@ function OccCard({ o, gifts, days, meId, onRemoveOcc }: { o: Occ; gifts: Gift[];
               {done && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
             </Pressable>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[s.text, { fontSize: 15, fontWeight: '700' }]} numberOfLines={2}>{g.title}</Text>
+              <Clip style={[s.text, { fontSize: 15, fontWeight: '700' }]} lines={2} longPress>{g.title}</Clip>
               <Text style={{ fontSize: 12, color: p?.color ?? C.muted, fontWeight: '700' }}>{p ? `für ${p.name}` : ''}{done ? <Text style={{ color: C.ok }}>{p ? ' · ' : ''}gekauft</Text> : null}</Text>
             </View>
             {g.cents !== undefined && <Text style={{ fontWeight: '700', color: C.fg }}>{euro(g.cents)}</Text>}

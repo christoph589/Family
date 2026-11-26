@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { contributeToPot, dissolvePot, pointsOf, potBalance, potShares, reservedOf, uid } from '../data/logic';
 import { Pot } from '../data/types';
@@ -55,7 +56,7 @@ function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: '#ffffffcc', fontSize: 12, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' }}>Gemeinsames Ziel</Text>
-            <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800', letterSpacing: -0.4 }} numberOfLines={2}>{pot.title}</Text>
+            <Clip style={{ color: '#fff', fontSize: 24, fontWeight: '800', letterSpacing: -0.4 }} lines={2}>{pot.title}</Clip>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>{bal}</Text>

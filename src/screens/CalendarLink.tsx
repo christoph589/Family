@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Clip } from '../ui/Clip';
 import { DeviceLink } from '../data/cloud';
 import { useFamily } from '../data/FamilyContext';
 import { calendarToken, feedStatus, icsUrl, loadFeed, reloadFeed } from '../data/feeds';
@@ -92,7 +93,7 @@ export function CalendarLink({ link }: { link: DeviceLink }) {
             <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: f.color }} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[s.text, { fontWeight: '700' }]} numberOfLines={1}>{f.icon ? f.icon + ' ' : ''}{f.name}{f.who ? ` · ${people.find(p => p.id === f.who)?.name ?? ''}` : ''}</Text>
-              <Text style={[s.muted, { fontSize: 12, color: st?.error ? C.danger : C.muted }]} numberOfLines={2}>{st?.error ?? (st ? `${st.events.length} Termine geladen` : 'lädt …')}</Text>
+              <Clip style={[s.muted, { fontSize: 12, color: st?.error ? C.danger : C.muted }]} lines={2}>{st?.error ?? (st ? `${st.events.length} Termine geladen` : 'lädt …')}</Clip>
             </View>
             <Pressable onPress={() => { reloadFeed(f.url).then(() => setTick(t => t + 1)); }}><Text style={{ color: C.accent, fontWeight: '700' }}>Neu laden</Text></Pressable>
             <Pressable onPress={() => setFeeds(fs => fs.filter(x => x.id !== f.id))}><Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text></Pressable>
