@@ -49,5 +49,6 @@ Abhilfe: Netzteil an eine Zeitschaltuhr oder smarte Steckdose, z. B. 2 mal tägl
 
 ## Probleme
 
-- **Weiße Seite:** Das Tablet ist vermutlich zu alt (Fire OS 5 oder älter). Die eingebaute Browser-Technik kann die App dann nicht ausführen. Modell und Fire-OS-Version melden.
+- **Weiße Seite mit „Loading…“ in Fully:** Das Web-Bundle wird seit Nov. 2026 für ältere WebViews übersetzt (scripts/legacy-web.js). Fully einmal ganz schließen, Cache leeren (Fully › Settings › Advanced Web Settings › Clear Cache) und neu laden.
+- **Weiße Seite trotzdem:** Das Tablet ist vermutlich zu alt (Fire OS 5 oder älter). Die eingebaute Browser-Technik kann die App dann nicht ausführen. Modell und Fire-OS-Version melden.
 - **Bildschirm geht trotzdem aus:** In Fully „Keep Screen On“ prüfen, und unter Fire-Einstellungen › Akku „Energiesparmodus“ ausschalten.
