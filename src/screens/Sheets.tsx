@@ -172,11 +172,33 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
 export function ReviewSheets({ childIds }: { childIds: string[] }) {
   const { data } = useFamily();
   const list = (data?.worksheets ?? []).filter(w => w.status === 'abgegeben' && childIds.includes(w.childId));
+  const [openId, setOpenId] = useState<string | null>(null);
   if (!list.length) return null;
+  const cur = list.length === 1 ? list[0].id : openId;
   return (
-    <View style={[s.card, { borderWidth: 2, borderColor: C.warn }]}>
-      <Text style={s.h2}>Zum Prüfen ({list.length})</Text>
-      {list.map(w => <ReviewOne key={w.id} sheet={w} name={data!.children.find(c => c.id === w.childId)?.name ?? ''} />)}
+    <View style={[s.card, { borderWidth: 2, borderColor: C.warn, gap: 10 }]}>
+      <Text style={s.h2}>✍️ Zum Prüfen ({list.length})</Text>
+      {list.map(w => {
+        const kid = data!.children.find(c => c.id === w.childId);
+        const on = cur === w.id;
+        const kind = w.exam ? (w.scan ? 'Probe-Arbeit · Foto' : 'Probe-Arbeit') : w.retryOf ? 'Nochmal üben' : 'Tagestest';
+        return (
+          <View key={w.id} style={{ gap: 8 }}>
+            {list.length > 1 && (
+              <Pressable onPress={() => setOpenId(on ? null : w.id)} accessibilityRole="button" accessibilityState={{ expanded: on }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: on ? C.warnSoft : C.bg, borderRadius: 12, padding: 12 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: kid?.color ?? C.accent }} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.text, { fontWeight: '800', fontSize: 15 }]} numberOfLines={1}>{kid?.name}: {w.title}</Text>
+                  <Text style={[s.muted, { fontSize: 12 }]}>{kind} · {w.questions.length} Aufgaben</Text>
+                </View>
+                <Text style={{ color: C.accent, fontWeight: '800' }}>{on ? '▲' : 'Prüfen ›'}</Text>
+              </Pressable>
+            )}
+            {on && <ReviewOne sheet={w} name={kid?.name ?? ''} />}
+          </View>
+        );
+      })}
     </View>
   );
 }

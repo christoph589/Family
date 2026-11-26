@@ -8,7 +8,7 @@ import { addPoints, currentGrade, examScore, finishCheck, regionOf, setSheet, to
 import { learnedShare, LEARN_GOAL, newCards } from '../data/vocab';
 import { DeckEditor, Practice } from './Vocab';
 import { STATES } from '../data/holidays';
-import { AI_ERROR, generateCards, generateExam, getSample, gradePaper } from '../ai/generate';
+import { AI_ERROR, generateCards, generateExam, getSample, gradePaper, spellCheckExam } from '../ai/generate';
 import { printHtml, sheetHtml } from '../ui/Print';
 import { CalEvent, EXAM_POINTS, ExamPrep, SCHOOL_TYPES, Worksheet } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
@@ -57,18 +57,98 @@ export async function scanAndGrade(sheet: Worksheet, photos: string[], who: { na
 export function ExamPrepScreen({ childIds, parent, meId, onSolve }: { childIds: string[]; parent: boolean; meId?: string; onSolve?: (sheetId: string) => void }) {
   const { data } = useFamily();
   const [adding, setAdding] = useState(false);
+  const [howto, setHowto] = useState(false);
+  const [showDone, setShowDone] = useState(false);
   if (!data) return null;
   const list = (data.exams ?? []).filter(e => childIds.includes(e.childId)).sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
+  // Erledigt: Note eingetragen oder mehr als 3 Tage vorbei
+  const isDone = (e: ExamPrep) => !!e.grade || (!!e.date && daysTo(e.date) < -3);
+  const active = list.filter(e => !isDone(e));
+  const done = list.filter(isDone).reverse();
   return (
     <View style={{ gap: 16 }}>
       <View style={[s.card, { gap: 8 }]}>
-        <Text style={s.h2}>📝 Klassenarbeit üben</Text>
-        <Text style={s.muted}>Alles hochladen, was drankommt: Heft, Arbeitsblätter, Buchseiten. Auch über mehrere Tage, bis zu {MAX} Fotos. So geht es: 1. Lernkarten aus den Unterlagen üben. 2. Wenn die meisten sitzen, gibt es eine Probe-Klassenarbeit auf dem Niveau von Klasse, Schulform und Bundesland. 3. Nach der echten Arbeit die Note eintragen.</Text>
+        <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
+          <Text style={[s.h2, { flex: 1 }]}>📝 Klassenarbeiten{active.length ? ` (${active.length})` : ''}</Text>
+          <Pressable onPress={() => setHowto(x => !x)} style={{ padding: 6 }}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>{howto ? 'Schließen' : 'So geht\'s'}</Text></Pressable>
+        </View>
+        {howto && <Text style={s.muted}>Alles hochladen, was drankommt: Heft, Arbeitsblätter, Buchseiten, auch über mehrere Tage, bis zu {MAX} Fotos. 1. Lernkarten aus den Unterlagen üben. 2. Wenn die meisten sitzen, gibt es eine Probe-Klassenarbeit auf dem Niveau von Klasse, Schulform und Bundesland. 3. Nach der echten Arbeit die Note eintragen.</Text>}
         {!adding && <Button title="+ Klassenarbeit anlegen" onPress={() => setAdding(true)} />}
       </View>
       {adding && <PrepForm childIds={childIds} meId={meId} onDone={() => setAdding(false)} />}
-      {list.map(e => <PrepCard key={e.id} prep={e} parent={parent} onSolve={onSolve} />)}
+      {active.map(e => <PrepCard key={e.id} prep={e} parent={parent} onSolve={onSolve} />)}
       {!list.length && !adding && <Text style={[s.muted, { textAlign: 'center' }]}>Noch keine Klassenarbeit angelegt.</Text>}
+      {done.length > 0 && (
+        <View style={[s.card, { gap: 8 }]}>
+          <Pressable onPress={() => setShowDone(x => !x)} style={[s.row, { justifyContent: 'space-between' }]}>
+            <Text style={[s.text, { fontWeight: '800' }]}>✓ Erledigt ({done.length})</Text>
+            <Text style={{ color: C.accent, fontWeight: '800' }}>{showDone ? '▲' : '▼'}</Text>
+          </Pressable>
+          {!showDone && done.slice(0, 3).map(e => {
+            const kid = data.children.find(c => c.id === e.childId);
+            return <Text key={e.id} style={[s.muted, { fontSize: 13 }]} numberOfLines={1}>{kid?.name} · {e.subject}: {e.title}{e.grade ? ` · Note ${e.grade}` : ''}</Text>;
+          })}
+        </View>
+      )}
+      {showDone && done.map(e => <PrepCard key={e.id} prep={e} parent={parent} onSolve={onSolve} />)}
+    </View>
+  );
+}
+
+const spellRunning = new Set<string>();
+/** Fragt einmal pro Klassenarbeit die KI nach Schreibfehlern in Fach und Thema. */
+function useSpellCheck(prep: ExamPrep) {
+  const { update } = useFamily();
+  useEffect(() => {
+    if (prep.spell || prep.grade || spellRunning.has(prep.id)) return;
+    spellRunning.add(prep.id);
+    spellCheckExam(prep.subject, prep.title)
+      .then(fix => update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, spell: fix ? { fix } : { done: true } } : e)) })))
+      .catch(() => { /* ohne KI kein Hinweis, später nochmal */ setTimeout(() => spellRunning.delete(prep.id), 60000); });
+  }, [prep.id, prep.spell]);
+}
+
+function FixHints({ prep, parent }: { prep: ExamPrep; parent: boolean }) {
+  const { update } = useFamily();
+  const [date, setDate] = useState('');
+  const fix = prep.spell && !prep.spell.done ? prep.spell.fix : undefined;
+  const noDate = !prep.date && !prep.grade;
+  if (!fix && !noDate) return null;
+  const set = (f: (e: ExamPrep) => ExamPrep) => update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? f(e) : e)) }));
+  function take() {
+    set(e => ({ ...e, subject: fix!.subject, title: fix!.title, spell: { done: true } }));
+    if (prep.eventId) update(x => ({ ...x, events: (x.events ?? []).map(v => (v.id === prep.eventId ? { ...v, title: `Klassenarbeit ${fix!.subject}`, note: fix!.title } : v)) }));
+  }
+  function saveDate() {
+    if (!date) return;
+    const ev: CalEvent = { id: uid(), title: `Klassenarbeit ${prep.subject}`, icon: '📝', date, who: [prep.childId], remind: -1, note: prep.title };
+    set(e => ({ ...e, date, eventId: ev.id }));
+    update(x => ({ ...x, events: [...(x.events ?? []), ev] }));
+  }
+  return (
+    <View style={{ marginHorizontal: 16, gap: 10 }}>
+      {fix && (
+        <View style={{ backgroundColor: '#fff7e0', borderRadius: 14, padding: 12, gap: 8 }}>
+          <Text style={[s.text, { fontWeight: '800' }]}>✏️ {parent ? 'Schreibweise prüfen' : 'Kleiner Tipp zur Schreibweise'}</Text>
+          <Text style={[s.text, { fontSize: 14 }]}>So schreibt man es richtig:</Text>
+          <Text style={[s.text, { fontWeight: '800', fontSize: 16 }]}>{fix.subject !== prep.subject ? `${fix.subject}: ` : ''}{fix.title}</Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>Vorher: {fix.subject !== prep.subject ? `${prep.subject}: ` : ''}{prep.title}</Text>
+          <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>
+            <Button title="Übernehmen" onPress={take} />
+            <Button title="Passt so" ghost onPress={() => set(e => ({ ...e, spell: { done: true } }))} />
+          </View>
+        </View>
+      )}
+      {noDate && (
+        <View style={{ backgroundColor: C.accentSoft, borderRadius: 14, padding: 12, gap: 8 }}>
+          <Text style={[s.text, { fontWeight: '800' }]}>📅 Wann wird die Arbeit geschrieben?</Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>Mit Datum gibt es den Countdown und einen Eintrag im Kalender.</Text>
+          <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>
+            <DateField value={date} onChange={setDate} label="Datum der Klassenarbeit" min={today()} />
+            <Button title="Speichern" onPress={saveDate} disabled={!date} />
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -146,6 +226,7 @@ function PrepForm({ childIds, meId, onDone }: { childIds: string[]; meId?: strin
 
 function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; onSolve?: (id: string) => void }) {
   const { data, update } = useFamily();
+  useSpellCheck(prep);
   const [ai, setAi] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -241,6 +322,8 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
           </View>
         )}
       </View>
+
+      <FixHints prep={prep} parent={parent} />
 
       {/* Fortschritt in drei Schritten */}
       <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 6 }}>

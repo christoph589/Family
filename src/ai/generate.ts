@@ -462,3 +462,13 @@ Schlüssel: 1 = Montag bis 5 = Freitag.`;
   const bells = (Array.isArray(res.bells) ? res.bells : []).map(b => time(String(b ?? ''))).slice(0, 12);
   return { plan: out, bells: bells.length && bells.every(Boolean) ? (bells as string[]) : undefined };
 }
+
+/** Prüft Fach und Thema einer Klassenarbeit auf Rechtschreibfehler. Gibt null zurück, wenn alles stimmt. */
+export async function spellCheckExam(subject: string, title: string): Promise<{ subject: string; title: string } | null> {
+  const sample = await getSample();
+  if (!sample?.json) return null;
+  const r = await sample.json<{ subject: string; title: string }>(
+    `Ein Schulkind hat Fach und Thema einer Klassenarbeit eingetippt. Korrigiere NUR Rechtschreibung, Getrennt-/Zusammenschreibung und Groß-/Kleinschreibung. Ändere keine Wörter inhaltlich, kürze nichts, ergänze nichts. Übliche Fach-Abkürzungen wie "Bio", "Mathe", "Reli", "Geo" bleiben so.\n\nFach: ${JSON.stringify(subject)}\nThema: ${JSON.stringify(title)}\n\nAntworte nur mit JSON: {"subject": "...", "title": "..."}`);
+  const fs = String(r?.subject ?? subject).trim() || subject, ft = String(r?.title ?? title).trim() || title;
+  return fs === subject && ft === title ? null : { subject: fs, title: ft };
+}

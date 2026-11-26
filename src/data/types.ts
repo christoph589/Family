@@ -125,7 +125,8 @@ export interface Worksheet {
 
 /** Klassenarbeit-Vorbereitung: alle Inhalte zum Thema, daraus macht die KI eine Probe-Arbeit. */
 export interface ExamPrep { id: string; childId: string; subject: string; title: string; date?: string; photos: string[]; createdAt: string; by?: string; eventId?: string;
-  /** Lernkarten-Stapel (VocabDeck mit prepId) */ deckId?: string; /** Eltern geben die Probe-Arbeit vor dem Lernen frei */ unlocked?: boolean; /** echte Note aus der Schule */ grade?: number }
+  /** Lernkarten-Stapel (VocabDeck mit prepId) */ deckId?: string; /** Eltern geben die Probe-Arbeit vor dem Lernen frei */ unlocked?: boolean; /** echte Note aus der Schule */ grade?: number;
+  /** KI-Rechtschreibhinweis zu Fach/Thema: fix = Vorschlag, done = vom Kind/Eltern entschieden */ spell?: { fix?: { subject: string; title: string }; done?: boolean } }
 export const SCHOOL_TYPES = ['Grundschule', 'Gymnasium', 'Realschule', 'Gesamtschule', 'Mittelschule', 'Oberschule', 'Förderschule', 'Andere'] as const;
 
 export interface CalEvent {
