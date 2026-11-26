@@ -53,6 +53,83 @@ async function fetchPublic(raw: string) {
   throw new Error('fetch_failed');
 }
 
+// ---------- Rezept per Link übernehmen (ohne KI) ----------
+// Liest das schema.org-Rezept (JSON-LD), das fast alle Rezeptseiten mitliefern: Name, Zutaten, Schritte, Bild.
+// Das Bild wird nur für die eigene Familie gespeichert (Privatgebrauch), die Quelle bleibt am Rezept vermerkt.
+
+async function fetchPage(raw: string, accept: string, max: number): Promise<{ bytes: Uint8Array; type: string; url: string }> {
+  let url = raw;
+  for (let i = 0; i < 5; i++) {
+    const p = new URL(url);
+    if (!['https:', 'http:'].includes(p.protocol) || !publicHost(p.hostname.toLowerCase())) throw new Error('host_not_allowed');
+    const r = await fetch(url, { headers: { accept, 'user-agent': 'Mozilla/5.0 (compatible; Famelio-Rezeptimport)', 'accept-language': 'de-DE,de;q=0.9' }, redirect: 'manual', signal: AbortSignal.timeout(12000) });
+    const loc = r.headers.get('location');
+    if (r.status >= 300 && r.status < 400 && loc) { url = new URL(loc, url).toString(); continue; }
+    if (!r.ok) throw new Error('fetch_failed');
+    const len = Number(r.headers.get('content-length') ?? 0);
+    if (len > max) throw new Error('too_big');
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    if (bytes.length > max) throw new Error('too_big');
+    return { bytes, type: r.headers.get('content-type') ?? '', url };
+  }
+  throw new Error('fetch_failed');
+}
+
+const toB64 = (b: Uint8Array) => { let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(s); };
+const unHtml = (t: string) => t.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/\s+/g, ' ').trim();
+
+function findRecipe(node: any): any {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) { for (const x of node) { const r = findRecipe(x); if (r) return r; } return null; }
+  const t = node['@type'];
+  if (t === 'Recipe' || (Array.isArray(t) && t.includes('Recipe'))) return node;
+  return findRecipe(node['@graph']) ?? findRecipe(node.mainEntity) ?? null;
+}
+function stepsOf(x: any): string[] {
+  if (!x) return [];
+  if (typeof x === 'string') return x.split(/\n+/).map(unHtml).filter(Boolean);
+  if (Array.isArray(x)) return x.flatMap(stepsOf);
+  if (x.itemListElement) return stepsOf(x.itemListElement);
+  if (x.text) return [unHtml(String(x.text))];
+  return [];
+}
+function imageOf(x: any): string | undefined {
+  if (!x) return undefined;
+  if (typeof x === 'string') return x;
+  if (Array.isArray(x)) return imageOf(x[0]);
+  return x.url ?? x.contentUrl;
+}
+
+async function recipeImport(body: any) {
+  let url = String(body.url ?? '').trim();
+  try { url = new URL(url).toString(); } catch { return json({ error: 'bad_url' }, 400); }
+  let page;
+  try { page = await fetchPage(url, 'text/html,application/xhtml+xml', 4_000_000); }
+  catch (e) { return json({ error: (e as Error).message === 'host_not_allowed' ? 'host_not_allowed' : 'fetch_failed' }, 400); }
+  const html = new TextDecoder().decode(page.bytes);
+  let rec: any = null;
+  for (const m of html.matchAll(/<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { rec = findRecipe(JSON.parse(m[1].trim())); } catch { /* nächster Block */ }
+    if (rec) break;
+  }
+  const meta = (prop: string) => new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i').exec(html)?.[1]
+    ?? new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i').exec(html)?.[1];
+  const title = unHtml(String(rec?.name ?? meta('og:title') ?? '')).slice(0, 80);
+  const ingredients = (Array.isArray(rec?.recipeIngredient) ? rec.recipeIngredient : []).map((x: unknown) => unHtml(String(x)).slice(0, 120)).filter(Boolean).slice(0, 60);
+  const steps = stepsOf(rec?.recipeInstructions).slice(0, 30).map((x, i) => `${i + 1}. ${x}`).join('\n').slice(0, 4000);
+  let image: string | undefined;
+  const imgUrl = imageOf(rec?.image) ?? meta('og:image');
+  if (imgUrl && body.withImage !== false) {
+    try {
+      const img = await fetchPage(new URL(imgUrl, page.url).toString(), 'image/jpeg,image/webp,image/png,image/*', 3_000_000);
+      const type = img.type.split(';')[0].trim();
+      if (/^image\/(jpeg|png|webp|gif)$/.test(type)) image = `data:${type};base64,${toB64(img.bytes)}`;
+    } catch { /* ohne Bild weiter */ }
+  }
+  if (!title && !ingredients.length) return json({ error: 'no_recipe' }, 422);
+  return json({ title, ingredients, steps, image, source: new URL(page.url).hostname.replace(/^www\./, ''), structured: !!rec });
+}
+
 // ---------- Export: Familientermine als iCal ----------
 
 type Ev = { id: string; title: string; date: string; time?: string; end?: string; who: string[]; weekly?: boolean; icon?: string };
@@ -1083,6 +1160,7 @@ if (typeof Deno !== 'undefined' && (Deno as any).serve) Deno.serve(async req => 
       if (String(body.action).startsWith('icloud_')) return await icloudAction(body, user.user.id, admin);
       if (String(body.action).startsWith('google_')) return await googleAction(body, user.user.id, admin);
       if (String(body.action).startsWith('untis_')) return await untisAction(body, user.user.id, admin);
+      if (body.action === 'recipe_import') return await recipeImport(body);
       if (body.action === 'import') {
         let url = String(body.url ?? '').trim().replace(/^webcals?:\/\//i, 'https://');
         try { url = new URL(url).toString(); } catch { return json({ error: 'bad_url' }, 400); }

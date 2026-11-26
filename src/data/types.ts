@@ -197,6 +197,10 @@ export interface FamilyData {
   meals?: Meal[];
   recipes?: Recipe[];
   shopping?: ShopItem[];
+  /** Essen: Unverträglichkeiten, Ernährungsweise und Abneigungen je Person (ID) */
+  diet?: Record<string, import('./food').Diet>;
+  /** Letzter KI-Wochenvorschlag je Woche (Montag), damit ein erneutes Öffnen nichts kostet */
+  mealIdeas?: { week: string; at: string; items: MealIdea[] };
   /** Jahr, in dem der Geburtstagsbonus vergeben wurde, je Kind */
   birthdayBonus?: Record<string, number>;
   topics?: Topic[];
@@ -250,7 +254,11 @@ export interface Recipe {
   /** Wer das Gericht vorgeschlagen hat (Person-ID) und wann */ by?: string; at?: string;
   /** Zubereitung als Text und Link zum Originalrezept */ steps?: string; link?: string;
   /** Foto des Gerichts, klein gerechnet (data-URL). Erscheint im Essensplan und an der Wand. */ photo?: string;
+  /** Neue Idee aus dem KI-Wochenvorschlag */ ai?: boolean;
+  /** Woher das Foto stammt, z. B. Website beim Import */ photoSrc?: string;
 }
+/** Ein Vorschlag der KI für einen Platz im Essensplan */
+export interface MealIdea { date: string; slot: MealSlot; title: string; isNew?: boolean; ingredients?: string[]; steps?: string; why?: string }
 export interface ShopItem {
   id: string; title: string; done: boolean; at: string; by?: string;
   /** Für wen (Personen-ID) */ forWho?: string;

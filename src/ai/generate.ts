@@ -351,7 +351,7 @@ Antworte nur mit JSON: {"cards":[{"unit":"Unit 1","front":"...","back":"..."}]}`
 }
 
 /** Rezept aus Fotos oder Screenshots (Kochbuch, Cookidoo, Webseite) abschreiben. */
-export async function extractRecipe(photos: string[], signal?: AbortSignal): Promise<{ title: string; ingredients: string[]; steps: string }> {
+export async function extractRecipe(photos: string[], signal?: AbortSignal): Promise<{ title: string; ingredients: string[]; steps: string; dish?: { img: number; box: [number, number, number, number] } }> {
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
@@ -362,12 +362,16 @@ Schreib es vollständig ab, nichts erfinden:
 - "title": Name des Gerichts
 - "ingredients": Zutaten mit Menge, eine pro Eintrag, z. B. "250 g Mehl"
 - "steps": Zubereitung als nummerierte Schritte, je Schritt eine Zeile. Thermomix-Angaben (Zeit, Temperatur, Stufe) übernehmen.
-Antworte nur mit JSON: {"title":"...","ingredients":["..."],"steps":"1. ...\\n2. ..."}`;
+- "dish": Falls auf einem Bild ein Foto des fertigen Gerichts zu sehen ist: {"img": Index des Bildes ab 0, "box": [links, oben, rechts, unten] als Anteile 0 bis 1}, eng um das Foto des Gerichts ohne Text und Ränder. Sonst null.
+Antworte nur mit JSON: {"title":"...","ingredients":["..."],"steps":"1. ...\\n2. ...","dish":null}`;
   const res = await sample.json<any>(prompt, { images, signal, cache: false });
   const ingredients = (Array.isArray(res?.ingredients) ? res.ingredients : []).map((x: unknown) => str(x, 120)).filter(Boolean).slice(0, 60);
   const title = str(res?.title, 80);
   if (!title && !ingredients.length) throw { code: 'invalid_json' };
-  return { title, ingredients, steps: str(res?.steps, 4000) };
+  const b = res?.dish?.box;
+  const okBox = Array.isArray(b) && b.length === 4 && b.every((x: unknown) => typeof x === 'number' && x >= 0 && x <= 1) && b[2] - b[0] > 0.15 && b[3] - b[1] > 0.08;
+  const img = Number(res?.dish?.img ?? 0);
+  return { title, ingredients, steps: str(res?.steps, 4000), dish: okBox && img >= 0 && img < images.length ? { img, box: b as [number, number, number, number] } : undefined };
 }
 
 export async function extractVocab(photos: string[], langHint: string, signal?: AbortSignal): Promise<ExtractedVocab> {
@@ -508,4 +512,51 @@ export async function judgeAnswer(word: string, solution: string, answer: string
   const timeout = new Promise<null>(ok => setTimeout(() => ok(null), 8000));
   const r = await Promise.race([req, timeout]);
   return r && typeof r.ok === 'boolean' ? { ok: r.ok, note: r.note ? String(r.note).slice(0, 120) : undefined } : null;
+}
+
+/**
+ * Wochenplan-Vorschlag: ein einziger KI-Aufruf für alle freien Plätze der Woche.
+ * Schickt nur Gerichtsnamen, Bewertungen und anonyme Unverträglichkeiten (keine Namen).
+ */
+export async function suggestWeek(input: {
+  slots: { date: string; slot: 'mittag' | 'abend' | 'fruehstueck'; weekday: string }[];
+  planned: string[];
+  recipes: { title: string; score: number; last?: string }[];
+  diet: string;
+  people: number;
+  wish?: string;
+}, signal?: AbortSignal): Promise<import('../data/types').MealIdea[]> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const fam = input.recipes.slice(0, 60).map(r => `- ${r.title}${r.score ? ` (Bewertung ${r.score > 0 ? '+' : ''}${r.score})` : ''}${r.last ? `, zuletzt ${r.last}` : ''}`).join('\n') || '(noch keine)';
+  const prompt = `Plane abwechslungsreiche Familienessen für ${input.people} Personen (Kinder dabei).
+Freie Plätze (nur diese füllen):
+${input.slots.map(x => `- ${x.date} (${x.weekday}) ${x.slot}`).join('\n')}
+Schon geplant diese Woche: ${input.planned.join(', ') || 'nichts'}
+
+Lieblingsgerichte der Familie (positive Bewertung = beliebt, negative = eher meiden):
+${fam}
+
+Einschränkungen (unbedingt einhalten, auch versteckte Zutaten):
+${input.diet || 'keine'}
+${input.wish ? `Wunsch der Eltern: ${input.wish.slice(0, 300)}\n` : ''}
+Regeln:
+- Etwa zwei Drittel aus den Lieblingsgerichten, der Rest neue, kindertaugliche Ideen (unter 45 Minuten, normale Supermarkt-Zutaten).
+- Abwechslung: nicht zweimal dieselbe Beilage hintereinander, höchstens 2× Nudeln, mindestens die Hälfte mit Gemüse, ein Fischgericht wenn die Einschränkungen es erlauben, mindestens ein vegetarischer Tag.
+- Mittags eher schnell und leicht, abends darf es aufwendiger sein.
+- Kein Gericht doppelt in der Woche. Lieblingsgerichte genau so schreiben wie in der Liste.
+- Bei neuen Ideen: Zutaten mit Menge für die Personenzahl und kurze Zubereitung in 3 bis 6 nummerierten Schritten.
+- "why": ein kurzer, freundlicher Grund (max. 8 Wörter), z. B. "Gemüse-Tag" oder "lange nicht gegessen".
+Antworte nur mit JSON: {"items":[{"date":"YYYY-MM-DD","slot":"abend","title":"...","isNew":false,"why":"..."},{"date":"...","slot":"mittag","title":"...","isNew":true,"ingredients":["400 g ..."],"steps":"1. ...\\n2. ...","why":"..."}]}`;
+  const res = await sample.json<any>(prompt, { signal, cache: false });
+  const ok = new Set(input.slots.map(x => x.date + x.slot));
+  const items = (Array.isArray(res?.items) ? res.items : []).map((x: any) => ({
+    date: str(x?.date, 10), slot: (['mittag', 'abend', 'fruehstueck'].includes(x?.slot) ? x.slot : 'abend') as 'mittag' | 'abend' | 'fruehstueck',
+    title: str(x?.title, 80), isNew: !!x?.isNew,
+    ingredients: x?.isNew && Array.isArray(x?.ingredients) ? x.ingredients.map((y: unknown) => str(y, 120)).filter(Boolean).slice(0, 30) : undefined,
+    steps: x?.isNew ? str(x?.steps, 2000) || undefined : undefined,
+    why: str(x?.why, 80) || undefined,
+  })).filter((x: { date: string; slot: string; title: string }) => x.title && ok.has(x.date + x.slot));
+  if (!items.length) throw { code: 'invalid_json' };
+  return items;
 }
