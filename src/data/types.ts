@@ -210,6 +210,7 @@ export interface Recipe {
   votes?: Record<string, number>;
   /** Wer das Gericht vorgeschlagen hat (Person-ID) und wann */ by?: string; at?: string;
   /** Zubereitung als Text und Link zum Originalrezept */ steps?: string; link?: string;
+  /** Foto des Gerichts, klein gerechnet (data-URL). Erscheint im Essensplan und an der Wand. */ photo?: string;
 }
 export interface ShopItem {
   id: string; title: string; done: boolean; at: string; by?: string;

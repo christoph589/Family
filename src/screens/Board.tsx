@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react';
 import { DeleteButton } from '../ui/DeleteButton';
 import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
-import { potBalance, potShares, birthdaysOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today } from '../data/logic';
+import { potBalance, potShares, birthdaysOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today, toggleByChild } from '../data/logic';
 import { TIME_ORDER } from '../data/templates';
 const TIME_ICON: Record<string, string> = { morgens: ' 🌅', mittags: ' ☀️', abends: ' 🌙' };
-import { Child, FamilyData } from '../data/types';
+import { Child, FamilyData, Task } from '../data/types';
 import { Button } from '../ui/Button';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf, matchesPeople } from '../ui/CalViews';
 import { EventForm, IcloudForm } from './Calendar';
 import { eventTarget, icloudSave } from '../data/icloud';
-import { MealPlan, mealsOn, Shopping, shoppingFor, untilLabel } from './Food';
+import { DishLine, dishPhoto, MealPlan, mealsOn, Shopping, shoppingFor, untilLabel } from './Food';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Popup } from '../ui/Popup';
 import { C, grad, s, SHADOW } from '../ui/theme';
@@ -29,6 +29,71 @@ function hardReload() {
 }
 const BUILD = process.env.EXPO_PUBLIC_BUILD ?? '';
 
+type WallView = 'zentral' | 'bad';
+const urlView = (): WallView | null => {
+  if (typeof location === 'undefined') return null;
+  const v = new URLSearchParams(location.search).get('wand');
+  return v === 'bad' ? 'bad' : v === 'zentral' ? 'zentral' : null;
+};
+const PART_LABEL: Record<string, string> = { morgens: '🌅 Morgens', mittags: '☀️ Mittags', abends: '🌙 Abends' };
+const partOf = (d: Date) => (d.getHours() < 11 ? 'morgens' : d.getHours() < 16 ? 'mittags' : 'abends');
+
+/** Bad-Ansicht: nur die Aufgaben der Kinder, groß und zum Abhaken. Was gerade dran ist (morgens/abends), steht oben. */
+function BathBoard({ data, date, now, controls, toggle, onTouch }: { data: FamilyData; date: string; now: Date; controls: React.ReactNode; toggle: (t: Task) => void; onTouch: () => void }) {
+  const { width } = useWindowDimensions();
+  const part = partOf(now);
+  return (
+    <ScrollView onTouchStart={onTouch} style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: width >= 700 ? 24 : 14, gap: 16 }}>
+      <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center', flexWrap: 'nowrap' }]}>
+        <View style={{ flexShrink: 1 }}>
+          <Text style={{ fontSize: 44, fontWeight: '800', color: C.fg, lineHeight: 48 }}>{now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</Text>
+          <Text style={{ fontSize: 18, color: C.muted, fontWeight: '700' }}>{now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })} · {PART_LABEL[part]}</Text>
+          {!!BUILD && <Text style={{ fontSize: 11, color: C.muted, opacity: 0.6 }}>Stand {BUILD}</Text>}
+        </View>
+        {controls}
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+        {data.children.map(c => <BathColumn key={c.id} data={data} child={c} date={date} part={part} toggle={toggle} />)}
+      </View>
+      <Text style={[s.muted, { textAlign: 'center', fontSize: 12 }]}>Antippen zum Abhaken. Mama oder Papa bestätigen, dann gibt es die Punkte.</Text>
+    </ScrollView>
+  );
+}
+
+function BathColumn({ data, child, date, part, toggle }: { data: FamilyData; child: Child; date: string; part: string; toggle: (t: Task) => void }) {
+  const items = tasksFor(data, child.id, date);
+  // Jetzt dran: passende Tageszeit und Aufgaben ohne Tageszeit. Danach Liegengebliebenes, zuletzt Späteres.
+  const rank = (t?: string) => (!t || t === part ? 0 : TIME_ORDER[t] < TIME_ORDER[part] ? 1 : 2);
+  const sorted = [...items].sort((a, b) => rank(a.task.time) - rank(b.task.time) || TIME_ORDER[a.task.time ?? ''] - TIME_ORDER[b.task.time ?? '']);
+  const done = items.filter(i => i.completion).length;
+  const now = sorted.filter(i => rank(i.task.time) === 0);
+  const allNowDone = now.length > 0 && now.every(i => i.completion);
+  return (
+    <View style={[s.card, { flexGrow: 1, flexBasis: 280, gap: 10, borderTopWidth: 6, borderTopColor: child.color }]}>
+      <PersonHead name={child.name} color={child.color} photo={child.photo} value={`${done}/${items.length}`} />
+      {!items.length && <Text style={s.muted}>Heute nichts zu tun 🎈</Text>}
+      {allNowDone && <Text style={{ fontSize: 18, fontWeight: '800', color: C.ok }}>🎉 Alles für jetzt erledigt!</Text>}
+      {sorted.map(({ task, completion }) => {
+        const later = rank(task.time) === 2;
+        const ok = completion?.status === 'bestaetigt';
+        return (
+          <Pressable key={task.id} accessibilityRole="checkbox" accessibilityState={{ checked: !!completion }} disabled={ok} onPress={() => toggle(task)}
+            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingHorizontal: 12, borderRadius: 16,
+              backgroundColor: completion ? child.color + '22' : C.bg, opacity: later && !completion ? 0.45 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
+            <View style={{ width: 34, height: 34, borderRadius: 10, borderWidth: 3, borderColor: child.color, backgroundColor: completion ? child.color : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+              {completion && <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18 }}>✓</Text>}
+            </View>
+            <Text style={{ flex: 1, fontSize: 19, fontWeight: '700', color: C.fg, textDecorationLine: completion ? 'line-through' : 'none' }} numberOfLines={2}>
+              {task.icon ? task.icon + ' ' : ''}{task.title}
+            </Text>
+            <Text style={{ fontSize: 13, color: completion && !ok ? C.warn : C.muted, fontWeight: '700' }}>{completion && !ok ? 'wartet' : TIME_ICON[task.time ?? '']?.trim() ?? ''}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 /** Wandansicht: nur lesen, für ein Tablet an der Wand. Aktualisiert sich selbst. */
 export function Board({ onExit }: { onExit: () => void }) {
   const { data, update } = useFamily();
@@ -45,6 +110,10 @@ export function Board({ onExit }: { onExit: () => void }) {
   const [icAdd, setIcAdd] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [pane, setPaneState] = useState<Pane>('kalender');
+  // Welche Wandansicht dieses Gerät zeigt: ?wand=bad in der Adresse gewinnt, sonst die gemerkte Wahl
+  const [view, setViewState] = useState<WallView>(urlView() ?? 'zentral');
+  const setView = (v: WallView) => { setViewState(v); AsyncStorage.setItem('familienplaner:wallView', v).catch(() => {}); };
+  useEffect(() => { if (!urlView()) AsyncStorage.getItem('familienplaner:wallView').then(v => v === 'bad' && setViewState('bad'), () => {}); }, []);
   const setPane = (p: Pane) => { setPaneState(p); AsyncStorage.setItem('familienplaner:boardPane', p).catch(() => {}); };
   // Pro Gerät: Kinder-Spalten, Punkte und gemeinsames Ziel ausblenden, dann steht der Kalender oben
   const [kids, setKidsState] = useState(true);
@@ -75,6 +144,32 @@ export function Board({ onExit }: { onExit: () => void }) {
   const people = peopleOf(data);
   const holiday = holidayLabel(data, date);
   const open = (data.shopping ?? []).filter(i => !i.done).length;
+  const controls = (
+    <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}>
+      {!ask && <Pressable accessibilityRole="button" accessibilityLabel={view === 'bad' ? 'Zur großen Wandansicht' : 'Zur Bad-Ansicht'} onPress={() => setView(view === 'bad' ? 'zentral' : 'bad')}
+        style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.55 }}>
+        <Text style={{ fontSize: 22 }}>{view === 'bad' ? '🏠' : '🛁'}</Text>
+      </Pressable>}
+          {!ask && <Pressable accessibilityRole="button" accessibilityLabel="Neu laden" onPress={hardReload}
+              style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 22 }}>🔄</Text>
+            </Pressable>}
+          {!ask ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Wandansicht beenden (Eltern-PIN)" onPress={() => setAsk(true)}
+              style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.55 }}>
+              <Text style={{ fontSize: 20 }}>⚙️</Text>
+            </Pressable>
+          ) : (
+            <View style={[s.row, { flexWrap: 'nowrap' }]}>
+              <TextInput autoFocus style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="PIN"
+                onChangeText={t => { const v = t.replace(/\D/g, '').slice(0, 4); setPin(v); if (v === data.family.parentPin) { setAsk(false); setPin(''); onExit(); } }} />
+              <Button ghost title="✕" onPress={() => { setAsk(false); setPin(''); }} />
+            </View>
+          )}
+    </View>
+  );
+
+  if (view === 'bad') return <BathBoard data={data} date={date} now={now} controls={controls} onTouch={() => setTouched(x => x + 1)} toggle={task => update(d => toggleByChild(d, task, date))} />;
 
   return (
     <ScrollView onTouchStart={() => setTouched(x => x + 1)} style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={{ padding: wide ? 24 : 16, gap: 16, flexGrow: 1 }}>
@@ -113,22 +208,7 @@ export function Board({ onExit }: { onExit: () => void }) {
             );
           })}
         </View>
-        {!ask && <Pressable accessibilityRole="button" accessibilityLabel="Neu laden" onPress={hardReload}
-            style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 22 }}>🔄</Text>
-          </Pressable>}
-        {!ask ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Wandansicht beenden (Eltern-PIN)" onPress={() => setAsk(true)}
-            style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.55 }}>
-            <Text style={{ fontSize: 20 }}>⚙️</Text>
-          </Pressable>
-        ) : (
-          <View style={[s.row, { flexWrap: 'nowrap' }]}>
-            <TextInput autoFocus style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="PIN"
-              onChangeText={t => { const v = t.replace(/\D/g, '').slice(0, 4); setPin(v); if (v === data.family.parentPin) { setAsk(false); setPin(''); onExit(); } }} />
-            <Button ghost title="✕" onPress={() => { setAsk(false); setPin(''); }} />
-          </View>
-        )}
+        {controls}
       </View>
 
       {birthdaysOn(data, date).map(({ child, age }) => (
@@ -148,7 +228,7 @@ export function Board({ onExit }: { onExit: () => void }) {
             <View style={[s.card, { flex: 1, backgroundColor: '#fff2e0' }]}>
               <Text style={s.label}>Heute gibt es</Text>
               {mealsOn(data, date).length
-                ? mealsOn(data, date).sort((a, b) => a.slot.localeCompare(b.slot) * -1).map(m => <Text key={m.id} style={[s.text, { fontWeight: '800', fontSize: 20 }]}>{m.slot === 'mittag' ? '☀️' : m.slot === 'abend' ? '🌙' : '🥣'} {m.title}</Text>)
+                ? mealsOn(data, date).sort((a, b) => a.slot.localeCompare(b.slot) * -1).map(m => <DishLine key={m.id} title={m.title} photo={dishPhoto(data, m.title)} icon={m.slot === 'mittag' ? '☀️' : m.slot === 'abend' ? '🌙' : '🥣'} />)
                 : <Text style={s.muted}>Noch nichts geplant</Text>}
             </View>
             <View style={[s.card, { flex: 1 }]}>
@@ -164,7 +244,7 @@ export function Board({ onExit }: { onExit: () => void }) {
           {mealsOn(data, date).length > 0 && (
             <View style={{ backgroundColor: '#fff2e0', borderRadius: 10, padding: 10, gap: 2 }}>
               <Text style={s.label}>Heute gibt es</Text>
-              {mealsOn(data, date).sort((a, b) => a.slot.localeCompare(b.slot) * -1).map(m => <Text key={m.id} style={[s.text, { fontWeight: '700' }]}>{m.slot === 'mittag' ? '☀️' : m.slot === 'abend' ? '🌙' : '🥣'} {m.title}</Text>)}
+              {mealsOn(data, date).sort((a, b) => a.slot.localeCompare(b.slot) * -1).map(m => <DishLine key={m.id} size={16} title={m.title} photo={dishPhoto(data, m.title)} icon={m.slot === 'mittag' ? '☀️' : m.slot === 'abend' ? '🌙' : '🥣'} />)}
             </View>
           )}
           {(data.shopping ?? []).some(i => !i.done) && <Text style={s.muted}>🛒 {(data.shopping ?? []).filter(i => !i.done).length} Sachen auf der Einkaufsliste</Text>}

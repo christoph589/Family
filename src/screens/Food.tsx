@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { Image, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
 import { FamilyData, MealSlot, Recipe, ShopItem } from '../data/types';
@@ -16,6 +18,30 @@ const SLOTS: { value: MealSlot; label: string; icon: string }[] = [
 const norm = (t: string) => t.trim().toLowerCase();
 
 export function mealsOn(d: FamilyData, date: string) { return (d.meals ?? []).filter(m => m.date === date); }
+/** Foto zum Gericht: hängt am Lieblingsrezept mit gleichem Namen, gilt also für jedes Mal, wenn es das gibt. */
+export const dishPhoto = (d: FamilyData, title: string) => (d.recipes ?? []).find(r => norm(r.title) === norm(title))?.photo;
+
+/** Foto auswählen und auf ca. 480 px klein rechnen (etwa 30 KB), damit die Familiendaten schlank bleiben. */
+export async function pickDishPhoto(): Promise<string | null> {
+  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsEditing: true, aspect: [4, 3] });
+  if (res.canceled || !res.assets.length) return null;
+  const a = res.assets[0];
+  const ctx = ImageManipulator.manipulate(a.uri);
+  if (a.width > 480) ctx.resize({ width: 480 });
+  const img = await ctx.renderAsync();
+  const out = await img.saveAsync({ compress: 0.6, format: SaveFormat.JPEG, base64: true });
+  return out.base64 ? `data:image/jpeg;base64,${out.base64}` : out.uri;
+}
+
+/** Gericht mit Foto (falls vorhanden) für die Wand und den Plan */
+export function DishLine({ title, icon, photo, size = 20 }: { title: string; icon: string; photo?: string; size?: number }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      {photo ? <Image source={{ uri: photo }} style={{ width: size * 3.6, height: size * 2.7, borderRadius: 12 }} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
+      <Text style={[s.text, { fontWeight: '800', fontSize: size, flex: 1 }]} numberOfLines={2}>{icon} {title}</Text>
+    </View>
+  );
+}
 
 /** Zutaten auf die Einkaufsliste, ohne doppelte offene Einträge */
 export function addToShopping(d: FamilyData, items: string[], by?: string): FamilyData {
@@ -81,6 +107,7 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                   return (
                     <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
                       style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent' }}>
+                      {m && dishPhoto(data, m.title) ? <Image source={{ uri: dishPhoto(data, m.title) }} style={{ width: '100%', height: 54, borderRadius: 8, marginBottom: 4 }} resizeMode="cover" /> : null}
                       <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
                       <Text numberOfLines={2} style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? '–' : '+')}</Text>
                     </Pressable>
@@ -102,6 +129,7 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                 return (
                   <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
                     style={{ backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, padding: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent', borderStyle: m ? 'solid' : 'dashed' }}>
+                    {m && dishPhoto(data, m.title) ? <Image source={{ uri: dishPhoto(data, m.title) }} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 8, marginBottom: 6 }} resizeMode="cover" /> : null}
                     <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
                     <Text style={{ fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? 'noch offen' : '+ eintragen')}</Text>
                   </Pressable>
@@ -137,6 +165,8 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
   const [title, setTitle] = useState(existing?.title ?? '');
   const known = data?.recipes?.find(r => norm(r.title) === norm(title));
   const [ingredients, setIngredients] = useState((existing && data?.recipes?.find(r => norm(r.title) === norm(existing.title))?.ingredients.join(', ')) ?? '');
+  const [photo, setPhoto] = useState<string | undefined>(existing ? dishPhoto(data!, existing.title) : undefined);
+  const [photoBusy, setPhotoBusy] = useState(false);
   if (!data) return null;
   const favs = [...(data.recipes ?? [])].sort((a, b) => recipeScore(b) - recipeScore(a) || countUses(data, b) - countUses(data, a)).slice(0, 12);
   const save = () => {
@@ -148,7 +178,7 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
       let recipes = d.recipes ?? [];
       if (t) {
         const r = recipes.find(x => norm(x.title) === norm(t));
-        recipes = r ? recipes.map(x => (x.id === r.id ? { ...x, ingredients: ing.length ? ing : x.ingredients } : x)) : [...recipes, { id: uid(), title: t, ingredients: ing } as Recipe];
+        recipes = r ? recipes.map(x => (x.id === r.id ? { ...x, ingredients: ing.length ? ing : x.ingredients, photo } : x)) : [...recipes, { id: uid(), title: t, ingredients: ing, photo } as Recipe];
       }
       return { ...d, meals, recipes };
     });
@@ -160,16 +190,23 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
       {favs.length > 0 && (
         <View style={[s.row, { gap: 6 }]}>
           {favs.map(r => (
-            <Pressable key={r.id} onPress={() => { setTitle(r.title); setIngredients(r.ingredients.join(', ')); }}
+            <Pressable key={r.id} onPress={() => { setTitle(r.title); setIngredients(r.ingredients.join(', ')); setPhoto(r.photo); }}
               style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: C.accent, backgroundColor: norm(r.title) === norm(title) ? C.accent : C.surface }}>
               <Text style={{ color: norm(r.title) === norm(title) ? '#fff' : C.fg, fontWeight: '700' }}>{r.title}{recipeScore(r) > 0 ? ` ❤️${recipeScore(r)}` : ''}</Text>
             </Pressable>
           ))}
         </View>
       )}
-      <TextInput style={s.input} value={title} onChangeText={t => { setTitle(t); const r = data.recipes?.find(x => norm(x.title) === norm(t)); if (r) setIngredients(r.ingredients.join(', ')); }} placeholder="Was gibt es? z. B. Spaghetti Bolognese" autoFocus />
+      <TextInput style={s.input} value={title} onChangeText={t => { setTitle(t); const r = data.recipes?.find(x => norm(x.title) === norm(t)); if (r) { setIngredients(r.ingredients.join(', ')); setPhoto(r.photo); } }} placeholder="Was gibt es? z. B. Spaghetti Bolognese" autoFocus />
       <TextInput style={[s.input, { minHeight: 60 }]} multiline value={ingredients} onChangeText={setIngredients} placeholder="Zutaten, mit Komma getrennt (optional): Nudeln, Hackfleisch, Tomaten" />
       {known && <Text style={[s.muted, { fontSize: 13 }]}>Bekanntes Gericht, Zutaten übernommen.</Text>}
+      <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
+        {photo ? <Image source={{ uri: photo }} style={{ width: 96, height: 72, borderRadius: 10 }} resizeMode="cover" /> : null}
+        <Button ghost title={photoBusy ? 'Lädt …' : photo ? '📷 Anderes Foto' : '📷 Foto vom Gericht'} disabled={photoBusy}
+          onPress={async () => { setPhotoBusy(true); try { const p = await pickDishPhoto(); if (p) setPhoto(p); } finally { setPhotoBusy(false); } }} />
+        {photo && <Button ghost title="Foto entfernen" onPress={() => setPhoto(undefined)} />}
+      </View>
+      {photo && <Text style={[s.muted, { fontSize: 12 }]}>Das Foto gilt für dieses Gericht, also auch für alle anderen Tage, an denen es das gibt.</Text>}
       <View style={s.row}>
         <Button title="Speichern" onPress={save} />
         {existing && <Button ghost title="Leeren" onPress={() => { update(d => ({ ...d, meals: (d.meals ?? []).filter(m => m.id !== existing.id) })); onDone(); }} />}
