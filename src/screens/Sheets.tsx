@@ -9,7 +9,7 @@ import { AnswerView, isAnswered, isCorrect, QuestionInput } from './QuestionView
 import { C, s } from '../ui/theme';
 import { PaperScore, ResultLine, scanAndGrade } from './Exam';
 import { printHtml, sheetHtml } from '../ui/Print';
-import { checkAnswers, getSample } from '../ai/generate';
+import { AI_ERROR, checkAnswers, getSample } from '../ai/generate';
 import { currentGrade } from '../data/logic';
 
 
@@ -240,14 +240,16 @@ function needsCheck(sheet: Worksheet) {
   return sheet.questions.some((q, i) => q.type !== 'choice' && !isCorrect(q, sheet.answers?.[i] ?? '') && (sheet.answers?.[i] ?? '').trim());
 }
 async function runCheck(sheet: Worksheet, update: (f: (d: any) => any) => void) {
-  if (checking.has(sheet.id) || !needsCheck(sheet)) return;
-  if (!(await getSample())) return;
+  if (checking.has(sheet.id) || !needsCheck(sheet)) return '';
+  if (!(await getSample())) return 'Die KI ist auf diesem Gerät nicht verbunden.';
   checking.add(sheet.id);
+  let err = '';
   try {
     const aiCheck = await checkAnswers(sheet, sheet.answers ?? []);
     update(d => { const cur = (d.worksheets ?? []).find((w: Worksheet) => w.id === sheet.id); return cur && cur.status === 'abgegeben' ? setSheet(d, { ...cur, aiCheck }) : d; });
-  } catch { /* Eltern prüfen dann selbst */ }
+  } catch (e: any) { err = AI_ERROR[e?.code] ?? 'Die KI hat gerade nicht geantwortet.'; }
   checking.delete(sheet.id);
+  return err;
 }
 
 function ReviewDigital(props: { sheet: Worksheet; name: string }) {
@@ -260,7 +262,10 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
   const ai = sheet.aiCheck;
   const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '') || !!ai?.ok[i]));
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if ((!ai || (sheet.exam && !ai.pts)) && needsCheck(sheet)) { setBusy(true); runCheck(sheet, update).finally(() => setBusy(false)); } }, [sheet.id]);
+  const [err, setErr] = useState('');
+  const want = (!ai || (sheet.exam && !ai.pts)) && needsCheck(sheet);
+  const start = () => { setBusy(true); setErr(''); runCheck(sheet, update).then(e => setErr(e)).finally(() => setBusy(false)); };
+  useEffect(() => { if (want) start(); }, [sheet.id]);
   const bonus = data ? selfBonus(data, sheet, understandingOf(res.filter(Boolean).length, sheet.questions.length)) : 0;
   const score = sheet.exam ? examScore(sheet, res) : null;
   // Probe-Arbeit mit KI-Teilpunkten: Antworten zeigen, darunter Punkte je Aufgabe bestätigen
@@ -283,6 +288,13 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
   return (
     <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
       <Text style={[s.text, { fontWeight: '700' }]}>{name}: {sheet.title}</Text>
+      {busy && <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI gleicht die Antworten mit der Lösung ab …</Text></View>}
+      {!busy && want && (
+        <View style={{ gap: 6 }}>
+          {!!err && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{err}</Text>}
+          <Button ghost title="🤖 Von der KI prüfen lassen" onPress={start} style={{ paddingVertical: 8, minHeight: 40 }} />
+        </View>
+      )}
       {sheet.questions.map((q, i) => (
         <View key={i} style={[s.row, { flexWrap: 'nowrap', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }]}>
           <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
@@ -303,7 +315,6 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
           <Text style={[s.muted, { fontSize: 12 }]}>Die Note ist nur ein Richtwert nach einem üblichen Schlüssel, jede Lehrkraft bewertet anders.</Text>
         </View>
       )}
-      {busy && <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI gleicht die Antworten mit der Lösung ab …</Text></View>}
       <Text style={s.muted}>{ai ? 'Die KI hat vorsortiert, auch anders formulierte Antworten. Bitte kurz drüberschauen.' : 'Gleiche Antworten sind schon als richtig markiert.'} Tippe auf Richtig/Falsch zum Ändern. {name} bekommt {sheet.exam ? EXAM_PREP_POINTS : PRACTICE_POINTS} Punkte fürs Üben{bonus ? ` und ${bonus} Bonuspunkte fürs Verstehen${(data?.topics ?? []).find(t => t.id === sheet.topicId)?.by === sheet.childId ? ' und selbst Hochladen' : ''}` : ''} und sieht danach die richtigen Lösungen.</Text>
       <View style={s.row}>
         {res.some(r => !r) && <Button title={sheet.exam ? 'Schwachstellen üben lassen' : 'Falsches nochmal üben lassen'} onPress={() => update(d => finishCheck(d, sheet, res, true))} />}
