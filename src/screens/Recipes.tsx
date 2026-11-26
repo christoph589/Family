@@ -14,9 +14,10 @@ import { pickPhotos } from './Exam';
 import { ConflictNote, cropDishPhoto, DishTile, pickDishPhoto, shrinkDishPhoto } from './FoodPlus';
 import { loadPhotos } from '../ui/PhotoImg';
 import { cloudEnabled, sb } from '../data/cloud';
+import { DishIdeas } from './DishIdeas';
 
 /** Rezept von einer Webseite übernehmen (Server liest das eingebettete Rezept, ohne KI). */
-async function importFromLink(url: string): Promise<{ title: string; ingredients: string[]; steps: string; image?: string; source?: string }> {
+async function importFromLink(url: string): Promise<{ title: string; ingredients: string[]; steps: string; image?: string; source?: string; servings?: string; time?: string; structured?: boolean }> {
   if (!cloudEnabled) throw { code: 'unavailable' };
   const { data, error } = await sb().functions.invoke('familie', { body: { action: 'recipe_import', url } });
   if (error) {
@@ -48,7 +49,8 @@ export function ranked(d: FamilyData) {
 
 export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent: boolean; onPlan: (r: Recipe, date: string, slot: MealSlot) => void; onShop: (r: Recipe) => void }) {
   const { data, update } = useFamily();
-  const [adding, setAdding] = useState<boolean | 'shot'>(false);
+  const [adding, setAdding] = useState<boolean | 'shot' | 'link'>(false);
+  const [ideas, setIdeas] = useState(false);
   const [edit, setEdit] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [show, setShow] = useState<string | null>(null);
@@ -68,10 +70,13 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
         <Text style={[s.muted, { flex: 1, minWidth: 200 }]}>
           {parent ? 'Ganz oben steht, was die Familie am liebsten isst. Antippen zum Einplanen.' : 'Bewerte die Gerichte oder schlag ein neues vor. Mama und Papa sehen das Ranking und planen danach.'}
         </Text>
+        {!adding && parent && <Button ghost title="💡 Vorschläge" accessibilityLabel="Neue Rezepte vorschlagen lassen" onPress={() => setIdeas(v => !v)} />}
+        {!adding && parent && <Button ghost title="🔗 Aus Link" accessibilityLabel="Rezept von einer Webseite übernehmen" onPress={() => { setAdding('link'); setEdit(null); setIdeas(false); }} />}
         {!adding && parent && <Button ghost title="📷 Aus Screenshot" accessibilityLabel="Rezept aus Screenshot oder Foto übernehmen" onPress={() => { setAdding('shot'); setEdit(null); }} />}
         {!adding && <Button title={parent ? '+ Gericht' : '+ Vorschlagen'} onPress={() => { setAdding(true); setEdit(null); }} />}
       </View>
-      {adding && <RecipeForm meId={meId} parent={parent} shot={adding === 'shot'} onDone={() => setAdding(false)} />}
+      {ideas && !adding && parent && <DishIdeas onPlan={onPlan} onClose={() => setIdeas(false)} />}
+      {adding && <RecipeForm meId={meId} parent={parent} shot={adding === 'shot'} linkFirst={adding === 'link'} onDone={() => setAdding(false)} />}
       {!!msg && <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text>}
       {list.length === 0 && !adding && (
         <View style={[s.card, { alignItems: 'center' }]}>
@@ -146,7 +151,7 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
 }
 
 
-function PlanPicker({ onPick }: { onPick: (date: string, slot: MealSlot) => void }) {
+export function PlanPicker({ onPick }: { onPick: (date: string, slot: MealSlot) => void }) {
   const { data } = useFamily();
   const [slot, setSlot] = useState<MealSlot>('abend');
   const days = Array.from({ length: 10 }, (_, i) => addDays(today(), i));
@@ -176,7 +181,7 @@ function PlanPicker({ onPick }: { onPick: (date: string, slot: MealSlot) => void
   );
 }
 
-function RecipeForm({ meId, parent, recipe, onDone, shot }: { meId: string; parent: boolean; recipe?: Recipe; onDone: () => void; shot?: boolean }) {
+function RecipeForm({ meId, parent, recipe, onDone, shot, linkFirst }: { meId: string; parent: boolean; recipe?: Recipe; onDone: () => void; shot?: boolean; linkFirst?: boolean }) {
   const { data, update } = useFamily();
   const [title, setTitle] = useState(recipe?.title ?? '');
   const [ing, setIng] = useState(recipe?.ingredients.join('\n') ?? '');
@@ -215,9 +220,10 @@ function RecipeForm({ meId, parent, recipe, onDone, shot }: { meId: string; pare
       const r = await importFromLink(link.trim());
       if (r.title && !title.trim()) setTitle(r.title);
       if (r.ingredients?.length) setIng(r.ingredients.join('\n'));
-      if (r.steps) setSteps(r.steps);
+      if (r.steps) setSteps([[r.time && `⏱ ${r.time}`, r.servings && `🍽️ ${r.servings}`].filter(Boolean).join(' · '), r.steps].filter(Boolean).join('\n'));
       if (r.image) { const small = await shrinkDishPhoto(r.image).catch(() => null); if (small) { setPhoto(small); setPhotoSrc(r.source); } }
       if (!r.ingredients?.length) setErr('Nur der Name wurde gefunden, Zutaten bitte selbst ergänzen.');
+      else if (!r.steps) setErr('Zutaten gefunden, aber keine Zubereitung. Bitte selbst ergänzen oder den Link behalten.');
     } catch (e: any) { setErr(IMPORT_ERROR[e?.code] ?? AI_ERROR[e?.code] ?? 'Übernehmen hat nicht geklappt.'); }
     setLinking(false);
   }
@@ -245,18 +251,28 @@ function RecipeForm({ meId, parent, recipe, onDone, shot }: { meId: string; pare
           <Text style={[s.muted, { fontSize: 12 }]}>Kochbuchseite fotografieren oder Screenshots aus Cookidoo, Chefkoch, Instagram und Co. (bis 6 Bilder). Die KI füllt Zutaten und Zubereitung aus und schneidet das Foto vom Gericht aus, falls eins drauf ist. Ein KI-Aufruf.</Text>
         </View>
       )}
+      {linkFirst && !recipe && (
+        <View style={{ gap: 6 }}>
+          <Text style={s.label}>Link zum Rezept</Text>
+          <TextInput style={s.input} value={link} onChangeText={setLink} placeholder="https://www.chefkoch.de/rezepte/…" autoCapitalize="none" autoCorrect={false} keyboardType="url" autoFocus
+            onSubmitEditing={() => { if (/^https?:\/\/\S+\.\S+/i.test(link.trim())) fromLink(); }} accessibilityLabel="Link zum Rezept" />
+          <Button title={linking ? 'Lese Seite …' : '🔗 Rezept holen'} disabled={linking || !/^https?:\/\/\S+\.\S+/i.test(link.trim()) || !cloudEnabled} onPress={fromLink} />
+          <Text style={[s.muted, { fontSize: 12 }]}>Link von Chefkoch, Lecker, Kochbar, Blogs und vielen anderen kopieren. Famelio holt Name, Zutaten, Zubereitung und Bild. Kostenlos, ohne KI. Danach kannst du alles noch ändern.</Text>
+          {!cloudEnabled && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>Dafür muss das Gerät mit der Familie verbunden sein.</Text>}
+        </View>
+      )}
       {(reading || linking) && !ai && <ActivityIndicator color={C.accent} />}
       {!!err && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{err}</Text>}
       <Text style={s.label}>Gericht</Text>
-      <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="z. B. Pfannkuchen mit Apfelmus" autoFocus={!recipe} />
+      <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="z. B. Pfannkuchen mit Apfelmus" autoFocus={!recipe && !linkFirst} />
       <Text style={s.label}>Zutaten{parent ? ' (eine pro Zeile, mit Menge)' : ''}</Text>
       <TextInput style={[s.input, { minHeight: 90 }]} multiline value={ing} onChangeText={setIng} placeholder={parent ? '250 g Mehl\n3 Eier\n500 ml Milch' : 'Was braucht man dafür? (wenn du es weißt)'} />
       {parent && <>
         <Text style={s.label}>Zubereitung</Text>
         <TextInput style={[s.input, { minHeight: 120 }]} multiline value={steps} onChangeText={setSteps} placeholder={'1. Mehl, Eier und Milch glatt rühren\n2. 10 Minuten quellen lassen\n3. In der Pfanne goldbraun backen'} />
-        <Text style={s.label}>Link zum Rezept (optional)</Text>
-        <TextInput style={s.input} value={link} onChangeText={setLink} placeholder="https://cookidoo.de/... oder https://www.chefkoch.de/..." autoCapitalize="none" keyboardType="url" />
-        {/^https?:\/\/\S+\.\S+/i.test(link.trim()) && cloudEnabled && (
+        {!linkFirst && <Text style={s.label}>Link zum Rezept (optional)</Text>}
+        {!linkFirst && <TextInput style={s.input} value={link} onChangeText={setLink} placeholder="https://cookidoo.de/... oder https://www.chefkoch.de/..." autoCapitalize="none" keyboardType="url" />}
+        {!linkFirst && /^https?:\/\/\S+\.\S+/i.test(link.trim()) && cloudEnabled && (
           <View style={{ gap: 4 }}>
             <Button ghost title={linking ? 'Lese Seite …' : '🔗 Zutaten, Schritte und Bild vom Link holen'} disabled={linking} onPress={fromLink} />
             <Text style={[s.muted, { fontSize: 12 }]}>Kostenlos, ohne KI. Klappt bei den meisten Rezeptseiten. Das Bild wird nur für eure Familie gespeichert.</Text>

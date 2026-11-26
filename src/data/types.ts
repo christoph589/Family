@@ -221,6 +221,8 @@ export interface FamilyData {
   diet?: Record<string, import('./food').Diet>;
   /** Letzter KI-Wochenvorschlag je Woche (Montag), damit ein erneutes Öffnen nichts kostet */
   mealIdeas?: { week: string; at: string; items: MealIdea[] };
+  /** Gemerkte Rezeptvorschläge (Rezepte › Ideen), bis sie übernommen oder verworfen werden */
+  dishIdeas?: { at: string; items: DishIdea[] };
   /** Jahr, in dem der Geburtstagsbonus vergeben wurde, je Kind */
   birthdayBonus?: Record<string, number>;
   topics?: Topic[];
@@ -280,6 +282,8 @@ export interface Recipe {
   /** Woher das Foto stammt, z. B. Website beim Import */ photoSrc?: string;
 }
 /** Ein Vorschlag der KI für einen Platz im Essensplan */
+/** Ein neuer Gerichtvorschlag der KI für die Rezeptsammlung */
+export interface DishIdea { id: string; title: string; why?: string; time?: string; ingredients: string[]; steps?: string }
 export interface MealIdea { date: string; slot: MealSlot; title: string; isNew?: boolean; ingredients?: string[]; steps?: string; why?: string }
 export interface ShopItem {
   id: string; title: string; done: boolean; at: string; by?: string;
