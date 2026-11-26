@@ -105,6 +105,11 @@ export function Manage({ onReset }: { onReset?: () => void }) {
               <Text style={[s.text, { fontWeight: '700' }]}>{t.icon ? t.icon + ' ' : ''}{t.title}</Text>
               <Text style={[s.muted, { fontSize: 12 }]}>{KIND_LABEL[t.kind]}{t.time ? ` · ${t.time}` : ''}{t.selfCheck ? ' · ohne Bestätigung' : ''} · {t.repeat === 'einmal' ? t.date : REPEAT_LABEL[t.repeat]}{isSchoolTask(t) ? ' · Schule' : ''} · {t.points} P</Text>
             </View>
+            <View style={{ alignItems: 'center', marginRight: 6 }}>
+              <TextInput style={[s.input, { width: 56, paddingVertical: 6, paddingHorizontal: 6, textAlign: 'center', fontWeight: '800' }]} defaultValue={String(t.points)} keyboardType="number-pad" accessibilityLabel={`Punkte für ${t.title}`}
+                onChangeText={v => { const n = Number(v.replace(/\D/g, '').slice(0, 3)); if (v !== '' && n !== t.points) update(d => ({ ...d, tasks: d.tasks.map(x => (x.id === t.id ? { ...x, points: n } : x)) })); }} />
+              <Text style={[s.muted, { fontSize: 11 }]}>Punkte</Text>
+            </View>
             <Pressable onPress={() => update(d => ({ ...d, tasks: d.tasks.map(x => (x.id === t.id ? { ...x, active: false } : x)) }))}>
               <Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text>
             </Pressable>

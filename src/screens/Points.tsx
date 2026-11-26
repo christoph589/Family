@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { Idea } from '../data/types';
+import { Idea, Reward } from '../data/types';
 import { useFamily } from '../data/FamilyContext';
-import { addPoints, decideIdea, decideRequest, pointsOf, proposeIdea, requestReward, reservedOf } from '../data/logic';
+import { addPoints, uid, decideIdea, decideRequest, pointsOf, proposeIdea, requestReward, reservedOf } from '../data/logic';
 import { Button } from '../ui/Button';
 import { PersonHead } from '../ui/Avatar';
 import { Pots } from './Pots';
@@ -41,6 +41,7 @@ export function Points({ childIds, parent, admin = parent }: { childIds: string[
           })}
         </View>
       )}
+      {admin && <RewardEditor />}
       <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
         {data.children.filter(c => childIds.includes(c.id)).map(k => {
           const p = pointsOf(data, k.id);
@@ -74,6 +75,7 @@ export function Points({ childIds, parent, admin = parent }: { childIds: string[
               })}
               {!parent && <Text style={[s.muted, { fontSize: 13 }]}>Dein Wunsch geht an Mama oder Papa. Wenn sie bestätigen, werden die Punkte abgezogen.</Text>}
               {!parent && <NewIdea childId={k.id} pending={(data.ideas ?? []).filter(i => i.childId === k.id)} />}
+              {parent && <Adjust childId={k.id} />}
               <Text style={s.label}>Verlauf</Text>
               {log.length === 0 && <Text style={s.muted}>Noch keine Punkte.</Text>}
               {log.map(l => (
@@ -87,6 +89,87 @@ export function Points({ childIds, parent, admin = parent }: { childIds: string[
         })}
       </View>
       {admin && <ResetPoints childIds={childIds} />}
+    </View>
+  );
+}
+
+/** Eltern legen Belohnungen und ihre Punktepreise fest. */
+function RewardEditor() {
+  const { data, update } = useFamily();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [cost, setCost] = useState('');
+  if (!data) return null;
+  const set = (id: string, f: (r: Reward) => Reward) => update(d => ({ ...d, rewards: d.rewards.map(r => (r.id === id ? f(r) : r)) }));
+  if (!open) return (
+    <Pressable onPress={() => setOpen(true)} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+      <Text style={{ fontSize: 22 }}>🎁</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={[s.text, { fontWeight: '800' }]}>Belohnungen und Preise ändern</Text>
+        <Text style={[s.muted, { fontSize: 13 }]}>{data.rewards.length} Belohnungen · Aufgabenpunkte unter ⚙️ › Aufgaben</Text>
+      </View>
+      <Text style={{ color: C.muted, fontSize: 20 }}>›</Text>
+    </Pressable>
+  );
+  return (
+    <View style={[s.card, { gap: 10, borderWidth: 2, borderColor: C.accent }]}>
+      <View style={[s.row, { justifyContent: 'space-between' }]}>
+        <Text style={s.h2}>🎁 Belohnungen</Text>
+        <Button ghost title="Fertig" onPress={() => setOpen(false)} style={{ paddingVertical: 6 }} />
+      </View>
+      {data.rewards.map(r => (
+        <View key={r.id} style={{ gap: 6, backgroundColor: C.bg, borderRadius: 12, padding: 10 }}>
+          <View style={[s.row, { flexWrap: 'nowrap', gap: 8 }]}>
+            <TextInput style={[s.input, { flex: 1, backgroundColor: C.surface }]} defaultValue={r.title} onEndEditing={e => { const v = e.nativeEvent.text.trim(); if (v) set(r.id, x => ({ ...x, title: v })); }} onBlur={(e: any) => { const v = String(e?.target?.value ?? '').trim(); if (v && v !== r.title) set(r.id, x => ({ ...x, title: v })); }} accessibilityLabel="Belohnung" />
+            <TextInput style={[s.input, { width: 72, textAlign: 'center', fontWeight: '800', backgroundColor: C.surface }]} defaultValue={String(r.cost)} keyboardType="number-pad" accessibilityLabel={`Preis für ${r.title}`}
+              onChangeText={v => { const n = Number(v.replace(/\D/g, '').slice(0, 5)); if (n > 0) set(r.id, x => ({ ...x, cost: n })); }} />
+            <Text style={s.muted}>P</Text>
+          </View>
+          <View style={[s.row, { gap: 6 }]}>
+            {[{ id: '', name: 'Alle' }, ...data.children].map(k => {
+              const on = (r.childId ?? '') === k.id;
+              return (
+                <Pressable key={k.id || 'alle'} onPress={() => set(r.id, x => ({ ...x, childId: k.id || undefined }))} style={[s.chip, { paddingVertical: 5, paddingHorizontal: 10, backgroundColor: on ? C.accent : C.surface }]}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: on ? '#fff' : C.fg }}>{k.name}</Text>
+                </Pressable>
+              );
+            })}
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={() => update(d => ({ ...d, rewards: d.rewards.filter(x => x.id !== r.id), requests: (d.requests ?? []).filter(q => q.rewardId !== r.id) }))} style={{ padding: 6 }}>
+              <Text style={{ color: C.danger, fontWeight: '700' }}>Entfernen</Text>
+            </Pressable>
+          </View>
+        </View>
+      ))}
+      <Text style={s.label}>Neue Belohnung</Text>
+      <View style={[s.row, { flexWrap: 'nowrap', gap: 8 }]}>
+        <TextInput style={[s.input, { flex: 1 }]} value={title} onChangeText={setTitle} placeholder="z. B. Eis essen gehen" />
+        <TextInput style={[s.input, { width: 72, textAlign: 'center' }]} value={cost} onChangeText={v => setCost(v.replace(/\D/g, '').slice(0, 5))} keyboardType="number-pad" placeholder="100" accessibilityLabel="Preis in Punkten" />
+      </View>
+      <Button title="Hinzufügen" disabled={!title.trim() || !Number(cost)} onPress={() => { update(d => ({ ...d, rewards: [...d.rewards, { id: uid(), title: title.trim(), cost: Number(cost) }] })); setTitle(''); setCost(''); }} />
+      <Text style={[s.muted, { fontSize: 12 }]}>„Alle“ heißt: jedes Kind sieht die Belohnung. Mit einem Namen nur dieses Kind.</Text>
+    </View>
+  );
+}
+
+/** Eltern geben Punkte von Hand oder ziehen welche ab, mit Grund im Verlauf. */
+function Adjust({ childId }: { childId: string }) {
+  const { update } = useFamily();
+  const [n, setN] = useState('');
+  const [why, setWhy] = useState('');
+  const v = Number(n) || 0;
+  const go = (sign: 1 | -1) => { update(d => addPoints(d, childId, sign * v, `${sign > 0 ? '➕' : '➖'} ${why.trim() || 'Von Hand'}`)); setN(''); setWhy(''); };
+  return (
+    <View style={{ gap: 8, backgroundColor: C.bg, borderRadius: 12, padding: 12 }}>
+      <Text style={[s.text, { fontWeight: '800' }]}>Punkte von Hand</Text>
+      <View style={[s.row, { flexWrap: 'nowrap' }]}>
+        <TextInput style={[s.input, { width: 70, textAlign: 'center', backgroundColor: C.surface }]} value={n} onChangeText={x => setN(x.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" placeholder="10" accessibilityLabel="Anzahl Punkte" />
+        <TextInput style={[s.input, { flex: 1, backgroundColor: C.surface }]} value={why} onChangeText={setWhy} placeholder="Grund, z. B. Oma geholfen" />
+      </View>
+      <View style={s.row}>
+        <Button title="+ Geben" color={C.ok} disabled={!v} onPress={() => go(1)} style={{ paddingVertical: 8 }} />
+        <Button ghost title="− Abziehen" disabled={!v} onPress={() => go(-1)} style={{ paddingVertical: 8 }} />
+      </View>
     </View>
   );
 }
