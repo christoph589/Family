@@ -23,6 +23,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { birthdaysOn, extraStates, isAdmin, parentsOf, payAllowances, peopleOf, pruneAiPhotos, ensurePackTasks, today } from './src/data/logic';
 import { PackSetup } from './src/screens/PackSetup';
 import { AiConsent } from './src/ui/AiConsent';
+import { PhotoCollector } from './src/screens/PhotoCollector';
 import { loadHolidays } from './src/data/holidays';
 import { MoneyTab } from './src/screens/Gifts';
 import { Food } from './src/screens/Food';
@@ -365,6 +366,7 @@ function Root() {
         </View>
       </View>
       <AiConsent />
+      <PhotoCollector />
     </SafeAreaView>
   );
 }

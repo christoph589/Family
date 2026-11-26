@@ -10,12 +10,13 @@ import {
   liveStreak, masteredCount, modeFor, newCards, parseVocabList, DAILY_CAP,
 } from '../data/vocab';
 import { AI_ERROR, extractVocab, getSample } from '../ai/generate';
+import { collectPhotos } from './PhotoCollector';
 import { Button, Segmented } from '../ui/Button';
 import { C, SHADOW, grad, s } from '../ui/theme';
 import { shrink } from './Learn';
 import { VocabBooks } from './VocabBook';
 
-const MAX_PHOTOS = 4;
+const MAX_PHOTOS = 6;
 
 function speak(text: string, lang?: string) {
   const synth = (globalThis as any).speechSynthesis;
@@ -145,19 +146,14 @@ export function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: Voc
   const parsed = parseVocabList(text);
   const badLines = text.split(/\r?\n/).filter(l => l.trim()).length - parsed.length;
 
-  async function photo(camera: boolean) {
+  async function photo() {
     setMsg('');
-    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1, allowsMultipleSelection: !camera, selectionLimit: MAX_PHOTOS };
-    if (camera) {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) { setMsg('Kamera nicht erlaubt.'); return; }
-    }
-    const res = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-    if (res.canceled || !res.assets.length) return;
+    const shots = await collectPhotos(MAX_PHOTOS, 'Vokabelseiten fotografieren').catch(() => [] as string[]);
+    if (!shots.length) return;
     setBusy(true);
     ctl.current = new AbortController();
     try {
-      const photos = await Promise.all(res.assets.slice(0, MAX_PHOTOS).map(shrink));
+      const photos = shots;
       const out = await extractVocab(photos, lang, ctl.current.signal);
       setText(t => (t.trim() ? t.trim() + '\n' : '') + out.cards.map(c => `${c.front} - ${c.back}`).join('\n'));
       if (!title.trim() && out.title) setTitle(out.title);
@@ -208,8 +204,7 @@ export function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: Voc
               </View>
             ) : (
               <View style={s.row}>
-                {Platform.OS !== 'web' && <Button title="Foto machen" onPress={() => photo(true)} />}
-                <Button title={Platform.OS === 'web' ? 'Foto hochladen' : 'Aus Fotos wählen'} onPress={() => photo(false)} />
+                <Button title="📸 Seiten fotografieren" onPress={photo} />
               </View>
             )}
           </>

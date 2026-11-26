@@ -162,7 +162,7 @@ function RecipeForm({ meId, parent, recipe, onDone }: { meId: string; parent: bo
   const [err, setErr] = useState('');
   useEffect(() => { let on = true; if (parent) getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, [parent]);
   async function fromPhoto() {
-    const p = await pickPhotos(6).catch(() => []);
+    const p = await pickPhotos(6, 'Rezept fotografieren').catch(() => []);
     if (!p.length) return;
     setReading(true); setErr('');
     try {

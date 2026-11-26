@@ -86,7 +86,7 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
   }
   async function importPages() {
     setMsg('');
-    const photos = await pickPhotos(MAX_PAGES).catch(() => [] as string[]);
+    const photos = await pickPhotos(MAX_PAGES, 'Buchseiten fotografieren').catch(() => [] as string[]);
     if (!photos.length) return;
     setBusy(true);
     ctl.current = new AbortController();

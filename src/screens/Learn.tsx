@@ -14,6 +14,7 @@ import { Button, Segmented } from '../ui/Button';
 import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
 import { C, s } from '../ui/theme';
 import { VocabReset, Vocab } from './Vocab';
+import { collectPhotos } from './PhotoCollector';
 import { ExamPrepScreen } from './Exam';
 import { dueCount } from '../data/vocab';
 
@@ -50,20 +51,11 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
   const kids = data.children.filter(c => childIds.includes(c.id));
   const topics = (data.topics ?? []).filter(t => childIds.includes(t.childId));
 
-  async function pick(camera: boolean) {
+  async function pick() {
     setMsg('');
-    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 1, allowsMultipleSelection: !camera, selectionLimit: MAX_PHOTOS - photos.length };
-    if (camera) {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) { setMsg('Kamera nicht erlaubt. Bitte in den Einstellungen freigeben.'); return; }
-    }
-    const res = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-    if (res.canceled || !res.assets.length) return;
     setBusy(true);
-    try {
-      const small = await Promise.all(res.assets.slice(0, MAX_PHOTOS - photos.length).map(shrink));
-      setPhotos(p => [...p, ...small]);
-    } catch { setMsg('Foto konnte nicht geladen werden. Bitte nochmal versuchen.'); }
+    const p = await collectPhotos(MAX_PHOTOS - photos.length, 'Seiten fotografieren').catch(() => [] as string[]);
+    setPhotos(x => [...x, ...p].slice(0, MAX_PHOTOS));
     setBusy(false);
   }
 
@@ -138,8 +130,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
         )}
         {photos.length < MAX_PHOTOS && (
           <View style={s.row}>
-            {Platform.OS !== 'web' && <Button ghost title="Foto machen" onPress={() => pick(true)} />}
-            <Button ghost title={busy ? 'Lädt …' : photos.length ? 'Weitere Seiten hinzufügen' : Platform.OS === 'web' ? 'Fotos oder Screenshots hochladen' : 'Aus Fotos wählen'} disabled={busy} onPress={() => pick(false)} />
+            <Button ghost title={busy ? 'Lädt …' : photos.length ? '📸 Weitere Seiten' : '📸 Seiten fotografieren'} disabled={busy} onPress={pick} />
           </View>
         )}
         <Button title="Thema speichern" disabled={busy || !childId || (!photos.length && !text.trim())} onPress={save} />

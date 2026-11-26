@@ -14,7 +14,7 @@ import { CalEvent, EXAM_POINTS, ExamPrep, SCHOOL_TYPES, Worksheet } from '../dat
 import { Button, Segmented } from '../ui/Button';
 import { DateField } from '../ui/DateField';
 import { C, s } from '../ui/theme';
-import { shrink } from './Learn';
+import { collectPhotos } from './PhotoCollector';
 
 const MAX = 20;
 const fmt = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -27,16 +27,9 @@ const Chip = ({ on, label, onPress, color = C.accent }: { on: boolean; label: st
   </Pressable>
 );
 
-export async function pickPhotos(room: number): Promise<string[]> {
-  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: true, selectionLimit: room });
-  if (res.canceled || !res.assets.length) return [];
-  return Promise.all(res.assets.slice(0, room).map(shrink));
-}
-async function takePhoto(): Promise<string[]> {
-  const perm = await ImagePicker.requestCameraPermissionsAsync();
-  if (!perm.granted) return [];
-  const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
-  return res.canceled ? [] : Promise.all(res.assets.slice(0, 1).map(shrink));
+/** Fotos sammeln: nacheinander aufnehmen oder aus der Galerie, dann gesammelt übernehmen. */
+export function pickPhotos(room: number, title = 'Fotos sammeln'): Promise<string[]> {
+  return collectPhotos(room, title);
 }
 
 /** Fotos der fertig geschriebenen Arbeit speichern und die KI vorkorrigieren lassen. */
@@ -166,7 +159,7 @@ function PrepForm({ childIds, meId, onDone }: { childIds: string[]; meId?: strin
   const [photos, setPhotos] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => { setSchoolType(child?.schoolType ?? ''); }, [childId]);
-  const add = async (cam: boolean) => { setBusy(true); try { const p = cam ? await takePhoto() : await pickPhotos(MAX - photos.length); setPhotos(x => [...x, ...p].slice(0, MAX)); } catch { /* egal */ } setBusy(false); };
+  const add = async () => { setBusy(true); try { const p = await pickPhotos(MAX - photos.length, 'Unterlagen fotografieren'); setPhotos(x => [...x, ...p].slice(0, MAX)); } catch { /* egal */ } setBusy(false); };
   function save() {
     const id = uid();
     const ev: CalEvent | null = date ? { id: uid(), title: `Klassenarbeit ${subject.trim()}`, icon: '📝', date, who: [childId], remind: -1, note: title.trim() } : null;
@@ -212,8 +205,7 @@ function PrepForm({ childIds, meId, onDone }: { childIds: string[]; meId?: strin
         </ScrollView>
       )}
       <View style={s.row}>
-        {Platform.OS !== 'web' && <Button ghost title="📷 Foto" onPress={() => add(true)} />}
-        {photos.length < MAX && <Button ghost title={busy ? 'Lädt …' : '🖼️ Fotos hinzufügen'} disabled={busy} onPress={() => add(false)} />}
+        {photos.length < MAX && <Button ghost title={busy ? 'Lädt …' : '📸 Fotos aufnehmen'} disabled={busy} onPress={add} />}
       </View>
       <Text style={[s.muted, { fontSize: 13 }]}>Du kannst später weitere Fotos nachreichen.</Text>
       <View style={s.row}>
@@ -267,7 +259,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   }
 
   async function addPhotos() {
-    const p = await pickPhotos(MAX - prep.photos.length).catch(() => []);
+    const p = await pickPhotos(MAX - prep.photos.length, 'Unterlagen fotografieren').catch(() => []);
     if (p.length) update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, photos: [...e.photos, ...p].slice(0, MAX) } : e)) }));
   }
   async function make() {
@@ -298,7 +290,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   const who = { name: child?.name ?? '', grade: child ? currentGrade(child) : undefined };
   async function upload() {
     if (!open) return;
-    const p = await pickPhotos(6).catch(() => [] as string[]);
+    const p = await pickPhotos(10, 'Fertige Arbeit fotografieren').catch(() => [] as string[]);
     if (!p.length) return;
     setMsg('');
     scanAndGrade(open, p, who, update as any, parent ? undefined : prep.childId);
