@@ -12,7 +12,7 @@ import { PRACTICE_POINTS, Question, Topic } from '../data/types';
 import { sanitizeSvg } from '../ui/Math';
 import { Button, Segmented } from '../ui/Button';
 import { KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
-import { C, s } from '../ui/theme';
+import { C, s, SHADOW } from '../ui/theme';
 import { VocabReset, Vocab } from './Vocab';
 import { collectPhotos } from './PhotoCollector';
 import { ExamPrepScreen } from './Exam';
@@ -68,7 +68,20 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
   const vocabDue = childIds.reduce((n, id) => n + dueCount(data, id), 0);
   const tabs = <>
     {parent && allIds.length > 1 && <ParentOverview ids={allIds} focus={focus} setFocus={setFocus} onGo={setPart} />}
-    <Segmented value={part} onChange={setPart} options={[{ value: 'themen', label: 'Täglich' }, { value: 'klassenarbeit', label: 'Klassenarbeit' }, { value: 'vokabeln', label: `Vokabeln${vocabDue ? ` (${vocabDue})` : ''}` }]} />
+    <View style={{ position: (Platform.OS === 'web' ? 'sticky' : 'relative') as any, top: 0, zIndex: 10, marginHorizontal: -4, paddingHorizontal: 4, paddingVertical: 4, backgroundColor: C.bg }}>
+      <View style={{ flexDirection: 'row', backgroundColor: C.surface2, padding: 4, borderRadius: 14, gap: 4 }}>
+        {([['themen', 'Täglich', 0], ['klassenarbeit', 'Arbeiten', 0], ['vokabeln', 'Vokabeln', vocabDue]] as const).map(([v, label, n]) => {
+          const on = part === v;
+          return (
+            <Pressable key={v} onPress={() => setPart(v)} accessibilityRole="tab" accessibilityState={{ selected: on }}
+              style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
+              <Text style={{ fontWeight: '800', fontSize: 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{label}</Text>
+              {n > 0 && <View style={{ minWidth: 20, paddingHorizontal: 5, height: 20, borderRadius: 10, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   </>;
   if (part === 'klassenarbeit') return (
     <View style={{ gap: 16 }}>

@@ -472,3 +472,28 @@ export async function spellCheckExam(subject: string, title: string): Promise<{ 
   const fs = String(r?.subject ?? subject).trim() || subject, ft = String(r?.title ?? title).trim() || title;
   return fs === subject && ft === title ? null : { subject: fs, title: ft };
 }
+
+/** Merkhilfen für mehrere Vokabeln in einem Aufruf: kurzer Beispielsatz, Übersetzung, Eselsbrücke. */
+export async function generateHints(cards: { id: string; front: string; back: string }[], lang: string, signal?: AbortSignal): Promise<Record<string, { ex: string; de: string; memo?: string }>> {
+  const sample = await getSample();
+  if (!sample?.json) throw { code: 'unavailable' };
+  const list = cards.map((c, i) => `${i + 1}. ${c.front} = ${c.back}`).join('\n');
+  const prompt = `Du hilfst einem deutschen Schulkind (ca. 10 bis 13 Jahre), ${lang || 'Englisch'}-Vokabeln zu behalten.
+Gib für jede Vokabel:
+- "ex": einen kurzen, lustigen oder bildhaften Beispielsatz in der Fremdsprache (höchstens 10 Wörter, einfache Grammatik, Wort genau so verwenden),
+- "de": die deutsche Übersetzung des Satzes,
+- "memo": eine kurze Eselsbrücke auf Deutsch (Klang, Bild oder Ähnlichkeit zu einem deutschen Wort), höchstens 15 Wörter. Wenn dir keine gute einfällt, lass "memo" weg statt etwas Erzwungenes.
+Keine Namen echter Personen, nichts Gruseliges.
+
+${list}
+
+Antworte nur mit JSON: {"hints":[{"n":1,"ex":"...","de":"...","memo":"..."}]}`;
+  const res = await sample.json<{ hints: { n: number; ex: string; de: string; memo?: string }[] }>(prompt, { signal });
+  const out: Record<string, { ex: string; de: string; memo?: string }> = {};
+  for (const h of Array.isArray(res?.hints) ? res.hints : []) {
+    const c = cards[(Number(h?.n) || 0) - 1];
+    const ex = str(h?.ex, 160), de = str(h?.de, 160), memo = str(h?.memo, 160);
+    if (c && ex && de) out[c.id] = memo ? { ex, de, memo } : { ex, de };
+  }
+  return out;
+}

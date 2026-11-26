@@ -9,7 +9,7 @@ import {
   LANGS, MASTERED, Reward, RoundResult, buildRound, checkTyped, choicesFor, dueCards, finishRound, langOf, levelOf,
   liveStreak, masteredCount, modeFor, newCards, parseVocabList, DAILY_CAP,
 } from '../data/vocab';
-import { AI_ERROR, extractVocab, getSample } from '../ai/generate';
+import { AI_ERROR, extractVocab, generateHints, getSample } from '../ai/generate';
 import { collectPhotos } from './PhotoCollector';
 import { Button, Segmented } from '../ui/Button';
 import { C, SHADOW, grad, s } from '../ui/theme';
@@ -283,6 +283,21 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
   const ask = card ? (plan?.reverse ? card.back : card.front) : '';
   const solution = card ? (plan?.reverse ? card.front : card.back) : '';
   const askForeign = !plan?.reverse;
+  // Merkhilfe: beim ersten Fehler für dieses und bis zu 24 weitere Wörter ohne Hilfe in EINEM KI-Aufruf holen und speichern
+  const [hintBusy, setHintBusy] = useState(false);
+  const liveCard = data?.vocab?.find(v => v.id === deck.id)?.cards.find(c => c.id === card?.id);
+  const hint = liveCard?.hint;
+  async function loadHints() {
+    if (deck.prepId || hintBusy || hint || !card) return;
+    const live = data?.vocab?.find(v => v.id === deck.id)?.cards ?? deck.cards;
+    const todo = [card, ...live.filter(c => !c.hint && c.id !== card.id)].slice(0, 25);
+    setHintBusy(true);
+    try {
+      const got = await generateHints(todo, deck.lang);
+      if (Object.keys(got).length) update(d => ({ ...d, vocab: (d.vocab ?? []).map(v => (v.id !== deck.id ? v : { ...v, cards: v.cards.map(c => (got[c.id] && !c.hint ? { ...c, hint: got[c.id] } : c)) })) }));
+    } catch { /* ohne KI keine Merkhilfe */ }
+    setHintBusy(false);
+  }
 
   useEffect(() => { if (card && askForeign && canSpeak() && plan?.mode !== 'type') speak(card.front, L.speech); }, [card?.id, idx]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -298,6 +313,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
     } else {
       setCombo(0);
       Animated.sequence([10, -10, 7, -7, 0].map(x => Animated.timing(shake, { toValue: x, duration: 55, useNativeDriver: false }))).start();
+      loadHints();
       // Falsches kommt in dieser Runde nochmal dran (höchstens zweimal).
       if (queue.filter(c => c.id === card.id).length < 3) setQueue(q => [...q, card]);
       if (canSpeak()) speak(card.front, L.speech);
@@ -414,6 +430,20 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
                 <View style={{ gap: 6 }}>
                   {!answered.ok && <Text style={[s.muted, { textAlign: 'center' }]}>Kein Problem, die kommt gleich nochmal.</Text>}
                   {!answered.ok && typed.trim() && <Button ghost title="✋ Meins stimmt doch" onPress={overrule} />}
+                  {!answered.ok && !deck.prepId && (hint || hintBusy) && (
+                    <View style={{ backgroundColor: '#fff7e0', borderRadius: 18, padding: 16, gap: 6 }}>
+                      <Text style={{ fontWeight: '800', color: C.fg }}>💡 Merkhilfe</Text>
+                      {hint ? (
+                        <>
+                          <Pressable onPress={() => L.speech && canSpeak() && speak(hint.ex, L.speech)} accessibilityLabel="Beispielsatz vorlesen">
+                            <Text style={{ fontSize: 17, fontWeight: '700', color: C.fg }}>{hint.ex}{L.speech && canSpeak() ? '  🔊' : ''}</Text>
+                          </Pressable>
+                          <Text style={{ fontSize: 15, color: C.muted }}>{hint.de}</Text>
+                          {!!hint.memo && <Text style={{ fontSize: 15, color: C.fg, marginTop: 4 }}>🧠 {hint.memo}</Text>}
+                        </>
+                      ) : <Text style={{ color: C.muted }}>Wird erstellt …</Text>}
+                    </View>
+                  )}
                   <Button title="Weiter" onPress={next} style={{ paddingVertical: 16 }} />
                 </View>
               )}
