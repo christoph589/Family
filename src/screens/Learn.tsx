@@ -5,7 +5,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { printHtml } from '../ui/Print';
 import { Grades } from './Grades';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
 import { currentGrade, setSheet, today, topicUnderstanding, uid, SELF_BONUS, SELF_BONUS_PER_DAY } from '../data/logic';
 import { askTopic, QA, AI_ERROR, generateQuiz, getSample } from '../ai/generate';
@@ -18,6 +18,7 @@ import { VocabReset, Vocab } from './Vocab';
 import { collectPhotos } from './PhotoCollector';
 import { ExamPrepScreen } from './Exam';
 import { dueCount } from '../data/vocab';
+import { LearnStats } from './LearnStats';
 
 const MAX_TOPICS = 30; // Fotos liegen vorerst lokal, deshalb begrenzt.
 const MAX_PHOTOS = 8;
@@ -42,8 +43,9 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
   const [msg, setMsg] = useState('');
   const [editing, setEditing] = useState<Topic | null>(null);
   const [solveId, setSolveId] = useState<string | null>(null);
-  const [part, setPart] = useState<'themen' | 'klassenarbeit' | 'vokabeln'>('themen');
+  const [part, setPart] = useState<'themen' | 'klassenarbeit' | 'vokabeln' | 'statistik'>('themen');
   const flags = useFlags();
+  const { width } = useWindowDimensions();
   useEffect(() => { if (part === 'vokabeln' && !isOn('vokabeln', flags)) setPart('themen'); }, [flags, part]);
   const [focus, setFocus] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -68,17 +70,20 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
     setSubject(''); setText(''); setPhotos([]); setMsg('Thema gespeichert.');
   }
 
+  const narrow = width < 560;
   const vocabDue = childIds.reduce((n, id) => n + dueCount(data, id), 0);
   const tabs = <>
-    {parent && allIds.length > 1 && <ParentOverview ids={allIds} focus={focus} setFocus={setFocus} onGo={setPart} />}
+    {parent && allIds.length > 1 && part !== 'statistik' && <ParentOverview ids={allIds} focus={focus} setFocus={setFocus} onGo={setPart} />}
     <View style={{ position: (Platform.OS === 'web' ? 'sticky' : 'relative') as any, top: 0, zIndex: 10, marginHorizontal: -4, paddingHorizontal: 4, paddingVertical: 4, backgroundColor: C.bg }}>
       <View style={{ flexDirection: 'row', backgroundColor: C.surface2, padding: 4, borderRadius: 14, gap: 4 }}>
-        {([['themen', 'Täglich', 0], ['klassenarbeit', 'Arbeiten', 0], ['vokabeln', 'Vokabeln', vocabDue]] as const).filter(([v]) => v !== 'vokabeln' || isOn('vokabeln', flags)).map(([v, label, n]) => {
+        {([['themen', 'Täglich', 0], ['klassenarbeit', 'Arbeiten', 0], ['vokabeln', 'Vokabeln', vocabDue], ['statistik', 'Statistik', 0]] as const).filter(([v]) => (v !== 'vokabeln' || isOn('vokabeln', flags)) && (v !== 'statistik' || parent)).map(([v, label, n]) => {
           const on = part === v;
+          // Statistik am Handy nur als Symbol, damit die anderen Reiter lesbar bleiben
+          const icon = v === 'statistik' && narrow;
           return (
-            <Pressable key={v} onPress={() => setPart(v)} accessibilityRole="tab" accessibilityState={{ selected: on }}
-              style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
-              <Text style={{ fontWeight: '800', fontSize: 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{label}</Text>
+            <Pressable key={v} onPress={() => setPart(v)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }}
+              style={{ flex: icon ? 0 : 1, paddingHorizontal: icon ? 12 : 0, minWidth: icon ? 48 : 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
+              <Text style={{ fontWeight: '800', fontSize: 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{icon ? '📊' : label}</Text>
               {n > 0 && <View style={{ minWidth: 20, paddingHorizontal: 5, height: 20, borderRadius: 10, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
             </Pressable>
           );
@@ -92,6 +97,12 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
       {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
       <ExamPrepScreen childIds={childIds} parent={parent} meId={meId} onSolve={parent ? undefined : setSolveId} />
       {admin && <Grades />}
+    </View>
+  );
+  if (part === 'statistik' && parent) return (
+    <View style={{ gap: 16 }}>
+      {tabs}
+      <LearnStats ids={allIds} onGo={(id, p) => { if (allIds.length > 1) setFocus(id); setPart(p); }} />
     </View>
   );
   if (part === 'vokabeln') return <View style={{ gap: 16 }}>{tabs}<Vocab childIds={childIds} parent={parent} meId={meId} />{admin && <VocabReset childIds={childIds} />}</View>;
