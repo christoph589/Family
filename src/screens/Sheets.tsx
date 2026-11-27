@@ -373,11 +373,28 @@ export function UnderstandingChip({ u }: { u: Understanding }) {
 }
 
 /** Ergebnis eines geprüften Tests zum Nachschauen (nur lesen): Antworten, Lösungen, richtig/falsch. */
-export function SheetResult({ sheet }: { sheet: Worksheet }) {
+export interface Recheck { busy: boolean; err?: string; proposal?: { ok: boolean[]; notes: string[]; cells?: (boolean[] | null)[]; pts?: number[] }; onRun: () => void; onApply: () => void; onDismiss: () => void }
+export function SheetResult({ sheet, recheck }: { sheet: Worksheet; recheck?: Recheck }) {
   const res = sheet.results ?? [];
   const pts = sheet.exam?.points;
+  const changed = recheck?.proposal ? sheet.questions.map((_, i) => i).filter(i => !res[i] && recheck.proposal!.ok[i]) : [];
   return (
     <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
+      {recheck && (
+        <View style={{ gap: 6, backgroundColor: C.accentSoft, borderRadius: 12, padding: 10 }}>
+          {recheck.busy && <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI prüft die abweichenden Antworten …</Text></View>}
+          {!recheck.busy && !recheck.proposal && <Button ghost title="Nochmal von der KI prüfen" onPress={recheck.onRun} style={{ paddingVertical: 8, minHeight: 40 }} />}
+          {!!recheck.err && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{recheck.err}</Text>}
+          {recheck.proposal && (changed.length ? (<>
+            <Text style={[s.text, { fontWeight: '800' }]}>KI-Vorschlag: {changed.length === 1 ? `Aufgabe ${changed[0] + 1} ist` : `Aufgabe ${changed.map(i => i + 1).join(', ')} sind`} doch richtig</Text>
+            {changed.map(i => recheck.proposal!.notes[i] ? <Text key={i} style={[s.muted, { fontSize: 13 }]}>Aufgabe {i + 1}: {recheck.proposal!.notes[i]}</Text> : null)}
+            <View style={s.row}><Button title="Übernehmen" onPress={recheck.onApply} style={{ paddingVertical: 8, minHeight: 40 }} /><Button ghost title="Verwerfen" onPress={recheck.onDismiss} style={{ paddingVertical: 8, minHeight: 40 }} /></View>
+          </>) : (<>
+            <Text style={[s.text, { fontSize: 14 }]}>Die KI bestätigt die Bewertung, nichts zu ändern.</Text>
+            <View style={s.row}><Button ghost title="OK" onPress={recheck.onDismiss} style={{ paddingVertical: 8, minHeight: 40 }} /></View>
+          </>))}
+        </View>
+      )}
       {sheet.exam ? <ResultLine sheet={sheet} /> : sheet.understanding ? <View style={s.row}><UnderstandingChip u={sheet.understanding} /><Text style={s.muted}>{res.filter(Boolean).length} von {sheet.questions.length} richtig</Text></View> : null}
       {sheet.questions.map((q, i) => {
         // Ältere Ergebnisse: Antwort mit angehängter Einheit („4000g“ statt 4000) gilt jetzt auch als richtig
@@ -398,11 +415,47 @@ export function SheetResult({ sheet }: { sheet: Worksheet }) {
 }
 
 /** Eltern: alle geprüften Tests oder Probe-Arbeiten zum Nachschauen. */
+/** Digital gelöst und geprüft, mit Antworten, die als falsch gewertet wurden: Kandidat für „Nochmal prüfen“. */
+const recheckable = (w: Worksheet) => w.status === 'geprueft' && !w.paperScore && !w.scan && !!w.answers
+  && w.questions.some((q, i) => q.type !== 'choice' && !w.results?.[i] && (w.answers?.[i] ?? '').trim());
+
 export function DoneSheets({ childIds, exam }: { childIds: string[]; exam: boolean }) {
-  const { data } = useFamily();
+  const { data, update } = useFamily();
   const [openId, setOpenId] = useState<string | null>(null);
   const [all, setAll] = useState(false);
+  const [rc, setRc] = useState<Record<string, { busy: boolean; err?: string; proposal?: Recheck['proposal'] }>>({});
+  const [bulk, setBulk] = useState(false);
   if (!data) return null;
+  async function run(w: Worksheet) {
+    setRc(x => ({ ...x, [w.id]: { busy: true } }));
+    if (!(await getSample())) { setRc(x => ({ ...x, [w.id]: { busy: false, err: 'Die KI ist auf diesem Gerät nicht verbunden.' } })); return; }
+    try {
+      // Nur die abweichenden Aufgaben schicken, das spart Kosten
+      const idx = w.questions.map((_, i) => i).filter(i => w.questions[i].type !== 'choice' && !w.results?.[i] && (w.answers?.[i] ?? '').trim());
+      const part = { title: w.title, questions: idx.map(i => w.questions[i]) };
+      const r = await checkAnswers(part, idx.map(i => w.answers![i]));
+      const ok = w.questions.map(() => false), notes = w.questions.map(() => ''), cells: (boolean[] | null)[] = w.questions.map(() => null);
+      idx.forEach((i, k) => { ok[i] = r.ok[k]; notes[i] = r.notes[k]; cells[i] = r.cells?.[k] ?? null; });
+      setRc(x => ({ ...x, [w.id]: { busy: false, proposal: { ok, notes, cells } } }));
+    } catch (e: any) { setRc(x => ({ ...x, [w.id]: { busy: false, err: AI_ERROR[e?.code] ?? 'Die KI hat gerade nicht geantwortet.' } })); }
+  }
+  function apply(w: Worksheet) {
+    const p = rc[w.id]?.proposal; if (!p) return;
+    const results = w.questions.map((_, i) => !!w.results?.[i] || p.ok[i]);
+    update(d => {
+      const cur = (d.worksheets ?? []).find(x => x.id === w.id);
+      if (!cur) return d;
+      const prev = cur.aiCheck;
+      const aiCheck = { ok: results, notes: cur.questions.map((_, i) => p.notes[i] || prev?.notes[i] || ''), cells: cur.questions.map((_, i) => p.cells?.[i] ?? prev?.cells?.[i] ?? null), ...(prev?.pts ? { pts: prev.pts } : {}) };
+      return setSheet(d, { ...cur, results, understanding: understandingOf(results.filter(Boolean).length, cur.questions.length), aiCheck });
+    });
+    setRc(x => { const { [w.id]: _, ...rest } = x; return rest; });
+  }
+  async function runAll(ws: Worksheet[]) {
+    setBulk(true);
+    for (const w of ws.slice(0, 10)) await run(w);
+    setBulk(false);
+  }
   const list = (data.worksheets ?? []).filter(w => childIds.includes(w.childId) && w.status === 'geprueft' && !!w.exam === exam)
     .sort((a, b) => (b.doneAt ?? b.date).localeCompare(a.doneAt ?? a.date));
   if (!list.length) return null;
@@ -410,6 +463,12 @@ export function DoneSheets({ childIds, exam }: { childIds: string[]; exam: boole
   return (
     <View style={[s.card, { gap: 8 }]}>
       <Text style={s.label}>{exam ? 'Ergebnisse Probe-Arbeiten' : 'Ergebnisse Tagestests'} ({list.length})</Text>
+      {list.some(recheckable) && (
+        <View style={{ gap: 4 }}>
+          <Button ghost title={bulk ? 'KI prüft …' : `Alle nochmal von der KI prüfen (${Math.min(10, list.filter(recheckable).length)})`} disabled={bulk} onPress={() => runAll(list.filter(recheckable))} style={{ paddingVertical: 8, minHeight: 40 }} />
+          <Text style={[s.muted, { fontSize: 12 }]}>Die KI schaut sich nur Antworten an, die als falsch gewertet wurden, zum Beispiel richtig mit anderer Schreibweise. Du bekommst einen Vorschlag und bestätigst ihn. Punkte fürs Üben bleiben, Note und Verständnis passen sich an.</Text>
+        </View>
+      )}
       {shown.map(w => {
         const kid = data.children.find(c => c.id === w.childId);
         const on = openId === w.id;
@@ -427,7 +486,8 @@ export function DoneSheets({ childIds, exam }: { childIds: string[]; exam: boole
               {r ? <Text style={{ fontWeight: '800', fontSize: 12, color: r.note <= 2 ? C.ok : r.note >= 4 ? C.danger : C.warn }}>Note ca. {r.note}</Text> : w.understanding ? <UnderstandingChip u={w.understanding} /> : null}
               <Text style={{ color: C.muted }}>{on ? '▾' : '›'}</Text>
             </Pressable>
-            {on && <SheetResult sheet={w} />}
+            {on && <SheetResult sheet={w} recheck={recheckable(w) || rc[w.id] ? { busy: !!rc[w.id]?.busy, err: rc[w.id]?.err, proposal: rc[w.id]?.proposal, onRun: () => run(w), onApply: () => apply(w), onDismiss: () => setRc(x => { const { [w.id]: _, ...rest } = x; return rest; }) } : undefined} />}
+            {!on && rc[w.id]?.proposal && <Text style={{ color: C.accent, fontWeight: '700', fontSize: 12, paddingLeft: 10 }}>KI-Vorschlag liegt vor, zum Ansehen antippen</Text>}
           </View>
         );
       })}
