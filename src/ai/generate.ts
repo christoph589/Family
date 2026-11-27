@@ -309,12 +309,13 @@ Antworte nur mit JSON: {"tasks":[{"pts":2,"note":"...","unsure":false}],"summary
 }
 
 /** Prüft am Gerät getippte Antworten gegen die Musterlösung, nach Sinn statt Wortlaut. Bei Probe-Arbeiten mit Teilpunkten. */
-export async function checkAnswers(sheet: { title: string; questions: Question[]; exam?: { points: number[] } }, answers: string[], signal?: AbortSignal): Promise<{ ok: boolean[]; notes: string[]; pts?: number[] }> {
+export async function checkAnswers(sheet: { title: string; questions: Question[]; exam?: { points: number[] } }, answers: string[], signal?: AbortSignal): Promise<{ ok: boolean[]; notes: string[]; pts?: number[]; cells?: (boolean[] | null)[] }> {
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const max = sheet.exam?.points;
+  const nCells = (q: Question) => (q.type === 'table' && q.table ? q.table.rows.flat().filter(c => c.trim() === '?').length : 0);
   const list = sheet.questions.map((q, i) => `### Aufgabe ${i + 1}${max ? ` (${max[i]} Punkte)` : ''}
-Frage: ${q.q}${q.options ? `\nAuswahl: ${q.options.join(' / ')}` : ''}${q.type === 'table' ? '\n(Tabelle, Werte zeilenweise mit | getrennt)' : ''}
+Frage: ${q.q}${q.options ? `\nAuswahl: ${q.options.join(' / ')}` : ''}${q.type === 'table' ? '\n(Tabelle mit ${nCells(q)} Feldern, Werte zeilenweise mit | getrennt)' : ''}
 Musterlösung: ${q.solution}
 Antwort des Kindes: ${answers[i] || '(leer)'}`).join('\n\n');
   const prompt = `Du bist eine erfahrene, faire Grundschul- und Unterstufenlehrkraft. Du korrigierst die getippten Antworten eines Kindes: ${sheet.title}.
@@ -331,13 +332,16 @@ So bewertest du:
 ${max ? `- "pts": Punkte von 0 bis zur Höchstpunktzahl, halbe Punkte erlaubt. Jeder richtige Teil gibt seinen Anteil. Ganz richtig = volle Punkte.
 ` : ''}- "ok": true, wenn die Antwort im Kern richtig ist${max ? ' (mindestens die Hälfte der Punkte)' : ''}.
 - "note": ein kurzer Satz an die Eltern: was stimmt, was fehlt.
+- Bei Tabellen zusätzlich "cells": eine Liste mit true/false je Eingabefeld in Lesereihenfolge. Gleichwertige Antworten (Synonym, Alternative wie "Sieb" statt "Durchschlag", Tippfehler) sind true. Die Zahl der Felder steht bei der Aufgabe.
 
 Denke jede Aufgabe kurz durch, antworte dann nur mit JSON: {"tasks":[{"ok":true,${max ? '"pts":2,' : ''}"note":"..."}]} mit genau ${sheet.questions.length} Einträgen in der Reihenfolge der Aufgaben.`;
   const res = await sample.json<any>(prompt, { signal, cache: false });
   const tasks: any[] = Array.isArray(res?.tasks) ? res.tasks : [];
   if (tasks.length !== sheet.questions.length) throw { code: 'invalid_json' };
   const pts = max ? max.map((m, i) => Math.min(m, Math.max(0, Math.round((Number(tasks[i]?.pts) || 0) * 2) / 2))) : undefined;
-  return { ok: tasks.map((x, i) => (pts ? pts[i] >= max![i] / 2 : x?.ok === true)), notes: tasks.map(x => str(x?.note, 200)), ...(pts ? { pts } : {}) };
+  const cells = sheet.questions.map((q, i) => { const n = nCells(q), c = tasks[i]?.cells; return n && Array.isArray(c) && c.length === n ? c.map((v: unknown) => v === true) : null; });
+  const hasCells = cells.some(Boolean);
+  return { ok: tasks.map((x, i) => (pts ? pts[i] >= max![i] / 2 : x?.ok === true) || (!!cells[i] && cells[i]!.every(Boolean))), notes: tasks.map(x => str(x?.note, 200)), ...(pts ? { pts } : {}), ...(hasCells ? { cells } : {}) };
 }
 
 const str = (v: unknown, max = 500) => String(v ?? '').trim().slice(0, max);

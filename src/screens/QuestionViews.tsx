@@ -121,7 +121,7 @@ export function splitAnswer(q: Question, value: string) {
 }
 
 /** Tabelle: "?" ist ein Eingabefeld. Mit solution/values wird sie zur Abgleich-Ansicht. */
-export function TableGrid({ q, values, onCell, solution, accepted }: { q: Question; values: string[]; onCell?: (k: number, v: string) => void; solution?: string[]; accepted?: boolean }) {
+export function TableGrid({ q, values, onCell, solution, accepted, cellOk }: { q: Question; values: string[]; onCell?: (k: number, v: string) => void; solution?: string[]; accepted?: boolean; cellOk?: boolean[] }) {
   let k = -1;
   const cols = Math.max(1, q.table!.header.length || q.table!.rows[0]?.length || 1);
   // Spalten passen sich der Breite an, damit am Handy nichts abgeschnitten wird
@@ -162,7 +162,7 @@ export function TableGrid({ q, values, onCell, solution, accepted }: { q: Questi
               );
               const lv = solution ? matchLevel(values[idx] ?? '', solution[idx] ?? '') : 'ok';
               // Hat die KI oder haben die Eltern die Aufgabe als richtig bestätigt, zeigt jede Zelle ✓ (Abweichung nur als Hinweis)
-              const good = lv === 'ok' || !!accepted;
+              const good = lv === 'ok' || !!accepted || !!cellOk?.[idx];
               const hint = lv === 'ok' ? '' : good ? `Schreibweise: ${solution?.[idx]}` : lv === 'near' ? `fast richtig: ${solution?.[idx]}` : `richtig: ${solution?.[idx]}`;
               return (
                 <View key={ci} style={[cell, { backgroundColor: good ? C.okSoft : lv === 'near' ? C.warnSoft : '#f8dcd8' }]}>
@@ -179,13 +179,13 @@ export function TableGrid({ q, values, onCell, solution, accepted }: { q: Questi
 }
 
 /** Abgleich-Ansicht für Eltern und für das Kind nach der Prüfung. */
-export function AnswerView({ q, answer, accepted }: { q: Question; answer: string; accepted?: boolean }) {
+export function AnswerView({ q, answer, accepted, cellOk }: { q: Question; answer: string; accepted?: boolean; cellOk?: boolean[] | null }) {
   return (
     <View style={{ gap: 6 }}>
       <MathText text={qText(q)} style={{ ...s.text, fontWeight: '700' }} />
       <Figure svg={q.figure} />
       {q.type === 'table' && q.table ? (
-        <TableGrid q={q} values={splitAnswer(q, answer)} solution={q.solution.split('|').map(x => x.trim())} accepted={accepted} />
+        <TableGrid q={q} values={splitAnswer(q, answer)} solution={q.solution.split('|').map(x => x.trim())} accepted={accepted} cellOk={cellOk ?? undefined} />
       ) : (
         <>
           <View style={[s.row, { gap: 6 }]}><Text style={s.text}>Antwort:</Text><MathText text={answer || '–'} style={{ ...s.text, fontWeight: '700' }} /></View>
