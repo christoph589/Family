@@ -94,7 +94,7 @@ export function UntisSetup() {
 
   return (
     <View style={s.card}>
-      <Text style={s.h2}>🏫 WebUntis (Stundenplan und Ausfälle)</Text>
+      <Text style={s.h2}>WebUntis (Stundenplan und Ausfälle)</Text>
       <Text style={s.muted}>Holt den Stundenplan und trägt zwischen 6 und 20 Uhr alle 3 Stunden ausfallende Stunden automatisch als „früher aus“ oder „frei“ ein. Eigene Einträge der Familie haben Vorrang.</Text>
       {slots.map((slot, i) => {
         const students = found[slot] ?? links.filter(l => slotOf(l) === slot).map(l => ({ id: l.id, name: l.name }));
@@ -118,7 +118,7 @@ export function UntisSetup() {
                       );
                     })}
                   </View>
-                  {link && <Button ghost title={busy ? 'Lädt …' : `📚 Stundenplan von ${kids.find(k => k.id === link.child)?.name} übernehmen`} disabled={busy} onPress={() => takeOver(link.child, st.id, slot)} />}
+                  {link && <Button ghost title={busy ? 'Lädt …' : `Stundenplan von ${kids.find(k => k.id === link.child)?.name} übernehmen`} disabled={busy} onPress={() => takeOver(link.child, st.id, slot)} />}
                 </View>
               );
             })}

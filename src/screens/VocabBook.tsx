@@ -24,7 +24,7 @@ export function VocabBooks({ childId, meId, parent = false, onStarted }: { child
   return (
     <View style={s.card}>
       <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-        <Text style={s.label}>📖 Ganzes Buch</Text>
+        <Text style={s.label}>Ganzes Buch</Text>
         {!adding && <Button ghost title="+ Buch importieren" style={{ paddingVertical: 8, paddingHorizontal: 14 }} onPress={() => setAdding(true)} />}
       </View>
       {!books.length && !adding && <Text style={s.muted}>Zum Schuljahresbeginn einmal das ganze Vokabelverzeichnis hinten im Buch fotografieren. Danach wählst du jede Woche, von welcher bis zu welcher Unit gelernt wird.</Text>}
@@ -207,7 +207,7 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
           {picked.length > 0 && (
             <View style={s.row}>
               {home
-                ? <Button color={C.ok} title="📚 Diese Wörter jetzt üben" onPress={() => { setSel([]); setOff(new Set()); setShowWords(false); onStarted(home.id); }} />
+                ? <Button color={C.ok} title="Diese Wörter jetzt üben" onPress={() => { setSel([]); setOff(new Set()); setShowWords(false); onStarted(home.id); }} />
                 : <Button title={fresh.length ? `${fresh.length} Vokabeln lernen` : 'Erst Wörter wählen'} disabled={!fresh.length} onPress={start} />}
               <Button ghost title="Auswahl aufheben" onPress={() => { setSel([]); setOff(new Set()); setRangeFrom(null); }} />
             </View>
@@ -219,7 +219,7 @@ function BookCard({ book, parent, onStarted }: { book: VocabBook; parent: boolea
       {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13, flex: 1 }}>Die KI liest {prog || 'die Seiten'}. Pro Paket etwa eine Minute. Bereits Gelesenes ist schon gespeichert.</Text></View>}
       {!!msg && <Text style={{ color: /Nicht geklappt|Limit|nicht erreichbar/.test(msg) ? C.danger : C.ok, fontWeight: '700', fontSize: 13 }}>{msg}</Text>}
       <View style={s.row}>
-        {ai && !busy && <Button ghost title={book.entries.length ? '+ Weitere Seiten' : '📸 Seiten scannen'} onPress={importPages} />}
+        {ai && !busy && <Button ghost title={book.entries.length ? '+ Weitere Seiten' : 'Seiten scannen'} onPress={importPages} />}
         {busy && <Button ghost title="Abbrechen" onPress={() => ctl.current?.abort()} />}
         {!busy && <DeleteButton parent={parent} confirm="Buch wirklich löschen" onDelete={() => update(d => ({ ...d, vocabBooks: (d.vocabBooks ?? []).filter(b => b.id !== book.id) }))} />}
       </View>

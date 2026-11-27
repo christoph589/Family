@@ -23,7 +23,7 @@ function Stars({ value, onChange, size = 20 }: { value: number; onChange?: (v: 1
     <View style={{ flexDirection: 'row', gap: 2 }} accessibilityLabel={`Wichtigkeit ${value} von 3`}>
       {[1, 2, 3].map(n => (
         <Pressable key={n} disabled={!onChange} onPress={() => onChange?.(n as 1 | 2 | 3)} hitSlop={4} accessibilityRole={onChange ? 'button' : undefined} accessibilityLabel={onChange ? `${n} Stern${n > 1 ? 'e' : ''}` : undefined}>
-          <Text style={{ fontSize: size, opacity: n <= value ? 1 : 0.22 }}>⭐</Text>
+          <Text style={{ fontSize: size, opacity: n <= value ? 1 : 0.22 }}>★</Text>
         </Pressable>
       ))}
     </View>
@@ -55,7 +55,7 @@ function WishForm({ initial, withPrice, onSave, onCancel }: { initial?: Partial<
       </View>
       <View style={[s.row, { gap: 8 }]}>
         {photo ? <PhotoImg uri={photo} style={{ width: 72, height: 54, borderRadius: 10 }} resizeMode="cover" /> : null}
-        <Button ghost title={busy ? 'Lädt …' : photo ? '📷 Anderes Foto' : '📷 Foto (optional)'} disabled={busy}
+        <Button ghost title={busy ? 'Lädt …' : photo ? 'Anderes Foto' : 'Foto (optional)'} disabled={busy}
           onPress={async () => { setBusy(true); try { const p = await pickDishPhoto(); if (p) setPhoto(p); } finally { setBusy(false); } }} />
         {photo && <Button ghost title="Foto weg" onPress={() => setPhoto(undefined)} />}
       </View>
@@ -79,7 +79,7 @@ function WishLine({ w, children, onPress }: { w: Wish; children?: React.ReactNod
           <View style={[s.row, { gap: 8 }]}>
             <Stars value={w.prio} size={13} />
             {w.cents !== undefined && <Text style={{ fontSize: 13, fontWeight: '700', color: C.fg }}>ca. {euro(w.cents)}</Text>}
-            {w.link && <Pressable onPress={() => open(w.link!)} hitSlop={6}><Text style={{ fontSize: 13, fontWeight: '700', color: C.accent }}>🔗 {domainOf(w.link)}</Text></Pressable>}
+            {w.link && <Pressable onPress={() => open(w.link!)} hitSlop={6}><Text style={{ fontSize: 13, fontWeight: '700', color: C.accent }}>{domainOf(w.link)}</Text></Pressable>}
           </View>
         </View>
       </Pressable>
@@ -108,14 +108,14 @@ export function KidWishes({ childId }: { childId: string }) {
   const active = mine.filter(w => !w.done && w.status !== 'nein'), rest = mine.filter(w => w.done || w.status === 'nein');
   return (
     <View style={[s.card, { gap: 12 }]}>
-      <PersonHead name={kid.name} color={kid.color} photo={kid.photo} sub="Mein Wunschzettel" value={`🎁 ${active.length}`} />
+      <PersonHead name={kid.name} color={kid.color} photo={kid.photo} sub="Mein Wunschzettel" value={`${active.length}`} />
       <Text style={s.muted}>Schreib auf, was du dir wünschst. Mama oder Papa schauen drüber. Danach kommt der Wunsch auf deinen Wunschzettel für Geburtstag und Weihnachten.</Text>
       {active.map(w => edit === w.id && w.status === 'neu'
         ? <WishForm key={w.id} initial={w} onCancel={() => setEdit(null)} onSave={p => { set(w.id, { ...p, status: 'neu' }); setEdit(null); }} />
         : (
           <WishLine key={w.id} w={w} onPress={w.status === 'neu' ? () => setEdit(w.id) : undefined}>
             <View style={[s.row, { justifyContent: 'space-between' }]}>
-              {w.status === 'neu' ? pill('⏳ Wartet auf Mama oder Papa', C.warnSoft, C.warn) : pill('✓ Auf dem Wunschzettel', C.okSoft, C.ok)}
+              {w.status === 'neu' ? pill('Wartet auf Mama oder Papa', C.warnSoft, C.warn) : pill('✓ Auf dem Wunschzettel', C.okSoft, C.ok)}
               <View style={[s.row, { gap: 6 }]}>
                 <Text style={[s.muted, { fontSize: 12 }]}>Wie wichtig?</Text>
                 <Stars value={w.prio} onChange={v => set(w.id, { prio: v })} size={18} />
@@ -131,7 +131,7 @@ export function KidWishes({ childId }: { childId: string }) {
       {rest.length > 0 && (
         <View style={{ gap: 6 }}>
           <Text style={s.label}>Bekommen oder nicht freigegeben</Text>
-          {rest.map(w => <WishLine key={w.id} w={w}>{w.done ? pill('🎉 Bekommen', C.okSoft, C.ok) : pill('Nicht freigegeben', C.surface, C.muted)}</WishLine>)}
+          {rest.map(w => <WishLine key={w.id} w={w}>{w.done ? pill('Bekommen', C.okSoft, C.ok) : pill('Nicht freigegeben', C.surface, C.muted)}</WishLine>)}
         </View>
       )}
     </View>
@@ -192,7 +192,7 @@ function KidWishAdmin({ childId, meId, fid, token, res, reload, setTokens }: { c
   };
   return (
     <View style={[s.card, { gap: 12 }]}>
-      <PersonHead name={kid.name} color={kid.color} photo={kid.photo} sub="Wunschzettel" value={`🎁 ${listed.length}`} />
+      <PersonHead name={kid.name} color={kid.color} photo={kid.photo} sub="Wunschzettel" value={`${listed.length}`} />
 
       {pending.length > 0 && (
         <View style={{ gap: 8 }}>
@@ -222,13 +222,13 @@ function KidWishAdmin({ childId, meId, fid, token, res, reload, setTokens }: { c
         return (
           <WishLine key={w.id} w={w} onPress={() => setEdit(w.id)}>
             {r
-              ? pill(r.by_parent ? `🎁 Schenkt ihr${r.name ? ` (${r.name})` : ''}` : `🔒 Reserviert${r.name ? ` von ${r.name}` : ''}`, C.accentSoft, C.accent)
+              ? pill(r.by_parent ? `Schenkt ihr${r.name ? ` (${r.name})` : ''}` : `Reserviert${r.name ? ` von ${r.name}` : ''}`, C.accentSoft, C.accent)
               : pill('Noch frei', C.okSoft, C.ok)}
             <View style={[s.row, { gap: 6 }]}>
               {fid && (r
                 ? <Button ghost title="Reservierung aufheben" disabled={busy} style={{ paddingVertical: 6, minHeight: 36 }} onPress={() => act(() => wishParentSet(fid, childId, w.id, false))} />
                 : <Button ghost title="Wir schenken das" disabled={busy} style={{ paddingVertical: 6, minHeight: 36 }} onPress={() => act(() => wishParentSet(fid, childId, w.id, true, me?.title || me?.name))} />)}
-              <Button ghost title="🎉 Bekommen" style={{ paddingVertical: 6, minHeight: 36 }} onPress={() => set(w.id, { done: true })} />
+              <Button ghost title="Bekommen" style={{ paddingVertical: 6, minHeight: 36 }} onPress={() => set(w.id, { done: true })} />
               <Button ghost title="Von der Liste nehmen" style={{ paddingVertical: 6, minHeight: 36 }} onPress={() => set(w.id, { status: 'nein' })} />
             </View>
           </WishLine>
@@ -240,7 +240,7 @@ function KidWishAdmin({ childId, meId, fid, token, res, reload, setTokens }: { c
 
       {cloudEnabled && fid && (
         <View style={{ gap: 8, backgroundColor: C.surface2, borderRadius: 16, padding: 12 }}>
-          <Text style={[s.text, { fontWeight: '800' }]}>🔗 Teilen für Geburtstag und Weihnachten</Text>
+          <Text style={[s.text, { fontWeight: '800' }]}>Teilen für Geburtstag und Weihnachten</Text>
           {token ? (<>
             <Text style={[s.muted, { fontSize: 13 }]}>Wer diesen Link hat, sieht die freigegebenen Wünsche ohne Anmeldung und kann einen reservieren. Schick ihn nicht in Gruppen, in denen {kid.name.split(' ')[0]} mitliest.</Text>
             <Text selectable style={{ fontSize: 12, color: C.fg, backgroundColor: C.surface, borderRadius: 10, padding: 8 }} numberOfLines={2}>{link}</Text>
@@ -265,7 +265,7 @@ function KidWishAdmin({ childId, meId, fid, token, res, reload, setTokens }: { c
           {showRest && rest.map(w => (
             <WishLine key={w.id} w={w}>
               <View style={[s.row, { gap: 6 }]}>
-                {w.done ? pill('🎉 Bekommen', C.okSoft, C.ok) : pill('Nicht freigegeben', C.surface, C.muted)}
+                {w.done ? pill('Bekommen', C.okSoft, C.ok) : pill('Nicht freigegeben', C.surface, C.muted)}
                 <Button ghost title={w.done ? 'Doch nicht bekommen' : 'Doch freigeben'} style={{ paddingVertical: 6, minHeight: 36 }} onPress={() => set(w.id, w.done ? { done: false } : { status: 'frei' })} />
                 <DeleteButton parent style={{ paddingVertical: 6, minHeight: 36 }} onDelete={() => del(w.id)} />
               </View>

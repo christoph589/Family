@@ -32,7 +32,7 @@ export function QuestStrip({ child, parent }: { child: Child; parent: boolean })
         <Text style={[s.text, { fontSize: 14, flex: 1, minWidth: 0 }]} numberOfLines={1}>
           {hatchable ? <Text style={{ fontWeight: '800', color: C.accent }}>Dein Ei schlüpft! 🐣</Text>
             : buddy ? <Text><Text style={{ fontWeight: '800' }}>{child.buddy?.name || buddy.label}</Text><Text style={{ color: C.muted }}> {mood.text}</Text></Text>
-            : <Text style={{ color: C.muted }}>Noch {st.next!.at - stars} ⭐ bis zum Schlüpfen</Text>}
+            : <Text style={{ color: C.muted }}>Noch {st.next!.at - stars} ★ bis zum Schlüpfen</Text>}
         </Text>
         {streak > 0 && <Text style={{ fontWeight: '800', color: C.accent2, fontSize: 14 }}>🔥 {streak}</Text>}
         <Text style={{ fontWeight: '800', color: C.accent, fontSize: 14 }}>🏅 {earned.size}{fresh && !parent ? <Text style={{ color: C.accent2 }}> •</Text> : null}</Text>
@@ -197,7 +197,7 @@ function SurpriseModal({ child, onClose }: { child: Child; onClose: () => void }
       <View style={{ flex: 1, backgroundColor: 'rgba(18,21,39,0.55)', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <View style={[{ backgroundColor: C.surface, borderRadius: 26, width: '100%', maxWidth: 420, padding: 24, gap: 14, alignItems: 'center', overflow: 'hidden' }, SHADOW.lg]}>
           {got && <Confetti />}
-          <Text style={{ fontSize: 72 }}>{got ? (got.kind === 'punkte' ? '⭐' : '🎉') : '🎁'}</Text>
+          <Text style={{ fontSize: 72 }}>{got ? (got.kind === 'punkte' ? '★' : '🎉') : '🎁'}</Text>
           {got ? (
             <>
               <Text style={[s.h2, { textAlign: 'center' }]}>{got.text}</Text>

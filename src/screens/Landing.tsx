@@ -93,7 +93,7 @@ export function Landing({ onNew, onLogin, onKid }: { onNew: () => void; onLogin:
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#fbfaff' }} contentContainerStyle={{ paddingBottom: 0 }}>
       {/* Kopf und Hero */}
-      <View style={[{ paddingBottom: wide ? 0 : 36, overflow: 'hidden' }, grad('#5b4cf0', '#b05cf0', 160)]}>
+      <View style={[{ paddingBottom: wide ? 0 : 36, overflow: 'hidden' }, grad('#1f6f63', '#17564d', 160)]}>
         <View style={[wrap, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 18 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={[{ borderRadius: 12, overflow: 'hidden' }, webOnly({ boxShadow: '0 0 0 2px #ffffff55' })]}><LogoMark size={38} /></View>
@@ -105,7 +105,7 @@ export function Landing({ onNew, onLogin, onKid }: { onNew: () => void; onLogin:
         <View style={[wrap, { flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'flex-end' : 'stretch', gap: wide ? 24 : 34, paddingTop: wide ? 40 : 24 }]}>
           <View style={{ flex: wide ? 0.95 : undefined, gap: 20, paddingBottom: wide ? 90 : 0 }}>
             <View style={{ alignSelf: 'flex-start', backgroundColor: '#ffffff26', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>✨ Jetzt in der Testphase</Text>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Jetzt in der Testphase</Text>
             </View>
             <Text style={{ color: '#fff', fontSize: h1, lineHeight: h1 * 1.05, fontWeight: '800', letterSpacing: -h1 * 0.035 }}>Der Familienalltag auf einem Bildschirm.</Text>
             <Text style={{ color: '#ffffffdd', fontSize: wide ? 20 : 17, lineHeight: wide ? 30 : 26, maxWidth: 520 }}>
@@ -242,7 +242,7 @@ export function Landing({ onNew, onLogin, onKid }: { onNew: () => void; onLogin:
       </View>
 
       {/* Abschluss */}
-      <View style={[{ paddingVertical: wide ? 90 : 60 }, grad('#5b4cf0', '#ff6a5c', 120)]}>
+      <View style={[{ paddingVertical: wide ? 90 : 60 }, grad('#1f6f63', '#17564d', 120)]}>
         <View style={[wrap, { alignItems: 'center', gap: 18 }]}>
           <LogoMark size={64} />
           <Text style={{ color: '#fff', fontSize: h2, fontWeight: '800', letterSpacing: -1, textAlign: 'center' }}>Bereit für weniger Chaos?</Text>

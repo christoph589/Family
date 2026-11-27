@@ -160,7 +160,7 @@ export function PlanPicker({ onPick }: { onPick: (date: string, slot: MealSlot) 
       <View style={[s.row, { gap: 6 }]}>
         {(['mittag', 'abend'] as MealSlot[]).map(sl => (
           <Pressable key={sl} onPress={() => setSlot(sl)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99, backgroundColor: slot === sl ? C.fg : C.surface }}>
-            <Text style={{ fontWeight: '700', color: slot === sl ? '#fff' : C.fg }}>{sl === 'mittag' ? '☀️ Mittag' : '🌙 Abend'}</Text>
+            <Text style={{ fontWeight: '700', color: slot === sl ? '#fff' : C.fg }}>{sl === 'mittag' ? 'Mittag' : 'Abend'}</Text>
           </Pressable>
         ))}
       </View>
@@ -169,7 +169,7 @@ export function PlanPicker({ onPick }: { onPick: (date: string, slot: MealSlot) 
           const taken = data?.meals?.find(m => m.date === d && m.slot === slot);
           return (
             <Pressable key={d} onPress={() => onPick(d, slot)} accessibilityLabel={`${d}${taken ? `, ersetzt ${taken.title}` : ''}`}
-              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: C.surface, borderWidth: 1, borderColor: taken ? '#f0c98f' : C.line, alignItems: 'center', minWidth: 52 }}>
+              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: C.surface, borderWidth: 1, borderColor: taken ? C.line : C.line, alignItems: 'center', minWidth: 52 }}>
               <Text style={{ fontWeight: '800', fontSize: 13 }}>{d === today() ? 'Heute' : parse(d).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric' })}</Text>
               {taken && <Text numberOfLines={1} style={{ fontSize: 10, color: C.muted, maxWidth: 70 }}>{taken.title}</Text>}
             </Pressable>
@@ -220,7 +220,7 @@ function RecipeForm({ meId, parent, recipe, onDone, shot, linkFirst }: { meId: s
       const r = await importFromLink(link.trim());
       if (r.title && !title.trim()) setTitle(r.title);
       if (r.ingredients?.length) setIng(r.ingredients.join('\n'));
-      if (r.steps) setSteps([[r.time && `⏱ ${r.time}`, r.servings && `🍽️ ${r.servings}`].filter(Boolean).join(' · '), r.steps].filter(Boolean).join('\n'));
+      if (r.steps) setSteps([[r.time && `⏱ ${r.time}`, r.servings && `${r.servings}`].filter(Boolean).join(' · '), r.steps].filter(Boolean).join('\n'));
       if (r.image) { const small = await shrinkDishPhoto(r.image).catch(() => null); if (small) { setPhoto(small); setPhotoSrc(r.source); } }
       if (!r.ingredients?.length) setErr('Nur der Name wurde gefunden, Zutaten bitte selbst ergänzen.');
       else if (!r.steps) setErr('Zutaten gefunden, aber keine Zubereitung. Bitte selbst ergänzen oder den Link behalten.');
@@ -246,7 +246,7 @@ function RecipeForm({ meId, parent, recipe, onDone, shot, linkFirst }: { meId: s
       <Text style={s.h2}>{recipe ? 'Gericht bearbeiten' : parent ? 'Neues Gericht' : 'Was möchtest du gern mal essen?'}</Text>
       {parent && ai && (
         <View style={{ gap: 4 }}>
-          <Button ghost title={reading ? 'Lese Rezept …' : '📷 Aus Foto oder Screenshot übernehmen'} disabled={reading} onPress={fromPhoto} />
+          <Button ghost title={reading ? 'Lese Rezept …' : 'Aus Foto oder Screenshot übernehmen'} disabled={reading} onPress={fromPhoto} />
           {reading && <ActivityIndicator color={C.accent} />}
           <Text style={[s.muted, { fontSize: 12 }]}>Kochbuchseite fotografieren oder Screenshots aus Cookidoo, Chefkoch, Instagram und Co. (bis 6 Bilder). Die KI füllt Zutaten und Zubereitung aus und schneidet das Foto vom Gericht aus, falls eins drauf ist. Ein KI-Aufruf.</Text>
         </View>
@@ -256,7 +256,7 @@ function RecipeForm({ meId, parent, recipe, onDone, shot, linkFirst }: { meId: s
           <Text style={s.label}>Link zum Rezept</Text>
           <TextInput style={s.input} value={link} onChangeText={setLink} placeholder="https://www.chefkoch.de/rezepte/…" autoCapitalize="none" autoCorrect={false} keyboardType="url" autoFocus
             onSubmitEditing={() => { if (/^https?:\/\/\S+\.\S+/i.test(link.trim())) fromLink(); }} accessibilityLabel="Link zum Rezept" />
-          <Button title={linking ? 'Lese Seite …' : '🔗 Rezept holen'} disabled={linking || !/^https?:\/\/\S+\.\S+/i.test(link.trim()) || !cloudEnabled} onPress={fromLink} />
+          <Button title={linking ? 'Lese Seite …' : 'Rezept holen'} disabled={linking || !/^https?:\/\/\S+\.\S+/i.test(link.trim()) || !cloudEnabled} onPress={fromLink} />
           <Text style={[s.muted, { fontSize: 12 }]}>Link von Chefkoch, Lecker, Kochbar, Blogs und vielen anderen kopieren. Famelio holt Name, Zutaten, Zubereitung und Bild. Kostenlos, ohne KI. Danach kannst du alles noch ändern.</Text>
           {!cloudEnabled && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>Dafür muss das Gerät mit der Familie verbunden sein.</Text>}
         </View>
@@ -274,7 +274,7 @@ function RecipeForm({ meId, parent, recipe, onDone, shot, linkFirst }: { meId: s
         {!linkFirst && <TextInput style={s.input} value={link} onChangeText={setLink} placeholder="https://cookidoo.de/... oder https://www.chefkoch.de/..." autoCapitalize="none" keyboardType="url" />}
         {!linkFirst && /^https?:\/\/\S+\.\S+/i.test(link.trim()) && cloudEnabled && (
           <View style={{ gap: 4 }}>
-            <Button ghost title={linking ? 'Lese Seite …' : '🔗 Zutaten, Schritte und Bild vom Link holen'} disabled={linking} onPress={fromLink} />
+            <Button ghost title={linking ? 'Lese Seite …' : 'Zutaten, Schritte und Bild vom Link holen'} disabled={linking} onPress={fromLink} />
             <Text style={[s.muted, { fontSize: 12 }]}>Kostenlos, ohne KI. Klappt bei den meisten Rezeptseiten. Das Bild wird nur für eure Familie gespeichert.</Text>
           </View>
         )}
@@ -282,7 +282,7 @@ function RecipeForm({ meId, parent, recipe, onDone, shot, linkFirst }: { meId: s
       <Text style={s.label}>Bild</Text>
       <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
         <DishTile title={title || '?'} photo={photo} ingredients={ing.split(/[,\n]/)} style={{ width: 96, height: 72 }} emojiSize={30} />
-        <Button ghost title={photo ? '📷 Anderes Foto' : '📷 Eigenes Foto'} onPress={async () => { const p = await pickDishPhoto().catch(() => null); if (p) { setPhoto(p); setPhotoSrc(undefined); } }} />
+        <Button ghost title={photo ? 'Anderes Foto' : 'Eigenes Foto'} onPress={async () => { const p = await pickDishPhoto().catch(() => null); if (p) { setPhoto(p); setPhotoSrc(undefined); } }} />
         {photo && <Button ghost title="Entfernen" onPress={() => { setPhoto(undefined); setPhotoSrc(undefined); }} />}
       </View>
       {!photo && <Text style={[s.muted, { fontSize: 12 }]}>Ohne Foto zeigt die App ein passendes Symbol. Am schönsten ist ein eigenes Foto vom fertigen Essen.</Text>}

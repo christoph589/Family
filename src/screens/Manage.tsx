@@ -42,7 +42,7 @@ export function Manage({ onReset }: { onReset?: () => void }) {
         <Text style={s.h2}>Vorlagen</Text>
         <Segmented value={childId} onChange={setChildId} options={data.children.map(c => ({ value: c.id, label: c.name }))} />
         <Pressable onPress={addPack} style={{ backgroundColor: C.accent + '14', borderWidth: 2, borderColor: C.accent, borderRadius: 14, padding: 14, gap: 4 }}>
-          <Text style={[s.text, { fontWeight: '800' }]}>🎒 Schulpaket für {data.children.find(c => c.id === childId)?.name} hinzufügen</Text>
+          <Text style={[s.text, { fontWeight: '800' }]}>Schulpaket für {data.children.find(c => c.id === childId)?.name} hinzufügen</Text>
           <Text style={s.muted}>{SCHOOL_PACK.map(t => t.title).join(', ')}. Mo bis Fr, Schulsachen abends vor Schultagen (also auch Sonntag). Am Wochenende und in den Ferien pausiert.</Text>
         </Pressable>
         <Text style={s.muted}>Oder einzeln antippen. Grau heißt: hat {data.children.find(c => c.id === childId)?.name} schon.</Text>
@@ -93,17 +93,17 @@ export function Manage({ onReset }: { onReset?: () => void }) {
             <Text style={[s.text, { flex: 1 }]}>Gehört zur Schule (nur an Schultagen, pausiert in den Ferien)</Text>
           </Pressable>
         )}
-        <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: special }} onPress={() => { const v = !special; setSpecial(v); if (v) { setRepeat('einmal'); if ((Number(points) || 0) < 30) setPoints('30'); } }} style={[s.row, { flexWrap: 'nowrap', backgroundColor: special ? '#fff6d6' : 'transparent', borderRadius: 12, padding: special ? 8 : 0 }]}>
-          <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#f2b705', backgroundColor: special ? '#f2b705' : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: special }} onPress={() => { const v = !special; setSpecial(v); if (v) { setRepeat('einmal'); if ((Number(points) || 0) < 30) setPoints('30'); } }} style={[s.row, { flexWrap: 'nowrap', backgroundColor: special ? C.sunSoft : 'transparent', borderRadius: 12, padding: special ? 8 : 0 }]}>
+          <View style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: C.sun, backgroundColor: special ? C.sun : C.surface, alignItems: 'center', justifyContent: 'center' }}>
             {special && <Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text>}
           </View>
-          <Text style={[s.text, { flex: 1 }]}>⭐ Sonderaufgabe: Extra-Punkte, bleibt stehen, bis sie erledigt ist (z. B. Garage aufräumen)</Text>
+          <Text style={[s.text, { flex: 1 }]}>★ Sonderaufgabe: Extra-Punkte, bleibt stehen, bis sie erledigt ist (z. B. Garage aufräumen)</Text>
         </Pressable>
         {special && <DateField value={until} onChange={setUntil} label="Frist (optional)" min={today()} clearable />}
         {repeat === 'einmal' && kind === 'hausaufgabe' && <Text style={[s.muted, { fontSize: 13 }]}>Einmalige Lernaufgaben erscheinen auch in den Ferien.</Text>}
         <Button title="Anlegen" disabled={!title.trim()} onPress={() => {
           update(d => ({ ...d, tasks: [...d.tasks, { id: uid(), childId, title: title.trim(), icon: icon.trim() || undefined, kind, time: time || undefined, selfCheck, school: school && kind !== 'hausaufgabe' && repeat !== 'einmal' ? true : undefined, repeat, points: Number(points) || 0, date: repeat === 'einmal' || special ? today() : undefined, active: true, ...(special ? { repeat: 'einmal' as Repeat, selfCheck: false, special: until ? { until } : {} } : {}) }] }));
-          setAdded(`${special ? '⭐ ' : icon}${title.trim()} hinzugefügt.`); setTitle(''); setIcon(''); setSpecial(false); setUntil('');
+          setAdded(`${special ? '★ ' : icon}${title.trim()} hinzugefügt.`); setTitle(''); setIcon(''); setSpecial(false); setUntil('');
         }} />
       </View>
       <View style={s.card}>
@@ -113,7 +113,7 @@ export function Manage({ onReset }: { onReset?: () => void }) {
           <View key={t.id} style={[s.row, { flexWrap: 'nowrap', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }]}>
             <View style={{ flex: 1 }}>
               <Text style={[s.text, { fontWeight: '700' }]}>{t.icon ? t.icon + ' ' : ''}{t.title}</Text>
-              <Text style={[s.muted, { fontSize: 12 }]}>{KIND_LABEL[t.kind]}{t.time ? ` · ${t.time}` : ''}{t.selfCheck ? ' · ohne Bestätigung' : ''} · {t.special ? `⭐ Sonderaufgabe${t.special.until ? ' bis ' + t.special.until : ''}${data.completions.some(c => c.taskId === t.id && c.status === 'bestaetigt') ? ' · geschafft' : ''}` : t.repeat === 'einmal' ? t.date : REPEAT_LABEL[t.repeat]}{isSchoolTask(t) ? ' · Schule' : ''} · {t.points} P</Text>
+              <Text style={[s.muted, { fontSize: 12 }]}>{KIND_LABEL[t.kind]}{t.time ? ` · ${t.time}` : ''}{t.selfCheck ? ' · ohne Bestätigung' : ''} · {t.special ? `★ Sonderaufgabe${t.special.until ? ' bis ' + t.special.until : ''}${data.completions.some(c => c.taskId === t.id && c.status === 'bestaetigt') ? ' · geschafft' : ''}` : t.repeat === 'einmal' ? t.date : REPEAT_LABEL[t.repeat]}{isSchoolTask(t) ? ' · Schule' : ''} · {t.points} P</Text>
             </View>
             <View style={{ alignItems: 'center', marginRight: 6 }}>
               <TextInput style={[s.input, { width: 56, paddingVertical: 6, paddingHorizontal: 6, textAlign: 'center', fontWeight: '800' }]} defaultValue={String(t.points)} keyboardType="number-pad" accessibilityLabel={`Punkte für ${t.title}`}

@@ -84,15 +84,15 @@ export function LetterImport({ onDone }: { onDone: (added: number) => void }) {
 
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
-      <Text style={s.h2}>📄 Elternbrief einlesen</Text>
+      <Text style={s.h2}>Elternbrief einlesen</Text>
       {ai === false && <Text style={s.muted}>Das Lesen macht die KI. Dafür muss dieses Gerät mit dem Familienserver verbunden sein.</Text>}
       {ai && !rows && !busy && (
         <>
           <Text style={s.muted}>Foto, PDF oder Text vom Brief, der Einladung oder dem Aushang. Die KI sucht alle Termine heraus, du entscheidest, was in den Kalender kommt.</Text>
           <View style={s.row}>
-            {Platform.OS !== 'web' && <Button title="📷 Foto machen" onPress={() => pick(true)} />}
-            <Button title={Platform.OS === 'web' ? '📎 Foto oder PDF hochladen' : '🖼️ Aus Fotos wählen'} onPress={() => pick(false)} />
-            <Button ghost title="📝 Text einfügen" onPress={() => setTyping(v => !v)} />
+            {Platform.OS !== 'web' && <Button title="Foto machen" onPress={() => pick(true)} />}
+            <Button title={Platform.OS === 'web' ? 'Foto oder PDF hochladen' : 'Aus Fotos wählen'} onPress={() => pick(false)} />
+            <Button ghost title="Text einfügen" onPress={() => setTyping(v => !v)} />
           </View>
           {typing && (
             <>
@@ -121,7 +121,7 @@ export function LetterImport({ onDone }: { onDone: (added: number) => void }) {
             <TextInput style={[s.input, { flex: 1, paddingVertical: 8 }]} value={`${r.title}`} onChangeText={t => set(r.key, { title: t })} accessibilityLabel="Titel" />
           </View>
           <Text style={[s.text, { fontWeight: '700' }]}>{r.icon ? r.icon + ' ' : ''}{niceDate(r.date, true)}{r.time ? `, ${r.time}${r.end ? `–${r.end}` : ''}` : ', ganztägig'}{r.date < today() ? '  (liegt in der Vergangenheit)' : ''}</Text>
-          {r.note ? <Text style={s.text}>📝 {r.note}</Text> : null}
+          {r.note ? <Text style={s.text}>{r.note}</Text> : null}
           <View style={[s.row, { gap: 6 }]}>
             {[{ id: '', name: 'Alle', color: C.accent }, ...kids].map(k => {
               const on = k.id ? r.who.includes(k.id) : r.who.length === 0;

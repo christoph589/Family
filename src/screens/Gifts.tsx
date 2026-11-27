@@ -18,13 +18,13 @@ export function MoneyTab({ childIds, parent, meId }: { childIds: string[]; paren
   const fresh = data ? pendingWishes(data).filter(w => childIds.includes(w.childId)).length : 0;
   if (!parent) return (
     <View style={{ gap: 14 }}>
-      <Segmented value={part} onChange={setPart} options={[{ value: 'taschengeld', label: '👛 Taschengeld' }, { value: 'wuensche', label: '🎁 Wunschzettel' }]} />
+      <Segmented value={part} onChange={setPart} options={[{ value: 'taschengeld', label: 'Taschengeld' }, { value: 'wuensche', label: 'Wunschzettel' }]} />
       {part === 'taschengeld' ? <Money childIds={childIds} parent={parent} /> : childIds.map(id => <KidWishes key={id} childId={id} />)}
     </View>
   );
   return (
     <View style={{ gap: 14 }}>
-      <Segmented value={part} onChange={setPart} options={[{ value: 'taschengeld', label: '👛 Taschengeld' }, { value: 'wuensche', label: fresh ? `📝 Wünsche (${fresh})` : '📝 Wünsche' }, { value: 'geschenke', label: '🎁 Geschenke' }]} />
+      <Segmented value={part} onChange={setPart} options={[{ value: 'taschengeld', label: 'Taschengeld' }, { value: 'wuensche', label: fresh ? `Wünsche (${fresh})` : 'Wünsche' }, { value: 'geschenke', label: 'Geschenke' }]} />
       {part === 'taschengeld' ? <Money childIds={childIds} parent={parent} /> : part === 'wuensche' ? <ParentWishes childIds={childIds} meId={meId} /> : <Gifts meId={meId} />}
     </View>
   );

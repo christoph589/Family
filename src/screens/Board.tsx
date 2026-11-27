@@ -5,7 +5,7 @@ import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { potBalance, potShares, birthdaysOn, holidayLabel, peopleOf, pointsOf, schoolOn, tasksFor, today, toggleByChild } from '../data/logic';
 import { TIME_ORDER } from '../data/templates';
-const TIME_ICON: Record<string, string> = { morgens: ' 🌅', mittags: ' ☀️', abends: ' 🌙' };
+const TIME_ICON: Record<string, string> = { morgens: '', mittags: '', abends: '' };
 import { Child, FamilyData, Task } from '../data/types';
 import { Button } from '../ui/Button';
 import { baseItems, CalItem, CalMode, CalNav, CalViews, daysOf, matchesPeople } from '../ui/CalViews';
@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Popup } from '../ui/Popup';
 import { C, grad, s, SHADOW } from '../ui/theme';
 import { Avatar, PersonHead } from '../ui/Avatar';
+import { Icon, IconName } from '../ui/Icon';
 import { useFeedItems } from '../data/feeds';
 import { useIcloudItems } from '../data/icloud';
 import { WeatherPill } from '../ui/Weather';
@@ -42,7 +43,7 @@ const urlView = (): WallView | null => {
   const v = new URLSearchParams(location.search).get('wand');
   return v === 'bad' ? 'bad' : v === 'zentral' ? 'zentral' : null;
 };
-const PART_LABEL: Record<string, string> = { morgens: '🌅 Morgens', mittags: '☀️ Mittags', abends: '🌙 Abends' };
+const PART_LABEL: Record<string, string> = { morgens: 'Morgens', mittags: 'Mittags', abends: 'Abends' };
 const partOf = (d: Date) => (d.getHours() < 11 ? 'morgens' : d.getHours() < 16 ? 'mittags' : 'abends');
 
 /** Bad-Ansicht: nur die Aufgaben der Kinder, groß und zum Abhaken. Was gerade dran ist (morgens/abends), steht oben. */
@@ -89,7 +90,7 @@ function BathColumn({ data, child, date, part, toggle, rowH }: { data: FamilyDat
     <View style={[s.card, { flexGrow: 1, flexBasis: 280, gap: rowH < 46 ? 4 : 8, borderTopWidth: 6, borderTopColor: child.color }]}>
       <PersonHead name={child.name} color={child.color} photo={child.photo} value={`${done}/${items.length}`} />
       {!items.length && <Text style={s.muted}>Heute nichts zu tun 🎈</Text>}
-      {allNowDone && <Text style={{ fontSize: 18, fontWeight: '800', color: C.ok }}>🎉 Alles für jetzt erledigt!</Text>}
+      {allNowDone && <Text style={{ fontSize: 18, fontWeight: '800', color: C.ok }}>Alles für jetzt erledigt!</Text>}
       {sorted.map(({ task, completion }) => {
         const later = rank(task.time) === 2;
         const ok = completion?.status === 'bestaetigt';
@@ -101,7 +102,7 @@ function BathColumn({ data, child, date, part, toggle, rowH }: { data: FamilyDat
               {completion && <Text style={{ color: '#fff', fontWeight: '900', fontSize: box * 0.55 }}>✓</Text>}
             </View>
             <Clip style={{ flex: 1, fontSize: fs, fontWeight: '700', color: C.fg, textDecorationLine: completion ? 'line-through' : 'none' }} lines={rowH < 46 ? 1 : 2} longPress>
-              {task.special ? '⭐ ' : ''}{task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}
+              {task.special ? '★ ' : ''}{task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}
             </Clip>
             <Text style={{ fontSize: 13, color: completion && !ok ? C.warn : C.muted, fontWeight: '700' }}>{completion && !ok ? 'wartet' : TIME_ICON[task.time ?? '']?.trim() ?? ''}</Text>
           </Pressable>
@@ -165,16 +166,16 @@ export function Board({ onExit }: { onExit: () => void }) {
     <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}>
       {!ask && <Pressable accessibilityRole="button" accessibilityLabel={view === 'bad' ? 'Zur großen Wandansicht' : 'Zur Bad-Ansicht'} onPress={() => setView(view === 'bad' ? 'zentral' : 'bad')}
         style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.55 }}>
-        <Text style={{ fontSize: 22 }}>{view === 'bad' ? '🏠' : '🛁'}</Text>
+        <Text style={{ fontSize: 22 }}>{view === 'bad' ? 'Groß' : 'Bad'}</Text>
       </Pressable>}
           {!ask && <Pressable accessibilityRole="button" accessibilityLabel="Neu laden" onPress={hardReload}
               style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 22 }}>🔄</Text>
+              <Text style={{ fontSize: 24, fontWeight: '800', color: C.fg }}>↻</Text>
             </Pressable>}
           {!ask ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Wandansicht beenden (Eltern-PIN)" onPress={() => setAsk(true)}
               style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', opacity: 0.55 }}>
-              <Text style={{ fontSize: 20 }}>⚙️</Text>
+              <Text style={{ fontSize: 24, fontWeight: '800', color: C.fg }}>⋯</Text>
             </Pressable>
           ) : (
             <View style={[s.row, { flexWrap: 'nowrap' }]}>
@@ -203,17 +204,17 @@ export function Board({ onExit }: { onExit: () => void }) {
         <WeatherPill big={wide} />
         {holiday && (
           <View style={{ backgroundColor: C.warnSoft, borderRadius: 99, paddingHorizontal: 16, paddingVertical: 8 }}>
-            <Text style={{ fontWeight: '800', color: C.fg, fontSize: 16 }}>🏖️ {holiday}</Text>
+            <Text style={{ fontWeight: '800', color: C.fg, fontSize: 16 }}>{holiday}</Text>
           </View>
         )}
         <View style={[s.row, { gap: 8 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Alle anzeigen" onPress={() => setFilter([])}
             style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 3, borderColor: filter.length ? 'transparent' : C.accent, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 22 }}>👨‍👩‍👧‍👦</Text>
+            <Icon name="user" size={24} color={C.fg} />
           </Pressable>
           <Pressable onPress={() => setKids(!kids)} accessibilityRole="switch" accessibilityState={{ checked: kids }} accessibilityLabel="Aufgaben und Punkte der Kinder anzeigen"
-            style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 3, borderColor: kids ? '#f5b301' : 'transparent', backgroundColor: kids ? '#fff6d6' : C.surface, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 22, opacity: kids ? 1 : 0.35 }}>⭐</Text>
+            style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 3, borderColor: kids ? '#f5b301' : 'transparent', backgroundColor: kids ? C.sunSoft : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 22, opacity: kids ? 1 : 0.35 }}>★</Text>
           </Pressable>
           {people.map(p => {
             const on = filter.includes(p.id);
@@ -244,14 +245,14 @@ export function Board({ onExit }: { onExit: () => void }) {
               <Text style={s.label}>Heute</Text>
               <DayEvents data={data} date={date} big filter={filter} />
             </View>
-            <View style={[s.card, { flex: 1, backgroundColor: '#fff2e0' }]}>
+            <View style={[s.card, { flex: 1, backgroundColor: C.accentSoft }]}>
               <Text style={s.label}>Heute gibt es</Text>
               {mealsOn(data, date).length
                 ? mealsOn(data, date).sort((a, b) => a.slot.localeCompare(b.slot) * -1).map(m => <DishLine key={m.id} title={m.title} photo={dishPhoto(data, m.title)} icon={m.slot === 'mittag' ? '☀️' : m.slot === 'abend' ? '🌙' : '🥣'} />)
                 : <Text style={s.muted}>Noch nichts geplant</Text>}
             </View>
             <View style={[s.card, { flex: 1 }]}>
-              <Text style={s.label}>🛒 Einkaufsliste{open ? ` (${open})` : ''}</Text>
+              <Text style={s.label}>Einkaufsliste{open ? ` (${open})` : ''}</Text>
               {open ? (data.shopping ?? []).filter(i => !i.done).slice(0, 6).map(i => <Text key={i.id} style={[s.text, { fontWeight: '600' }]} numberOfLines={1}>• {i.title}</Text>) : <Text style={s.muted}>Alles da</Text>}
               {open > 6 && <Text style={s.muted}>und {open - 6} weitere</Text>}
             </View>
@@ -261,12 +262,12 @@ export function Board({ onExit }: { onExit: () => void }) {
           <Text style={s.label}>Heute</Text>
           <DayEvents data={data} date={date} big filter={filter} />
           {mealsOn(data, date).length > 0 && (
-            <View style={{ backgroundColor: '#fff2e0', borderRadius: 10, padding: 10, gap: 2 }}>
+            <View style={{ backgroundColor: C.accentSoft, borderRadius: 10, padding: 10, gap: 2 }}>
               <Text style={s.label}>Heute gibt es</Text>
               {mealsOn(data, date).sort((a, b) => a.slot.localeCompare(b.slot) * -1).map(m => <DishLine key={m.id} size={16} title={m.title} photo={dishPhoto(data, m.title)} icon={m.slot === 'mittag' ? '☀️' : m.slot === 'abend' ? '🌙' : '🥣'} />)}
             </View>
           )}
-          {(data.shopping ?? []).some(i => !i.done) && <Text style={s.muted}>🛒 {(data.shopping ?? []).filter(i => !i.done).length} Sachen auf der Einkaufsliste</Text>}
+          {(data.shopping ?? []).some(i => !i.done) && <Text style={s.muted}>{(data.shopping ?? []).filter(i => !i.done).length} Sachen auf der Einkaufsliste</Text>}
         </View>
         )}
         {kids && <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 16, width: wide ? undefined : '100%' }}>
@@ -277,7 +278,7 @@ export function Board({ onExit }: { onExit: () => void }) {
       {kids && (data.pots ?? []).filter(p => !p.doneAt).map(p => {
         const bal = potBalance(data, p.id);
         return (
-          <View key={p.id} style={[{ flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 22, padding: 16 }, grad('#5b4cf0', '#ff6a5c', 120), SHADOW.sm]}>
+          <View key={p.id} style={[{ flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 22, padding: 16 }, grad('#1f6f63', '#17564d', 120), SHADOW.sm]}>
             <Text style={{ fontSize: 36 }}>{p.icon ?? '🎯'}</Text>
             <View style={{ flex: 1, gap: 8 }}>
               <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>Gemeinsam für: {p.title}</Text>
@@ -286,15 +287,15 @@ export function Board({ onExit }: { onExit: () => void }) {
                 {!!p.bonus && <View style={{ width: `${(p.bonus / Math.max(p.target, bal)) * 100}%`, backgroundColor: '#fff' }} />}
               </View>
             </View>
-            <Text style={{ color: '#fff', fontSize: 26, fontWeight: '800' }}>{bal}<Text style={{ fontSize: 15, color: '#ffffffcc' }}> / {p.target} ⭐</Text></Text>
+            <Text style={{ color: '#fff', fontSize: 26, fontWeight: '800' }}>{bal}<Text style={{ fontSize: 15, color: '#ffffffcc' }}> / {p.target} ★</Text></Text>
           </View>
         );
       })}
       <View style={[s.row, { gap: 10 }]} accessibilityRole="tablist">
         {PANES.map(x => (
           <Pressable key={x.value} accessibilityRole="tab" accessibilityState={{ selected: pane === x.value }} onPress={() => setPane(x.value)}
-            style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 18, backgroundColor: pane === x.value ? C.fg : C.surface }, pane === x.value ? null : SHADOW.sm]}>
-            <Text style={{ fontSize: 20 }}>{x.icon}</Text>
+            style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 18, backgroundColor: pane === x.value ? C.accent : C.surface }, pane === x.value ? null : SHADOW.sm]}>
+            <Icon name={x.icon} size={22} color={pane === x.value ? '#fff' : C.fg} />
             <Text style={{ fontSize: 16, fontWeight: '800', color: pane === x.value ? '#fff' : C.fg }}>{x.label}</Text>
             {x.value === 'einkauf' && open > 0 && <View style={{ backgroundColor: C.accent2, borderRadius: 10, minWidth: 20, paddingHorizontal: 5, alignItems: 'center' }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>{open}</Text></View>}
           </Pressable>
@@ -306,7 +307,7 @@ export function Board({ onExit }: { onExit: () => void }) {
       {pane === 'kalender' && <View style={[s.card, { gap: 12 }, fit && { flex: 1, minHeight: 0 }]}>
         <CalNav mode={mode} anchor={anchor} onMode={m => { setMode(m); setAnchor(date); AsyncStorage.setItem('familienplaner:boardView', m).catch(() => {}); }} onAnchor={setAnchor}
           right={<View style={[s.row, { gap: 8 }]}>
-            {eventTarget(data.settings) === 'both' && <Button ghost title="🍎 + iCloud" onPress={() => { setIcAdd(true); setSel(null); }} />}
+            {eventTarget(data.settings) === 'both' && <Button ghost title="+ iCloud" onPress={() => { setIcAdd(true); setSel(null); }} />}
             <Button title="+ Termin" onPress={() => { if (eventTarget(data.settings) === 'icloud') setIcAdd(true); else setAdding(true); setSel(null); }} />
           </View>} />
         {icAdd && <Popup onClose={() => setIcAdd(false)}><IcloudForm initial={{ date: anchor }} cals={data.settings?.icloud ?? []} onCancel={() => setIcAdd(false)} onSave={async ev => { await icloudSave(ev, (data.settings?.icloud ?? []).map(c => c.href)); setIcAdd(false); setAnchor(ev.date); }} /></Popup>}
@@ -316,7 +317,7 @@ export function Board({ onExit }: { onExit: () => void }) {
             <Text style={s.h2}>{sel.it.title}</Text>
             <Text style={s.muted}>{new Date(sel.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}{sel.it.time ? `, ${sel.it.time}${sel.it.end ? ' bis ' + sel.it.end : ''}` : ', ganztägig'}{sel.it.tag ? ` · ${sel.it.tag}` : ''}</Text>
             {sel.it.drive ? <Text style={[s.text, { fontWeight: '700' }]}>{sel.it.drive}</Text> : null}
-            {sel.it.note ? <Text style={s.text}>📝 {sel.it.note}</Text> : null}
+            {sel.it.note ? <Text style={s.text}>{sel.it.note}</Text> : null}
             <View style={s.row}>
               {(data.events ?? []).some(e => e.id === sel.it.key) && <DeleteButton parent={false} title="Termin löschen" onDelete={() => { update(d => ({ ...d, events: (d.events ?? []).filter(e => e.id !== sel.it.key) })); setSel(null); }} />}
               <Button ghost title="Schließen" onPress={() => { setSel(null); setConfirmDel(false); }} />
@@ -353,10 +354,10 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
   const sd = schoolOn(data, child.id, date);
   return (
     <View style={[s.card, { flexGrow: 1, flexBasis: 260 }]}>
-      <PersonHead name={child.name} color={child.color} photo={child.photo} value={`⭐ ${pointsOf(data, child.id)}`} />
-      {sd && (sd.from || sd.to) ? <Text style={[s.text, { fontWeight: '700' }]}>🏫 Schule {sd.from ?? '?'}–{sd.to ?? '?'}</Text> : null}
+      <PersonHead name={child.name} color={child.color} photo={child.photo} value={`★ ${pointsOf(data, child.id)}`} />
+      {sd && (sd.from || sd.to) ? <Text style={[s.text, { fontWeight: '700' }]}>Schule {sd.from ?? '?'}–{sd.to ?? '?'}</Text> : null}
       {shoppingFor(data, child.id).map(i => { const u = untilLabel(i.until); return (
-        <Text key={i.id} style={[s.text, { fontSize: 15 }]}>🛒 <Text style={{ fontWeight: '700' }}>{i.title}</Text>{u ? <Text style={{ color: u.urgent ? C.danger : C.muted, fontWeight: u.urgent ? '800' : '500' }}>  {u.text}</Text> : null}</Text>
+        <Text key={i.id} style={[s.text, { fontSize: 15 }]}><Text style={{ fontWeight: '700' }}>{i.title}</Text>{u ? <Text style={{ color: u.urgent ? C.danger : C.muted, fontWeight: u.urgent ? '800' : '500' }}>  {u.text}</Text> : null}</Text>
       ); })}
       <View>
         <Text style={[s.muted, { marginBottom: 4 }]}>{done} von {items.length} erledigt</Text>
@@ -364,11 +365,11 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
           <View style={{ height: '100%', width: `${items.length ? (done / items.length) * 100 : 0}%`, backgroundColor: child.color }} />
         </View>
       </View>
-      {open.length === 0 && items.length > 0 && <Text style={[s.text, { fontWeight: '800', color: C.ok }]}>🎉 Alles erledigt!</Text>}
+      {open.length === 0 && items.length > 0 && <Text style={[s.text, { fontWeight: '800', color: C.ok }]}>Alles erledigt!</Text>}
       {open.map(({ task, completion }) => (
         <View key={task.id} style={[s.row, { flexWrap: 'nowrap' }]}>
           <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: completion ? C.warn : child.color, backgroundColor: completion ? C.warn : 'transparent' }} />
-          <Clip style={[s.text, { flex: 1 }]} lines={1}>{task.special ? '⭐ ' : ''}{task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}{TIME_ICON[task.time ?? ''] ?? ''}</Clip>
+          <Clip style={[s.text, { flex: 1 }]} lines={1}>{task.special ? '★ ' : ''}{task.icon ? oldEmoji(task.icon) + ' ' : ''}{task.title}{TIME_ICON[task.time ?? ''] ?? ''}</Clip>
           {completion && <Text style={{ color: C.warn, fontSize: 12, fontWeight: '700' }}>wartet</Text>}
         </View>
       ))}
@@ -377,9 +378,9 @@ function KidColumn({ data, child, date }: { data: FamilyData; child: Child; date
 }
 
 type Pane = 'kalender' | 'stundenplan' | 'essen' | 'einkauf';
-const PANES: { value: Pane; icon: string; label: string }[] = [
-  { value: 'kalender', icon: '📅', label: 'Kalender' }, { value: 'stundenplan', icon: '🏫', label: 'Stundenplan' },
-  { value: 'essen', icon: '🍽️', label: 'Essensplan' }, { value: 'einkauf', icon: '🛒', label: 'Einkaufsliste' },
+const PANES: { value: Pane; icon: IconName; label: string }[] = [
+  { value: 'kalender', icon: 'cal', label: 'Kalender' }, { value: 'stundenplan', icon: 'book', label: 'Stundenplan' },
+  { value: 'essen', icon: 'food', label: 'Essensplan' }, { value: 'einkauf', icon: 'cart', label: 'Einkaufsliste' },
 ];
 const WDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr'];
 

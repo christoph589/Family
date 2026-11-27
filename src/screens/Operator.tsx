@@ -20,7 +20,7 @@ const time = (iso: string) => new Date(iso).toLocaleString('de-DE', { weekday: '
 
 type Status = 'neu' | 'aktiv' | 'ruhend' | 'inaktiv';
 const STATUS: Record<Status, { label: string; fg: string; bg: string }> = {
-  neu: { label: 'Neu', fg: '#5b4cf0', bg: '#ecebff' },
+  neu: { label: 'Neu', fg: C.accent, bg: C.accentSoft },
   aktiv: { label: 'Aktiv', fg: '#14a05a', bg: '#dcf7e8' },
   ruhend: { label: 'Ruhend', fg: '#b26b00', bg: '#fff1d6' },
   inaktiv: { label: 'Inaktiv', fg: '#6b7088', bg: '#eef0f8' },
@@ -29,7 +29,7 @@ const FEAT: Record<string, string> = Object.fromEntries(FEATURES.map(f => [f.key
 const FEAT_NAME: Record<string, string> = Object.fromEntries(FEATURES.map(f => [f.key, f.name]));
 const PLANS: Record<string, { label: string; fg: string; bg: string }> = {
   free: { label: 'Free', fg: '#6b7088', bg: '#eef0f8' }, pro: { label: 'Pro', fg: '#b26b00', bg: '#fff1d6' },
-  test: { label: 'Test', fg: '#0b7fa8', bg: '#dff3fb' }, intern: { label: 'Intern', fg: '#5b4cf0', bg: '#ecebff' },
+  test: { label: 'Test', fg: '#0b7fa8', bg: '#dff3fb' }, intern: { label: 'Intern', fg: C.accent, bg: C.accentSoft },
 };
 const usd = (n?: number) => (n ? `${n < 0.01 ? '<0,01' : n.toFixed(2).replace('.', ',')} $` : '–');
 const offList = (f: OpFamily) => Object.entries(f.flags ?? {}).filter(([, v]) => v === false).map(([k]) => k);
@@ -91,7 +91,7 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
           <View style={[s.row, { gap: 10 }]}>
             <LogoMark size={34} />
             {width >= 420 && <Text style={{ color: '#fff', fontWeight: '800', fontSize: 20 }}>{BRAND.name}</Text>}
-            <View style={{ backgroundColor: '#5b4cf0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 1.2 }}>OPERATOR</Text></View>
+            <View style={{ backgroundColor: C.accent, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 1.2 }}>OPERATOR</Text></View>
           </View>
           <View style={[s.row, { gap: 16 }]}>
             <Pressable onPress={onClose}><Text style={{ color: '#ffffffb0', fontWeight: '700' }}>{width < 520 ? 'Familie' : 'Zur eigenen Familie'}</Text></Pressable>
@@ -181,7 +181,7 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
               <>
                 <Button ghost title="⚙️ Funktionen, Plan und KI-Limit" onPress={() => setEdit({ ...edit, mode: 'flags', flags: { ...(edit.f.flags ?? {}) }, plan: edit.f.plan ?? 'free', text: edit.f.ai_limit != null ? String(edit.f.ai_limit) : '' })} />
                 <Button ghost title="✏️ Umbenennen" onPress={() => setEdit({ ...edit, mode: 'rename', text: edit.f.name })} />
-                {edit.f.id !== cur && <Button ghost title="🗑️ Familie löschen" onPress={() => setEdit({ ...edit, mode: 'delete', text: '' })} />}
+                {edit.f.id !== cur && <Button ghost title="Familie löschen" onPress={() => setEdit({ ...edit, mode: 'delete', text: '' })} />}
               </>
             )}
             {edit.mode === 'flags' && (
@@ -240,7 +240,7 @@ export function Operator({ onClose, onEntered }: { onClose: () => void; onEntere
 export function SupportAccess({ familyId, status }: { familyId: string; status: { until: string | null; visits: string[] } | null; onChange?: (hours: number) => void; busy?: boolean }) {
   return (
     <View style={[s.card, { gap: 10 }]}>
-      <Text style={s.h2}>🛟 Support</Text>
+      <Text style={s.h2}>Support</Text>
       <Text style={s.muted}>Bei Problemen kann das {BRAND.name}-Team in eure Familie schauen und helfen. Jeder Besuch wird hier mit Uhrzeit angezeigt.</Text>
       <Text style={[s.text, { fontSize: 14 }]}>{status?.visits?.length ? `Letzte Besuche: ${status.visits.map(time).join(', ')}` : 'Bisher kein Besuch.'}</Text>
       <Text style={[s.muted, { fontSize: 12 }]}>Eure Familien-ID für Anfragen: {familyId.slice(0, 8)}</Text>

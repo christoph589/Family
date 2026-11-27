@@ -29,7 +29,7 @@ export function Pots({ childIds, parent, admin }: { childIds: string[]; parent: 
           </Pressable>
         : <NewPot onDone={() => setAdding(false)} />)}
       {done.length > 0 && (
-        <Text style={[s.muted, { textAlign: 'center' }]}>🏆 Geschafft: {done.map(p => `${p.icon ?? ''} ${p.title}`).join(', ')}</Text>
+        <Text style={[s.muted, { textAlign: 'center' }]}>Geschafft: {done.map(p => `${p.icon ?? ''} ${p.title}`).join(', ')}</Text>
       )}
     </View>
   );
@@ -49,7 +49,7 @@ function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[
   const myFree = me ? pointsOf(data, me.id) - reservedOf(data, me.id) : 0;
   return (
     <View style={[{ borderRadius: 26, overflow: 'hidden' }, SHADOW.md]}>
-      <View style={[{ padding: 20, gap: 14 }, grad('#5b4cf0', '#ff6a5c', 120)]}>
+      <View style={[{ padding: 20, gap: 14 }, grad('#1f6f63', '#17564d', 120)]}>
         <View style={[s.row, { flexWrap: 'nowrap', gap: 14 }]}>
           <View style={{ width: 60, height: 60, borderRadius: 20, backgroundColor: '#ffffff33', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 34 }}>{pot.icon ?? '🎯'}</Text>
@@ -60,7 +60,7 @@ function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>{bal}</Text>
-            <Text style={{ color: '#ffffffcc', fontSize: 13, fontWeight: '700' }}>von {pot.target} ⭐</Text>
+            <Text style={{ color: '#ffffffcc', fontSize: 13, fontWeight: '700' }}>von {pot.target} ★</Text>
           </View>
         </View>
         {/* Balken: jeder Anteil in der Farbe des Kindes */}
@@ -68,7 +68,7 @@ function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[
           {shares.map(x => <View key={x.child.id} style={{ width: `${(x.points / Math.max(pot.target, bal)) * 100}%`, backgroundColor: x.child.color, borderRightWidth: 2, borderRightColor: '#ffffff88' }} />)}
           {!!pot.bonus && <View style={{ width: `${(pot.bonus / Math.max(pot.target, bal)) * 100}%`, backgroundColor: '#ffffff' }} />}
         </View>
-        <Text style={{ color: '#fff', fontWeight: '700' }}>{reached ? '🎉 Ziel erreicht!' : `Noch ${pot.target - bal} Punkte, ${Math.round(pct)} % geschafft`}</Text>
+        <Text style={{ color: '#fff', fontWeight: '700' }}>{reached ? 'Ziel erreicht!' : `Noch ${pot.target - bal} Punkte, ${Math.round(pct)} % geschafft`}</Text>
         {(shares.length > 0 || !!pot.bonus) && (
           <View style={[s.row, { gap: 8 }]}>
             {shares.map(x => (
@@ -77,7 +77,7 @@ function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{x.child.name} {x.points}</Text>
               </View>
             ))}
-            {!!pot.bonus && <View style={{ backgroundColor: '#ffffff26', borderRadius: 99, paddingVertical: 5, paddingHorizontal: 10 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>👪 Eltern {pot.bonus}</Text></View>}
+            {!!pot.bonus && <View style={{ backgroundColor: '#ffffff26', borderRadius: 99, paddingVertical: 5, paddingHorizontal: 10 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Eltern {pot.bonus}</Text></View>}
           </View>
         )}
       </View>
@@ -95,9 +95,9 @@ function PotCard({ pot, childIds, parent, admin }: { pot: Pot; childIds: string[
         {me && reached && <Text style={s.text}>Super, ihr habt es geschafft! Mama und Papa lösen das Ziel ein.</Text>}
         {admin && (
           <View style={[s.row, { gap: 8 }]}>
-            {!reached && <Button ghost title="👪 +25 von uns" onPress={() => update(d => ({ ...d, pots: (d.pots ?? []).map(p => (p.id === pot.id ? { ...p, bonus: (p.bonus ?? 0) + 25 } : p)) }))} />}
+            {!reached && <Button ghost title="+25 von uns" onPress={() => update(d => ({ ...d, pots: (d.pots ?? []).map(p => (p.id === pot.id ? { ...p, bonus: (p.bonus ?? 0) + 25 } : p)) }))} />}
             <Button ghost title="✏️ Bearbeiten" onPress={() => setEditing(true)} />
-            {reached && <Button title="🎉 Einlösen" color={C.ok} onPress={() => update(d => ({ ...d, pots: (d.pots ?? []).map(p => (p.id === pot.id ? { ...p, doneAt: new Date().toISOString() } : p)) }))} />}
+            {reached && <Button title="Einlösen" color={C.ok} onPress={() => update(d => ({ ...d, pots: (d.pots ?? []).map(p => (p.id === pot.id ? { ...p, doneAt: new Date().toISOString() } : p)) }))} />}
             {ask === 'none'
               ? <Pressable onPress={() => setAsk('dissolve')} style={{ padding: 8 }}><Text style={{ color: C.danger, fontWeight: '700' }}>Ziel auflösen</Text></Pressable>
               : <>
@@ -146,7 +146,7 @@ function NewPot({ onDone, pot }: { onDone: () => void; pot?: Pot }) {
         <>
           <Text style={s.label}>Von euch Eltern dazugelegt</Text>
           <TextInput style={[s.input, { width: 120 }]} value={bonus} onChangeText={x => setBonus(x.replace(/\D/g, ''))} keyboardType="number-pad" accessibilityLabel="Eltern-Anteil" />
-          <Text style={[s.muted, { fontSize: 13 }]}>Die Kinder haben {paid} Punkte eingezahlt. Daran ändert sich nichts. Mit den neuen Werten steht der Topf bei {paid + bo} von {t || 0}{paid + bo >= t && t > 0 ? ', also erreicht 🎉' : ''}.</Text>
+          <Text style={[s.muted, { fontSize: 13 }]}>Die Kinder haben {paid} Punkte eingezahlt. Daran ändert sich nichts. Mit den neuen Werten steht der Topf bei {paid + bo} von {t || 0}{paid + bo >= t && t > 0 ? ', also erreicht' : ''}.</Text>
         </>
       )}
       <Text style={[s.muted, { fontSize: 13 }]}>Richtwert: Hausaufgaben bringen 10, Zähne putzen 2 Punkte. Bei 4 Kindern kommen so grob 150 bis 250 Punkte pro Woche zusammen, wenn alle mitmachen.</Text>

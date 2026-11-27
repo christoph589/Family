@@ -133,7 +133,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
         <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Die KI macht daraus einen kurzen Test, mit dem ihr seht, ob das Thema verstanden wurde.</Text>
         {!parent && (
           <View style={{ backgroundColor: C.warnSoft, borderRadius: 14, padding: 12, gap: 2 }}>
-            <Text style={[s.text, { fontWeight: '800' }]}>⭐ Bonus, wenn du selbst hochlädst</Text>
+            <Text style={[s.text, { fontWeight: '800' }]}>★ Bonus, wenn du selbst hochlädst</Text>
             <Text style={[s.text, { fontSize: 14 }]}>+{SELF_BONUS.upload} fürs Hochladen, +{PRACTICE_POINTS} fürs Lernen, +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
           </View>
         )}
@@ -159,7 +159,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
         )}
         {photos.length < MAX_PHOTOS && (
           <View style={s.row}>
-            <Button ghost title={busy ? 'Lädt …' : photos.length ? '📸 Weitere Seiten' : '📸 Seiten fotografieren'} disabled={busy} onPress={pick} />
+            <Button ghost title={busy ? 'Lädt …' : photos.length ? 'Weitere Seiten' : 'Seiten fotografieren'} disabled={busy} onPress={pick} />
           </View>
         )}
         <Button title="Thema speichern" disabled={busy || !childId || (!photos.length && !text.trim())} onPress={save} />
@@ -227,11 +227,11 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
               <Text style={[s.text, { fontWeight: '800', fontSize: 15 }]}>{k.name}</Text>
               <View style={[s.row, { gap: 6, flexWrap: 'wrap' }]}>
                 {check > 0 && <Pill text={`✍️ ${check} prüfen`} color={C.warn} bg={C.warnSoft} />}
-                {open > 0 && <Pill text={`📝 ${open} ${open === 1 ? 'Test' : 'Tests'} beim Kind offen`} color={C.accent} bg={C.accentSoft} />}
-                {next && <Pill text={`📅 ${next.subject} ${days === 0 ? 'heute' : days === 1 ? 'morgen' : `in ${days} T.`}`} color={days !== null && days <= 3 ? C.danger : C.fg} bg={days !== null && days <= 3 ? '#fde3e6' : C.surface2} onPress={() => { setFocus(k.id); onGo('klassenarbeit'); }} />}
+                {open > 0 && <Pill text={`${open} ${open === 1 ? 'Test' : 'Tests'} beim Kind offen`} color={C.accent} bg={C.accentSoft} />}
+                {next && <Pill text={`${next.subject} ${days === 0 ? 'heute' : days === 1 ? 'morgen' : `in ${days} T.`}`} color={days !== null && days <= 3 ? C.danger : C.fg} bg={days !== null && days <= 3 ? '#fde3e6' : C.surface2} onPress={() => { setFocus(k.id); onGo('klassenarbeit'); }} />}
                 {fixme > 0 && <Pill text={`⚠️ ${fixme} unvollständig`} color={C.warn} bg={C.warnSoft} onPress={() => { setFocus(k.id); onGo('klassenarbeit'); }} />}
                 {claims > 0 && <Pill text={`✋ ${claims} Vokabel-Einspruch`} color={C.warn} bg={C.warnSoft} onPress={() => { setFocus(k.id); onGo('vokabeln'); }} />}
-                {vocab > 0 && <Pill text={`🔤 ${vocab} Vokabeln`} color={C.fg} bg={C.surface2} />}
+                {vocab > 0 && <Pill text={`${vocab} Vokabeln`} color={C.fg} bg={C.surface2} />}
                 {!check && !open && !next && !vocab && !fixme && !claims && <Text style={[s.muted, { fontSize: 12 }]}>Nichts offen ✓</Text>}
               </View>
             </View>
@@ -360,7 +360,7 @@ function AskBox({ topic, childName, onClose }: { topic: Topic; childName: string
       <Text style={[s.label, { color: C.accent }]}>❓ Frag nach, was du nicht verstanden hast</Text>
       {log.map((x, i) => (
         <View key={i} style={{ gap: 4 }}>
-          <Text style={[s.text, { fontWeight: '700', fontSize: 15 }]}>🙋 {x.q}</Text>
+          <Text style={[s.text, { fontWeight: '700', fontSize: 15 }]}>{x.q}</Text>
           <Text style={[s.text, { fontSize: 15, backgroundColor: C.surface, borderRadius: 10, padding: 10 }]}>{x.a}</Text>
         </View>
       ))}
