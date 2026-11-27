@@ -45,28 +45,40 @@ export function SheetEditor({ topic, onDone }: { topic: Topic; onDone: () => voi
   );
 }
 
-/** Kind löst offene Arbeiten. */
-export function KidSheets({ childId, openId, setOpenId }: { childId: string; openId: string | null; setOpenId: (id: string | null) => void }) {
+/** Lösen-Fenster für ein offenes Blatt. Einmal in Learn eingebunden, damit jeder Reiter es öffnen kann. */
+export function SolveModal({ sheetId, onClose }: { sheetId: string | null; onClose: () => void }) {
   const { data } = useFamily();
-  const sheets = (data?.worksheets ?? []).filter(w => w.childId === childId);
-  const open = sheets.filter(w => w.status === 'offen');
-  const waiting = sheets.filter(w => w.status === 'abgegeben');
-  const checked = sheets.filter(w => w.status === 'geprueft').slice(0, 5);
-  if (!sheets.length) return (
+  const active = sheetId ? (data?.worksheets ?? []).find(w => w.id === sheetId && w.status === 'offen') : undefined;
+  return (
+    <Modal visible={!!active} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={s.screen}>
+        {active && <SolveSheet sheet={active} onDone={onClose} />}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+/**
+ * Kind: Übungen und Ergebnisse. kind 'test' = Tagestests (offen, abgegeben, geprüft),
+ * kind 'exam' = nur die Ergebnisse der Probe-Arbeiten (Lösen und Abgeben laufen in der Klassenarbeit selbst).
+ */
+export function KidSheets({ childId, kind = 'test', setOpenId }: { childId: string; kind?: 'test' | 'exam'; setOpenId: (id: string | null) => void }) {
+  const { data } = useFamily();
+  const exam = kind === 'exam';
+  const sheets = (data?.worksheets ?? []).filter(w => w.childId === childId && !!w.exam === exam);
+  const open = exam ? [] : sheets.filter(w => w.status === 'offen');
+  const waiting = exam ? [] : sheets.filter(w => w.status === 'abgegeben');
+  const checked = sheets.filter(w => w.status === 'geprueft').slice(0, exam ? 3 : 5);
+  if (!sheets.length) return exam ? null : (
     <View style={s.card}>
       <Text style={s.h2}>Deine Übungen</Text>
-      <Text style={s.muted}>Noch keine Übung da. Lade unten Fotos von dem hoch, was heute dran war. Dann tippst du auf „Test erstellen“.</Text>
+      <Text style={s.muted}>Noch keine Übung da. Lege unten ein Thema an und lade Fotos hoch. Dann tippst du auf „Test erstellen“.</Text>
     </View>
   );
-  const active = open.find(w => w.id === openId);
+  if (exam && !checked.length) return null;
   return (
     <View style={[s.card, { borderWidth: open.length ? 2 : 0, borderColor: C.accent }]}>
-      <Text style={s.h2}>Deine Übungen</Text>
-      <Modal visible={!!active} animationType="slide" onRequestClose={() => setOpenId(null)}>
-        <SafeAreaView style={s.screen}>
-          {active && <SolveSheet sheet={active} onDone={() => setOpenId(null)} />}
-        </SafeAreaView>
-      </Modal>
+      <Text style={s.h2}>{exam ? 'Ergebnisse deiner Probe-Arbeiten' : 'Deine Übungen'}</Text>
       {open.map(w => (
         <View key={w.id} style={[s.row, { backgroundColor: C.bg, padding: 12, borderRadius: 12 }]}>
           <Text style={[s.text, { flex: 1, minWidth: 160, fontWeight: '700' }]}>{w.title}</Text>
@@ -176,9 +188,9 @@ function SolveSheet({ sheet, onDone }: { sheet: Worksheet; onDone: () => void })
 }
 
 /** Eltern gleichen Antworten mit Lösungen ab. */
-export function ReviewSheets({ childIds }: { childIds: string[] }) {
+export function ReviewSheets({ childIds, exam }: { childIds: string[]; exam?: boolean }) {
   const { data } = useFamily();
-  const list = (data?.worksheets ?? []).filter(w => w.status === 'abgegeben' && childIds.includes(w.childId));
+  const list = (data?.worksheets ?? []).filter(w => w.status === 'abgegeben' && childIds.includes(w.childId) && (exam === undefined || !!w.exam === exam));
   const [openId, setOpenId] = useState<string | null>(null);
   if (!list.length) return null;
   const cur = list.length === 1 ? list[0].id : openId;

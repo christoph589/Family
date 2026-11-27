@@ -13,7 +13,9 @@ import { askTopic, QA, AI_ERROR, generateQuiz, getSample } from '../ai/generate'
 import { PRACTICE_POINTS, Question, Topic } from '../data/types';
 import { sanitizeSvg } from '../ui/Math';
 import { Button, Segmented } from '../ui/Button';
-import { DoneSheets, KidSheets, ReviewSheets, SheetEditor, UnderstandingChip } from './Sheets';
+import { DoneSheets, KidSheets, ReviewSheets, SheetEditor, SolveModal, UnderstandingChip } from './Sheets';
+import { LearnToday, LearnPart } from './LearnToday';
+import { studyToday } from '../data/studyplan';
 import { C, s, SHADOW } from '../ui/theme';
 import { VocabReset, Vocab } from './Vocab';
 import { collectPhotos } from './PhotoCollector';
@@ -44,10 +46,10 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
   const [msg, setMsg] = useState('');
   const [editing, setEditing] = useState<Topic | null>(null);
   const [solveId, setSolveId] = useState<string | null>(null);
-  const [part, setPart] = useState<'themen' | 'klassenarbeit' | 'vokabeln' | 'statistik'>('themen');
+  const [part, setPart] = useState<LearnPart>('heute');
   const flags = useFlags();
   const { width } = useWindowDimensions();
-  useEffect(() => { if (part === 'vokabeln' && !isOn('vokabeln', flags)) setPart('themen'); }, [flags, part]);
+  useEffect(() => { if (part === 'vokabeln' && !isOn('vokabeln', flags)) setPart('heute'); }, [flags, part]);
   const [focus, setFocus] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [allTopics, setAllTopics] = useState(false);
@@ -68,120 +70,140 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
   function save() {
     const t: Topic = { id: uid(), childId, subject: subject.trim() || 'Schule', text: text.trim() || `${photos.length} ${photos.length === 1 ? 'Seite' : 'Seiten'}`, photos, date: today(), by: meId };
     update(d => ({ ...d, topics: [t, ...(d.topics ?? [])].slice(0, MAX_TOPICS) }));
-    setSubject(''); setText(''); setPhotos([]); setMsg('Thema gespeichert.');
+    setSubject(''); setText(''); setPhotos([]); setMsg('Thema gespeichert.'); setShowForm(false);
   }
 
   const narrow = width < 560;
   const vocabDue = childIds.reduce((n, id) => n + dueCount(data, id), 0);
+  // Zahl am Reiter „Heute“: Kind = was wartet, Eltern = was zu prüfen ist
+  const sheetsOf = (data.worksheets ?? []).filter(w => allIds.includes(w.childId));
+  const todayN = parent ? sheetsOf.filter(w => w.status === 'abgegeben').length
+    : sheetsOf.filter(w => w.status === 'offen').length + studyToday(data, allIds[0] ?? '').filter(p => !p.day.done).length;
   const tabs = <>
-    {parent && allIds.length > 1 && part !== 'statistik' && <ParentOverview ids={allIds} focus={focus} setFocus={setFocus} onGo={setPart} />}
     <View style={{ position: (Platform.OS === 'web' ? 'sticky' : 'relative') as any, top: 0, zIndex: 10, marginHorizontal: -4, paddingHorizontal: 4, paddingVertical: 4, backgroundColor: C.bg }}>
       <View style={{ flexDirection: 'row', backgroundColor: C.surface2, padding: 4, borderRadius: 14, gap: 4 }}>
-        {([['themen', 'Täglich', 0], ['klassenarbeit', 'Arbeiten', 0], ['vokabeln', 'Vokabeln', vocabDue], ['statistik', 'Statistik', 0]] as const).filter(([v]) => (v !== 'vokabeln' || isOn('vokabeln', flags)) && (v !== 'statistik' || parent)).map(([v, label, n]) => {
+        {([['heute', 'Heute', todayN], ['themen', 'Themen', 0], ['klassenarbeit', 'Arbeiten', 0], ['vokabeln', 'Vokabeln', vocabDue], ['statistik', 'Statistik', 0]] as const).filter(([v]) => (v !== 'vokabeln' || isOn('vokabeln', flags)) && (v !== 'statistik' || parent)).map(([v, label, n]) => {
           const on = part === v;
           // Statistik am Handy nur als Symbol, damit die anderen Reiter lesbar bleiben
           const icon = v === 'statistik' && narrow;
           return (
             <Pressable key={v} onPress={() => setPart(v)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }}
-              style={{ flex: icon ? 0 : 1, paddingHorizontal: icon ? 12 : 0, minWidth: icon ? 48 : 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
-              <Text style={{ fontWeight: '800', fontSize: 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{icon ? '📊' : label}</Text>
-              {n > 0 && <View style={{ minWidth: 20, paddingHorizontal: 5, height: 20, borderRadius: 10, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
+              style={{ flex: icon ? 0 : 1, paddingHorizontal: icon ? 12 : 0, minWidth: icon ? 48 : 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
+              <Text style={{ fontWeight: '800', fontSize: narrow ? 13 : 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{icon ? '📊' : label}</Text>
+              {n > 0 && <View style={{ minWidth: 18, paddingHorizontal: 4, height: 18, borderRadius: 9, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
             </Pressable>
           );
         })}
       </View>
     </View>
+    {/* Eltern mit mehreren Kindern: ein Filter für alle Reiter außer „Heute“ (dort steht der Überblick) */}
+    {parent && allIds.length > 1 && part !== 'heute' && part !== 'statistik' && (
+      <Segmented value={focus} onChange={setFocus} options={[{ value: '', label: 'Alle Kinder' }, ...data.children.filter(c => allIds.includes(c.id)).map(c => ({ value: c.id, label: c.name }))]} />
+    )}
   </>;
-  if (part === 'klassenarbeit') return (
-    <View style={{ gap: 16 }}>
-      {tabs}
-      {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
-      <ExamPrepScreen childIds={childIds} parent={parent} meId={meId} onSolve={parent ? undefined : setSolveId} />
-      {parent && <DoneSheets childIds={childIds} exam />}
-      {admin && <Grades />}
-    </View>
-  );
-  if (part === 'statistik' && parent) return (
-    <View style={{ gap: 16 }}>
-      {tabs}
-      <LearnStats ids={allIds} onGo={(id, p) => { if (allIds.length > 1) setFocus(id); setPart(p); }} />
-    </View>
-  );
-  if (part === 'vokabeln') return <View style={{ gap: 16 }}>{tabs}<Vocab childIds={childIds} parent={parent} meId={meId} />{admin && <VocabReset childIds={childIds} />}</View>;
-
+  const goTo = (p: LearnPart) => setPart(p);
+  const newTopic = () => { setShowForm(true); setPart('themen'); };
+  const body = (() => {
+    if (part === 'heute') return parent ? (
+      <>
+        <ReviewSheets childIds={allIds} />
+        <ParentOverview ids={allIds} focus={focus} setFocus={setFocus} onGo={goTo} />
+        <View style={[s.row, { gap: 8 }]}>
+          <Button ghost title="+ Thema anlegen" onPress={newTopic} />
+          <Button ghost title="+ Klassenarbeit anlegen" onPress={() => setPart('klassenarbeit')} />
+        </View>
+      </>
+    ) : <LearnToday childId={childIds[0]} onGo={goTo} onSolve={setSolveId} onNewTopic={newTopic} />;
+    if (part === 'klassenarbeit') return (
+      <>
+        {parent && <ReviewSheets childIds={childIds} exam />}
+        <ExamPrepScreen childIds={childIds} parent={parent} meId={meId} onSolve={parent ? undefined : setSolveId} />
+        {!parent && <KidSheets childId={childIds[0]} kind="exam" setOpenId={setSolveId} />}
+        {parent && <DoneSheets childIds={childIds} exam />}
+        {admin && <Grades />}
+      </>
+    );
+    if (part === 'statistik' && parent) return <LearnStats ids={allIds} onGo={(id, p) => { if (allIds.length > 1) setFocus(id); setPart(p); }} />;
+    if (part === 'vokabeln') return <><Vocab childIds={childIds} parent={parent} meId={meId} />{admin && <VocabReset childIds={childIds} />}</>;
+    return (
+      <>
+        {parent ? <ReviewSheets childIds={childIds} exam={false} /> : <KidSheets childId={childIds[0]} kind="test" setOpenId={setSolveId} />}
+        {editing && <SheetEditor topic={editing} onDone={() => setEditing(null)} />}
+        <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
+          {!showForm ? (
+            <Pressable onPress={() => setShowForm(true)} style={[s.card, { flexGrow: 1, flexBasis: 320, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+              <Text style={{ fontSize: 26 }}>📸</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.text, { fontWeight: '800' }]}>Neues Thema anlegen</Text>
+                <Text style={[s.muted, { fontSize: 13 }]}>Foto vom Heft oder der Tafel, die KI macht einen kurzen Test.</Text>
+              </View>
+              <Text style={{ color: C.accent, fontWeight: '800', fontSize: 22 }}>+</Text>
+            </Pressable>
+          ) : (
+          <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
+            <View style={[s.row, { justifyContent: 'space-between' }]}>
+              <Text style={s.h2}>Was kam heute dran?</Text>
+              <Button ghost title="Schließen" onPress={() => setShowForm(false)} style={{ paddingVertical: 6 }} />
+            </View>
+            <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Die KI macht daraus einen kurzen Test, mit dem ihr seht, ob das Thema verstanden wurde.</Text>
+            {!parent && (
+              <View style={{ backgroundColor: C.warnSoft, borderRadius: 14, padding: 12, gap: 2 }}>
+                <Text style={[s.text, { fontWeight: '800' }]}>⭐ Bonus, wenn du selbst hochlädst</Text>
+                <Text style={[s.text, { fontSize: 14 }]}>+{SELF_BONUS.upload} fürs Hochladen, +{PRACTICE_POINTS} fürs Lernen, +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
+              </View>
+            )}
+            {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
+            <Text style={s.label}>Fach (optional)</Text>
+            <TextInput style={s.input} value={subject} onChangeText={setSubject} placeholder="z. B. Mathe" />
+            <Text style={s.label}>Thema (optional, wenn Fotos dabei sind)</Text>
+            <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top' }]} multiline value={text} onChangeText={setText} placeholder="z. B. Brüche mit gleichem Nenner addieren" />
+            <Text style={s.label}>Fotos ({photos.length} von {MAX_PHOTOS})</Text>
+            {photos.length > 0 && (
+              <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+                {photos.map((ph, i) => (
+                  <View key={i} style={{ width: 110 }}>
+                    <PhotoImg uri={ph} style={{ width: 110, height: 150, borderRadius: 8, backgroundColor: C.surface2 }} resizeMode="cover" />
+                    <Pressable accessibilityLabel={`Seite ${i + 1} entfernen`} onPress={() => setPhotos(p => p.filter((_, j) => j !== i))}
+                      style={{ position: 'absolute', top: 4, right: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ color: '#fff', fontWeight: '800' }}>✕</Text>
+                    </Pressable>
+                    <Text style={[s.muted, { fontSize: 12, textAlign: 'center' }]}>Seite {i + 1}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            {photos.length < MAX_PHOTOS && (
+              <View style={s.row}>
+                <Button ghost title={busy ? 'Lädt …' : photos.length ? '📸 Weitere Seiten' : '📸 Seiten fotografieren'} disabled={busy} onPress={pick} />
+              </View>
+            )}
+            <Button title="Thema speichern" disabled={busy || !childId || (!photos.length && !text.trim())} onPress={save} />
+            {!photos.length && !text.trim() ? <Text style={[s.muted, { fontSize: 13 }]}>Ein Foto oder ein paar Worte zum Thema reichen.</Text> : null}
+          </View>
+          )}
+          <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
+            <Text style={s.label}>Themen{topics.length ? ` (${topics.length})` : ''}</Text>
+            {msg && !showForm ? <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text> : null}
+            {topics.length === 0 && <Text style={s.muted}>Noch keine Themen.</Text>}
+            {(allTopics ? topics : topics.slice(0, 5)).map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} onCreate={parent ? () => setEditing(t) : undefined} onSolve={parent ? undefined : id => setSolveId(id)} />)}
+            {topics.length > 5 && <Button ghost title={allTopics ? 'Weniger zeigen' : `Alle ${topics.length} Themen zeigen`} onPress={() => setAllTopics(x => !x)} />}
+          </View>
+        </View>
+        {parent && <DoneSheets childIds={childIds} exam={false} />}
+      </>
+    );
+  })();
   return (
     <View style={{ gap: 16 }}>
-    {tabs}
-    {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
-    {editing && <SheetEditor topic={editing} onDone={() => setEditing(null)} />}
-    <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
-      {parent && !showForm ? (
-        <Pressable onPress={() => setShowForm(true)} style={[s.card, { flexGrow: 1, flexBasis: 320, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-          <Text style={{ fontSize: 26 }}>📸</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.text, { fontWeight: '800' }]}>Neues Thema anlegen</Text>
-            <Text style={[s.muted, { fontSize: 13 }]}>Foto vom Heft oder der Tafel, die KI macht einen kurzen Test.</Text>
-          </View>
-          <Text style={{ color: C.accent, fontWeight: '800', fontSize: 22 }}>+</Text>
-        </Pressable>
-      ) : (
-      <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
-        <View style={[s.row, { justifyContent: 'space-between' }]}>
-          <Text style={s.h2}>Was kam heute dran?</Text>
-          {parent && <Button ghost title="Schließen" onPress={() => setShowForm(false)} style={{ paddingVertical: 6 }} />}
-        </View>
-        <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Die KI macht daraus einen kurzen Test, mit dem ihr seht, ob das Thema verstanden wurde.</Text>
-        {!parent && (
-          <View style={{ backgroundColor: C.warnSoft, borderRadius: 14, padding: 12, gap: 2 }}>
-            <Text style={[s.text, { fontWeight: '800' }]}>⭐ Bonus, wenn du selbst hochlädst</Text>
-            <Text style={[s.text, { fontSize: 14 }]}>+{SELF_BONUS.upload} fürs Hochladen, +{PRACTICE_POINTS} fürs Lernen, +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
-          </View>
-        )}
-        {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
-        <Text style={s.label}>Fach (optional)</Text>
-        <TextInput style={s.input} value={subject} onChangeText={setSubject} placeholder="z. B. Mathe" />
-        <Text style={s.label}>Thema (optional, wenn Fotos dabei sind)</Text>
-        <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top' }]} multiline value={text} onChangeText={setText} placeholder="z. B. Brüche mit gleichem Nenner addieren" />
-        <Text style={s.label}>Fotos ({photos.length} von {MAX_PHOTOS})</Text>
-        {photos.length > 0 && (
-          <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
-            {photos.map((ph, i) => (
-              <View key={i} style={{ width: 110 }}>
-                <PhotoImg uri={ph} style={{ width: 110, height: 150, borderRadius: 8, backgroundColor: C.surface2 }} resizeMode="cover" />
-                <Pressable accessibilityLabel={`Seite ${i + 1} entfernen`} onPress={() => setPhotos(p => p.filter((_, j) => j !== i))}
-                  style={{ position: 'absolute', top: 4, right: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: '#fff', fontWeight: '800' }}>✕</Text>
-                </Pressable>
-                <Text style={[s.muted, { fontSize: 12, textAlign: 'center' }]}>Seite {i + 1}</Text>
-              </View>
-            ))}
-          </ScrollView>
-        )}
-        {photos.length < MAX_PHOTOS && (
-          <View style={s.row}>
-            <Button ghost title={busy ? 'Lädt …' : photos.length ? '📸 Weitere Seiten' : '📸 Seiten fotografieren'} disabled={busy} onPress={pick} />
-          </View>
-        )}
-        <Button title="Thema speichern" disabled={busy || !childId || (!photos.length && !text.trim())} onPress={save} />
-        {!photos.length && !text.trim() ? <Text style={[s.muted, { fontSize: 13 }]}>Ein Foto oder ein paar Worte zum Thema reichen.</Text> : null}
-        {msg ? <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text> : null}
-      </View>
-      )}
-      <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
-        <Text style={s.label}>Themen{topics.length ? ` (${topics.length})` : ''}</Text>
-        {parent && msg && !showForm ? <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text> : null}
-        {topics.length === 0 && <Text style={s.muted}>Noch keine Themen.</Text>}
-        {(allTopics ? topics : topics.slice(0, 5)).map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} onCreate={parent ? () => setEditing(t) : undefined} onSolve={parent ? undefined : id => setSolveId(id)} />)}
-        {topics.length > 5 && <Button ghost title={allTopics ? 'Weniger zeigen' : `Alle ${topics.length} Themen zeigen`} onPress={() => setAllTopics(x => !x)} />}
-      </View>
-    </View>
-    {parent && <DoneSheets childIds={childIds} exam={false} />}
+      {tabs}
+      {body}
+      {!parent && <SolveModal sheetId={solveId} onClose={() => setSolveId(null)} />}
     </View>
   );
 }
 
 /** Eltern: auf einen Blick, wo bei welchem Kind etwas ansteht. Antippen filtert alles darunter auf dieses Kind. */
-function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: string; setFocus: (id: string) => void; onGo: (p: 'themen' | 'klassenarbeit' | 'vokabeln') => void }) {
+function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: string; setFocus: (id: string) => void; onGo: (p: LearnPart) => void }) {
   const { data } = useFamily();
   if (!data) return null;
   const t0 = today();
@@ -211,11 +233,11 @@ function ParentOverview({ ids, focus, setFocus, onGo }: { ids: string[]; focus: 
   return (
     <View style={[s.card, { gap: 4, padding: 12 }]}>
       <View style={[s.row, { justifyContent: 'space-between', paddingHorizontal: 4 }]}>
-        <Text style={[s.text, { fontWeight: '800' }]}>Überblick</Text>
-        {focus ? <Pressable onPress={() => setFocus('')}><Text style={{ color: C.accent, fontWeight: '800', fontSize: 13 }}>Alle Kinder zeigen</Text></Pressable> : <Text style={[s.muted, { fontSize: 12 }]}>Kind antippen zum Filtern</Text>}
+        <Text style={s.h2}>Was bei den Kindern ansteht</Text>
+        {rows.length < 2 ? null : focus ? <Pressable onPress={() => setFocus('')}><Text style={{ color: C.accent, fontWeight: '800', fontSize: 13 }}>Alle Kinder zeigen</Text></Pressable> : <Text style={[s.muted, { fontSize: 12 }]}>Kind antippen für Details</Text>}
       </View>
       {rows.map(({ k, check, open, next, days, fixme, items, vocab, claims }) => {
-        const on = focus === k.id, dim = !!focus && !on;
+        const on = focus === k.id || rows.length === 1, dim = !!focus && !on && rows.length > 1;
         return (
           <View key={k.id}>
           <Pressable onPress={() => setFocus(on ? '' : k.id)} accessibilityRole="button" accessibilityState={{ selected: on }}
