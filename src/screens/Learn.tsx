@@ -14,6 +14,7 @@ import { PRACTICE_POINTS, Question, Topic } from '../data/types';
 import { sanitizeSvg } from '../ui/Math';
 import { Button, Segmented } from '../ui/Button';
 import { DoneSheets, KidSheets, ReviewSheets, SheetEditor, SolveModal, UnderstandingChip } from './Sheets';
+import { Icon } from '../ui/Icon';
 import { LearnToday, LearnPart } from './LearnToday';
 import { studyToday } from '../data/studyplan';
 import { C, s, SHADOW } from '../ui/theme';
@@ -89,15 +90,16 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
           return (
             <Pressable key={v} onPress={() => setPart(v)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }}
               style={{ flex: icon ? 0 : 1, paddingHorizontal: icon ? 12 : 0, minWidth: icon ? 48 : 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
-              <Text style={{ fontWeight: '800', fontSize: narrow ? 13 : 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{icon ? '📊' : label}</Text>
-              {n > 0 && <View style={{ minWidth: 18, paddingHorizontal: 4, height: 18, borderRadius: 9, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
+              <Text style={{ fontWeight: '800', fontSize: narrow ? 13 : 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{icon ? <Icon name="chart" size={20} color={on ? C.fg : C.muted} /> : label}</Text>
+              {n > 0 && v === 'vokabeln' && narrow && <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: C.accent2 }} />}
+              {n > 0 && !(v === 'vokabeln' && narrow) && <View style={{ minWidth: 18, paddingHorizontal: 4, height: 18, borderRadius: 9, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
             </Pressable>
           );
         })}
       </View>
     </View>
     {/* Eltern mit mehreren Kindern: ein Filter für alle Reiter außer „Heute“ (dort steht der Überblick) */}
-    {parent && allIds.length > 1 && part !== 'heute' && part !== 'statistik' && (
+    {parent && allIds.length > 1 && part !== 'heute' && part !== 'statistik' && part !== 'vokabeln' && (
       <Segmented value={focus} onChange={setFocus} options={[{ value: '', label: 'Alle Kinder' }, ...data.children.filter(c => allIds.includes(c.id)).map(c => ({ value: c.id, label: c.name }))]} />
     )}
   </>;
@@ -152,7 +154,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
                 <Text style={[s.text, { fontSize: 14 }]}>+{SELF_BONUS.upload} fürs Hochladen, +{PRACTICE_POINTS} fürs Lernen, +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
               </View>
             )}
-            {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
+            {kids.length > 1 && <><Text style={s.label}>Für wen?</Text><Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} /></>}
             <Text style={s.label}>Fach (optional)</Text>
             <TextInput style={s.input} value={subject} onChangeText={setSubject} placeholder="z. B. Mathe" />
             <Text style={s.label}>Thema (optional, wenn Fotos dabei sind)</Text>
