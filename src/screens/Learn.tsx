@@ -148,7 +148,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
             <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Die KI macht daraus einen kurzen Test, mit dem ihr seht, ob das Thema verstanden wurde.</Text>
             {!parent && (
               <View style={{ backgroundColor: C.warnSoft, borderRadius: 14, padding: 12, gap: 2 }}>
-                <Text style={[s.text, { fontWeight: '800' }]}>⭐ Bonus, wenn du selbst hochlädst</Text>
+                <Text style={[s.text, { fontWeight: '800' }]}>★ Bonus, wenn du selbst hochlädst</Text>
                 <Text style={[s.text, { fontSize: 14 }]}>+{SELF_BONUS.upload} fürs Hochladen, +{PRACTICE_POINTS} fürs Lernen, +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
               </View>
             )}
@@ -174,7 +174,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
             )}
             {photos.length < MAX_PHOTOS && (
               <View style={s.row}>
-                <Button ghost title={busy ? 'Lädt …' : photos.length ? '📸 Weitere Seiten' : '📸 Seiten fotografieren'} disabled={busy} onPress={pick} />
+                <Button ghost title={busy ? 'Lädt …' : photos.length ? 'Weitere Seiten' : 'Seiten fotografieren'} disabled={busy} onPress={pick} />
               </View>
             )}
             <Button title="Thema speichern" disabled={busy || !childId || (!photos.length && !text.trim())} onPress={save} />
@@ -195,77 +195,9 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
   })();
   return (
     <View style={{ gap: 16 }}>
-<<<<<<< HEAD
       {tabs}
       {body}
       {!parent && <SolveModal sheetId={solveId} onClose={() => setSolveId(null)} />}
-=======
-    {tabs}
-    {parent ? <ReviewSheets childIds={childIds} /> : <KidSheets childId={childIds[0]} openId={solveId} setOpenId={setSolveId} />}
-    {editing && <SheetEditor topic={editing} onDone={() => setEditing(null)} />}
-    <View style={[s.row, { alignItems: 'flex-start', gap: 16 }]}>
-      {parent && !showForm ? (
-        <Pressable onPress={() => setShowForm(true)} style={[s.card, { flexGrow: 1, flexBasis: 320, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-          <Text style={{ fontSize: 26 }}>📸</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.text, { fontWeight: '800' }]}>Neues Thema anlegen</Text>
-            <Text style={[s.muted, { fontSize: 13 }]}>Foto vom Heft oder der Tafel, die KI macht einen kurzen Test.</Text>
-          </View>
-          <Text style={{ color: C.accent, fontWeight: '800', fontSize: 22 }}>+</Text>
-        </Pressable>
-      ) : (
-      <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
-        <View style={[s.row, { justifyContent: 'space-between' }]}>
-          <Text style={s.h2}>Was kam heute dran?</Text>
-          {parent && <Button ghost title="Schließen" onPress={() => setShowForm(false)} style={{ paddingVertical: 6 }} />}
-        </View>
-        <Text style={s.muted}>Thema eintragen und ein Foto vom Heft oder der Tafel machen. Die KI macht daraus einen kurzen Test, mit dem ihr seht, ob das Thema verstanden wurde.</Text>
-        {!parent && (
-          <View style={{ backgroundColor: C.warnSoft, borderRadius: 14, padding: 12, gap: 2 }}>
-            <Text style={[s.text, { fontWeight: '800' }]}>★ Bonus, wenn du selbst hochlädst</Text>
-            <Text style={[s.text, { fontSize: 14 }]}>+{SELF_BONUS.upload} fürs Hochladen, +{PRACTICE_POINTS} fürs Lernen, +{SELF_BONUS.verstanden} wenn du alles verstanden hast. Bis zu {SELF_BONUS_PER_DAY} Themen am Tag.</Text>
-          </View>
-        )}
-        {kids.length > 1 && <Segmented value={childId} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
-        <Text style={s.label}>Fach (optional)</Text>
-        <TextInput style={s.input} value={subject} onChangeText={setSubject} placeholder="z. B. Mathe" />
-        <Text style={s.label}>Thema (optional, wenn Fotos dabei sind)</Text>
-        <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top' }]} multiline value={text} onChangeText={setText} placeholder="z. B. Brüche mit gleichem Nenner addieren" />
-        <Text style={s.label}>Fotos ({photos.length} von {MAX_PHOTOS})</Text>
-        {photos.length > 0 && (
-          <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
-            {photos.map((ph, i) => (
-              <View key={i} style={{ width: 110 }}>
-                <PhotoImg uri={ph} style={{ width: 110, height: 150, borderRadius: 8, backgroundColor: C.surface2 }} resizeMode="cover" />
-                <Pressable accessibilityLabel={`Seite ${i + 1} entfernen`} onPress={() => setPhotos(p => p.filter((_, j) => j !== i))}
-                  style={{ position: 'absolute', top: 4, right: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: '#fff', fontWeight: '800' }}>✕</Text>
-                </Pressable>
-                <Text style={[s.muted, { fontSize: 12, textAlign: 'center' }]}>Seite {i + 1}</Text>
-              </View>
-            ))}
-          </ScrollView>
-        )}
-        {photos.length < MAX_PHOTOS && (
-          <View style={s.row}>
-            <Button ghost title={busy ? 'Lädt …' : photos.length ? 'Weitere Seiten' : 'Seiten fotografieren'} disabled={busy} onPress={pick} />
-          </View>
-        )}
-        <Button title="Thema speichern" disabled={busy || !childId || (!photos.length && !text.trim())} onPress={save} />
-        {!photos.length && !text.trim() ? <Text style={[s.muted, { fontSize: 13 }]}>Ein Foto oder ein paar Worte zum Thema reichen.</Text> : null}
-        {msg ? <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text> : null}
-      </View>
-      )}
-      <View style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
-        <Text style={s.label}>Themen{topics.length ? ` (${topics.length})` : ''}</Text>
-        {parent && msg && !showForm ? <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text> : null}
-        {topics.length === 0 && <Text style={s.muted}>Noch keine Themen.</Text>}
-        {(allTopics ? topics : topics.slice(0, 5)).map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} onCreate={parent ? () => setEditing(t) : undefined} onSolve={parent ? undefined : id => setSolveId(id)} />)}
-        {topics.length > 5 && <Button ghost title={allTopics ? 'Weniger zeigen' : `Alle ${topics.length} Themen zeigen`} onPress={() => setAllTopics(x => !x)} />}
-      </View>
-    </View>
-    {parent && <DoneSheets childIds={childIds} exam={false} />}
->>>>>>> origin/main
     </View>
   );
 }
