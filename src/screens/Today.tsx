@@ -16,6 +16,8 @@ import { QuestStrip } from './Quest';
 import { shoppingFor, untilLabel } from './Food';
 import { TIME_LABEL, TIME_ORDER } from '../data/templates';
 import { dueCount, liveStreak } from '../data/vocab';
+import { studyToday } from '../data/studyplan';
+import { dayText } from './StudyPack';
 
 export function Today({ childIds, parent, meId, admin }: { childIds: string[]; parent: boolean; meId?: string; admin?: boolean }) {
   const { data, update } = useFamily();
@@ -242,6 +244,16 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
           </View>
         );
       })()}
+      {studyToday(data!, child.id, date).map(({ prep, day, days }) => (
+        <View key={prep.id} style={[s.row, { alignItems: 'center', backgroundColor: day.done ? C.okSoft : TINT[0], borderRadius: 14, padding: 12, flexWrap: 'nowrap', gap: 10 }]}>
+          <View style={{ flexShrink: 0 }}><Icon name={day.done ? 'check' : 'book'} size={18} color={day.done ? C.ok : C.accent} stroke={2.2} /></View>
+          <Text style={[s.text, { fontSize: 14, flex: 1 }]}>
+            <Text style={{ fontWeight: '800' }}>{prep.subject}{days !== null ? (days === 1 ? ', Arbeit morgen' : `, Arbeit in ${days} Tagen`) : ''}</Text>
+            <Text style={{ color: day.done ? C.ok : C.fg }}>{day.done ? ' · Heute geschafft' : ` · ${dayText(day)} (${day.minutes} Min)`}</Text>
+            {!day.done && <Text style={{ color: C.muted }}> · unter Lernen</Text>}
+          </Text>
+        </View>
+      ))}
       {(() => {
         const need = shoppingFor(data!, child.id);
         if (!need.length) return null;
@@ -258,7 +270,7 @@ function ChildColumn({ child, parent }: { child: Child; parent: boolean }) {
       {group('routine', 'Routinen')}
       {group('hausaufgabe', 'Schule')}
       {group('pflicht', 'Haushalt')}
-      {items.length === 0 && <Text style={[s.muted, { textAlign: 'center', paddingVertical: 8 }]}>Heute steht nichts an.</Text>}
+      {items.length === 0 && !studyToday(data!, child.id, date).length && <Text style={[s.muted, { textAlign: 'center', paddingVertical: 8 }]}>Heute steht nichts an.</Text>}
       </View>
     </View>
   );
