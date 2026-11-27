@@ -188,9 +188,9 @@ Antworte nur mit JSON: {"cards":[{"front":"...","back":"..."}]}`;
   return cards;
 }
 
-export interface GeneratedPack { intro: string; parts: { title: string; points: string[]; example?: { task: string; steps: string[] }; cards: { front: string; back: string }[] }[]; pitfalls: string[]; memo: string }
+export interface GeneratedPack { intro: string; parts: { title: string; points: string[]; example?: { task: string; steps: string[] }; cards: { front: string; back: string }[]; /** Indizes (ab 0) vorhandener Karten */ use: number[] }[]; pitfalls: string[]; memo: string }
 /** Lernpaket zur Klassenarbeit in EINEM Aufruf: Merkzettel in Abschnitten, Beispiel mit Lösungsweg, Lernkarten je Abschnitt. */
-export async function generateStudyPack(e: { subject: string; title: string }, photos: string[], who: { name: string; grade?: string; schoolType?: string }, signal?: AbortSignal): Promise<GeneratedPack> {
+export async function generateStudyPack(e: { subject: string; title: string }, photos: string[], who: { name: string; grade?: string; schoolType?: string }, signal?: AbortSignal, existing: { front: string; back: string }[] = []): Promise<GeneratedPack> {
   const sample = await getSample();
   if (!sample) throw { code: 'unavailable' };
   const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
@@ -205,23 +205,29 @@ Aufbau:
   - "title": 2 bis 5 Wörter, z. B. "Brüche kürzen".
   - "points": 2 bis 5 Merksätze, das Wichtigste in einfacher Sprache, je höchstens 140 Zeichen. Regeln, Begriffe, Formeln.
   - "example": eine Beispielaufgabe mit neuen Zahlen ("task") und dem Lösungsweg in 2 bis 5 kurzen Schritten ("steps"). Weglassen, wenn es im Abschnitt nichts zu rechnen oder anzuwenden gibt.
-  - "cards": 4 bis 7 Lernkarten. "front" ist eine klare Frage oder kleine Aufgabe (höchstens 120 Zeichen), "back" die kurze eindeutige Antwort (höchstens 80 Zeichen, Brüche als 3/4). Vom Wissen zum Anwenden. Keine zwei Karten mit derselben Antwort.
+${existing.length ? `  - "use": Nummern der VORHANDENEN Karten (siehe unten), die zu diesem Abschnitt gehören. Jede vorhandene Karte genau einem Abschnitt zuordnen.
+  - "cards": nur NEUE Karten für Lücken, höchstens 2 pro Abschnitt, oft keine. Keine Doppelungen mit vorhandenen Karten.` : '  - "cards": 4 bis 7 Lernkarten.'} "front" ist eine klare Frage oder kleine Aufgabe (höchstens 120 Zeichen), "back" die kurze eindeutige Antwort (höchstens 80 Zeichen, Brüche als 3/4). Vom Wissen zum Anwenden. Keine zwei Karten mit derselben Antwort.
 - "pitfalls": 2 bis 4 typische Fehler in dieser Arbeit, je ein kurzer Satz ("Aufpassen: ...").
 - "memo": eine Eselsbrücke oder ein Merkspruch zum Thema, wenn es einen guten gibt, sonst leer.
 
 Sprache: kindgerecht für diese Klassenstufe, kurze Sätze, du-Form, ermutigend, ohne Babysprache. Keine Namen echter Personen aus den Fotos.
 
-Antworte nur mit JSON: {"intro":"...","parts":[{"title":"...","points":["..."],"example":{"task":"...","steps":["..."]},"cards":[{"front":"...","back":"..."}]}],"pitfalls":["..."],"memo":"..."}`;
+${existing.length ? `\nDiese Lernkarten gibt es schon, das Kind hat damit schon geübt. Sie bleiben erhalten:\n${existing.map((c, i) => `${i + 1}. ${c.front} → ${c.back}`).join('\n')}\n` : ''}
+Antworte nur mit JSON: {"intro":"...","parts":[{"title":"...","points":["..."],"example":{"task":"...","steps":["..."]},${existing.length ? '"use":[1,2],' : ''}"cards":[{"front":"...","back":"..."}]}],"pitfalls":["..."],"memo":"..."}`;
   const res = await sample.json<any>(prompt, { images: images.length ? images : undefined, signal, cache: false });
   const list = (v: unknown, n: number, max: number) => (Array.isArray(v) ? v : []).map(x => str(x, max)).filter(Boolean).slice(0, n);
-  const seen = new Set<string>();
+  const seen = new Set<string>(existing.map(c => c.back.toLowerCase()));
+  const used = new Set<number>();
   const parts = (Array.isArray(res?.parts) ? res.parts : []).slice(0, 6).map((p: any) => {
     const ex = p?.example && str(p.example.task, 300) ? { task: str(p.example.task, 300), steps: list(p.example.steps, 6, 200) } : undefined;
     const cards = (Array.isArray(p?.cards) ? p.cards : []).map((c: any) => ({ front: str(c?.front, 160), back: str(c?.back, 100) }))
-      .filter((c: { front: string; back: string }) => c.front && c.back && !seen.has(c.back.toLowerCase()) && (seen.add(c.back.toLowerCase()), true)).slice(0, 8);
-    return { title: str(p?.title, 60), points: list(p?.points, 6, 200), example: ex?.steps.length ? ex : undefined, cards };
+      .filter((c: { front: string; back: string }) => c.front && c.back && !seen.has(c.back.toLowerCase()) && (seen.add(c.back.toLowerCase()), true)).slice(0, existing.length ? 3 : 8);
+    const use = (Array.isArray(p?.use) ? p.use : []).map((n: unknown) => Math.round(Number(n)) - 1).filter((n: number) => n >= 0 && n < existing.length && !used.has(n) && (used.add(n), true));
+    return { title: str(p?.title, 60), points: list(p?.points, 6, 200), example: ex?.steps.length ? ex : undefined, cards, use };
   }).filter((p: { title: string; points: string[]; cards: unknown[] }) => p.title && (p.points.length || p.cards.length));
-  if (!parts.length || parts.reduce((a: number, p: { cards: unknown[] }) => a + p.cards.length, 0) < 5) throw { code: 'invalid_json' };
+  if (!parts.length || existing.length + parts.reduce((a: number, p: { cards: unknown[] }) => a + p.cards.length, 0) < 5) throw { code: 'invalid_json' };
+  // Vorhandene Karten, die die KI keinem Abschnitt zugeordnet hat, kommen zum letzten Abschnitt
+  existing.forEach((_, i) => { if (!used.has(i)) parts[parts.length - 1].use.push(i); });
   return { intro: str(res?.intro, 240), parts, pitfalls: list(res?.pitfalls, 5, 200), memo: str(res?.memo, 200) };
 }
 
