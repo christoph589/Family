@@ -261,7 +261,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
     const photos = [...prep.photos, ...p].slice(0, MAX);
     update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, photos: [...e.photos, ...p].slice(0, MAX) } : e)) }));
     // Noch kein Lernpaket: jetzt erstellen. Mit Lernpaket zeigt der Lernen-Schritt einen Hinweis auf die neuen Fotos.
-    if (!prep.pack && !packRunning(prep) && !sheets.length) startPack({ ...prep, photos }, child, update as any);
+    if (!prep.pack && !packRunning(prep) && !sheets.length) startPack({ ...prep, photos }, child, update as any, deck);
   }
   async function make() {
     setBusy(true); setMsg('');
@@ -333,7 +333,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
 
       <View style={{ gap: 12, paddingHorizontal: 16 }}>
         {/* Schritt 1: Lernen (Merkzettel, Lernplan, Karten) */}
-        {(prep.pack ? !past : !sheets.length) && !(n !== null && n < 0 && !deck) && (
+        {!past && (
           <Step n={1} title={usePack ? 'Lernen' : 'Lernkarten üben'} on={stepNow === 1}
             note={deck ? `${learned} von ${deck.cards.length} Karten sitzen${share >= LEARN_GOAL ? ' · Probe-Arbeit ist frei' : ` · ab ${Math.ceil(deck.cards.length * LEARN_GOAL)} gibt es die Probe-Arbeit`}` : undefined}>
             {usePack ? (
@@ -345,7 +345,12 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
               <View style={s.row}>
                 <Button title="Üben" onPress={() => setPlaying(deck)} style={btnS} />
               </View>
-              {parent && ai && <Pressable onPress={() => startPack(prep, child, update as any)}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Merkzettel und Lernplan dazu erstellen (Karten werden neu gemacht)</Text></Pressable>}
+              {ai && (
+                <View style={{ backgroundColor: C.accentSoft, borderRadius: 12, padding: 10, gap: 6 }}>
+                  <Text style={[s.text, { fontSize: 14 }]}>Neu: Merkzettel und Lernplan bis zum Termin. Die Karten und was schon sitzt bleiben erhalten.</Text>
+                  <View style={s.row}><Button title="Lernpaket erstellen" onPress={() => startPack(prep, child, update as any, deck)} style={btnS} /></View>
+                </View>
+              )}
             </>) : null}
             {deck && (<>
               {parent && <View style={s.row}><Button ghost title="Karten prüfen" onPress={() => setEditCards(x => !x)} style={btnS} />{usePack && <Button ghost title="Alle Karten üben" onPress={() => setPlaying(deck)} style={btnS} />}</View>}

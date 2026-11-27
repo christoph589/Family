@@ -21,24 +21,28 @@ export const packRunning = (prep: ExamPrep) => running.has(prep.id) || (!!prep.p
  * Lernpaket im Hintergrund erstellen: Merkzettel, Lernkarten je Abschnitt, daraus der Lernplan.
  * Startet automatisch, sobald Unterlagen da sind. Ersetzt den alten Karten-Stapel dieser Klassenarbeit.
  */
-export async function startPack(prep: ExamPrep, child: Child | undefined, update: (f: (d: FamilyData) => FamilyData) => void) {
+export async function startPack(prep: ExamPrep, child: Child | undefined, update: (f: (d: FamilyData) => FamilyData) => void, oldDeck?: VocabDeck) {
   if (running.has(prep.id)) return;
   running.add(prep.id);
   const at = new Date().toISOString();
   const setPrep = (f: (e: ExamPrep) => ExamPrep) => update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? f(e) : e)) }));
   setPrep(e => ({ ...e, packJob: { at } }));
   try {
-    const g = await generateStudyPack(prep, prep.photos, { name: child?.name ?? '', grade: child ? currentGrade(child) : undefined, schoolType: child?.schoolType });
-    const cards = newCards(g.parts.flatMap(p => p.cards));
+    // Vorhandene Karten (mit Lernfortschritt) bleiben erhalten, die KI ordnet sie den Abschnitten zu
+    const keep = oldDeck?.cards ?? [];
+    const g = await generateStudyPack(prep, prep.photos, { name: child?.name ?? '', grade: child ? currentGrade(child) : undefined, schoolType: child?.schoolType }, undefined, keep.map(c => ({ front: c.front, back: c.back })));
+    const fresh = newCards(g.parts.flatMap(p => p.cards));
     let k = 0;
     const pack: StudyPack = { at, photos: prep.photos.length, intro: g.intro || undefined, pitfalls: g.pitfalls, memo: g.memo || undefined,
-      parts: g.parts.map(p => ({ title: p.title, points: p.points, example: p.example, cards: p.cards.map(() => cards[k++].id) })) };
-    const id = uid();
+      parts: g.parts.map(p => ({ title: p.title, points: p.points, example: p.example, cards: [...p.use.map(i => keep[i].id), ...p.cards.map(() => fresh[k++].id)] })) };
+    const id = oldDeck?.id ?? uid();
     update(x => {
       const cur = (x.exams ?? []).find(e => e.id === prep.id);
       if (!cur || cur.packJob?.at !== at) return x; // gelöscht oder inzwischen neu gestartet
       return { ...x,
-        vocab: [{ id, childId: prep.childId, title: `${prep.subject}: ${prep.title}`.slice(0, 80), lang: 'Andere', cards, createdAt: at, prepId: prep.id }, ...(x.vocab ?? []).filter(v => v.prepId !== prep.id)],
+        vocab: oldDeck && (x.vocab ?? []).some(v => v.id === oldDeck.id)
+          ? (x.vocab ?? []).map(v => (v.id === oldDeck.id ? { ...v, cards: [...v.cards, ...fresh] } : v))
+          : [{ id, childId: prep.childId, title: `${prep.subject}: ${prep.title}`.slice(0, 80), lang: 'Andere', cards: fresh, createdAt: at, prepId: prep.id }, ...(x.vocab ?? []).filter(v => v.prepId !== prep.id)],
         exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, pack, deckId: id, packJob: undefined } : e)) };
     });
   } catch (e: any) {
@@ -60,7 +64,7 @@ export function StudySection({ prep, child, deck, parent, ai, hasSheet, checked,
   const pack = prep.pack;
   const busy = packRunning(prep);
   const canStart = ai && (prep.photos.length > 0 || prep.title.length >= 10);
-  const start = () => { setMsg(''); startPack(prep, child, update as any); };
+  const start = () => { setMsg(''); startPack(prep, child, update as any, deck); };
 
   if (!pack) {
     if (busy) return <BusyLine text="Die KI macht aus den Unterlagen einen Merkzettel, Lernkarten und einen Lernplan. Das dauert 1 bis 2 Minuten. Bitte die App so lange offen lassen." />;
@@ -186,11 +190,11 @@ export function StudySection({ prep, child, deck, parent, ai, hasSheet, checked,
         <View style={{ backgroundColor: C.surface2, borderRadius: 12, padding: 10, gap: 6 }}>
           <Text style={[s.text, { fontSize: 14 }]}>{newPhotos === 1 ? '1 neues Foto' : `${newPhotos} neue Fotos`} seit dem Lernpaket.</Text>
           {busy ? <BusyLine text="Lernpaket wird neu erstellt …" />
-            : ai && <View style={s.row}><Button ghost title="Lernpaket neu erstellen" onPress={start} style={btnS} /><Text style={[s.muted, { fontSize: 12, flexShrink: 1 }]}>Der Kartenfortschritt beginnt dann neu.</Text></View>}
+            : ai && <View style={s.row}><Button ghost title="Lernpaket neu erstellen" onPress={start} style={btnS} /><Text style={[s.muted, { fontSize: 12, flexShrink: 1 }]}>Gelernte Karten bleiben erhalten.</Text></View>}
         </View>
       )}
       {!newPhotos && parent && ai && (busy ? <BusyLine text="Lernpaket wird neu erstellt …" />
-        : <Pressable onPress={start}><Text style={{ color: C.muted, fontWeight: '600', fontSize: 12 }}>Lernpaket neu erstellen (Kartenfortschritt beginnt neu)</Text></Pressable>)}
+        : <Pressable onPress={start}><Text style={{ color: C.muted, fontWeight: '600', fontSize: 12 }}>Lernpaket neu erstellen (gelernte Karten bleiben)</Text></Pressable>)}
       {!!prep.packJob?.error && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{prep.packJob.error}</Text>}
       {!!msg && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{msg}</Text>}
     </View>
