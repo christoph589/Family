@@ -97,9 +97,9 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
               <View style={{ width: 20, alignItems: 'center', paddingTop: 2 }}>
                 <Text style={{ fontWeight: '700', fontSize: 13, color: i < 3 && score > 0 ? C.accent : C.muted }}>{i + 1}</Text>
               </View>
-              <DishTile title={r.title} photo={r.photo} ingredients={r.ingredients} style={{ width: 60, height: 46 }} emojiSize={22} />
+              <DishTile title={r.title} photo={r.photo} ingredients={r.ingredients} style={{ width: 56, height: 56 }} emojiSize={26} />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <Text style={[s.text, { fontWeight: '800' }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}{r.ai && <Text style={{ fontSize: 12, color: C.accent }}>  KI-Idee</Text>}</Text>
+                <Text style={[s.text, { fontWeight: '800', fontSize: 16.5 }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}{r.ai && <Text style={{ fontSize: 12, color: C.accent }}>  KI-Idee</Text>}</Text>
                 <ConflictNote title={r.title} compact />
                 {r.ingredients.length > 0 && <Clip style={[s.muted, { fontSize: 13 }]} lines={1}>{r.ingredients.join(', ')}</Clip>}
                 <Text style={[s.muted, { fontSize: 12 }]}>

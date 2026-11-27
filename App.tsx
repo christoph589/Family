@@ -283,22 +283,27 @@ function Root() {
 
   return (
     <SafeAreaView style={s.screen}>
-      <View style={[{ backgroundColor: C.bg + 'e6', zIndex: 5 }, Platform.OS === 'web' ? ({ backdropFilter: 'blur(14px)', position: 'sticky', top: 0 } as any) : null]}>
-        <View style={[s.row, { flexWrap: 'nowrap', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10, maxWidth: 1100, width: '100%', alignSelf: 'center' }]}>
+      <View style={{ zIndex: 5, ...grad(C.accent, C.deep, 160), borderBottomLeftRadius: 30, borderBottomRightRadius: 30, marginBottom: 4 } as any}>
+        <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, overflow: 'hidden', borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
+          <View style={{ position: 'absolute', right: 58, top: -44, width: 80, height: 80, borderRadius: 40, backgroundColor: C.sun }} />
+          <View style={{ position: 'absolute', right: 30, top: 66, width: 26, height: 26, borderRadius: 13, backgroundColor: '#ffffff26' }} />
+          <View style={{ position: 'absolute', left: -24, bottom: -34, width: 90, height: 90, borderRadius: 45, backgroundColor: '#ffffff12' }} />
+        </View>
+        <View style={[s.row, { flexWrap: 'nowrap', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18, maxWidth: 1100, width: '100%', alignSelf: 'center' }]}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[s.muted, { fontSize: 13, fontWeight: '700' }]} numberOfLines={1}>{dateStr} · {data.family.name}</Text>
-            <Text style={[s.h1, { fontSize: wide ? 28 : 24 }]} numberOfLines={1}>{tab === 'aufgaben' ? 'Einstellungen' : wide ? `${greet}, ${me.name}` : `Hallo ${me.name}`}</Text>
+            <Text style={{ color: '#ffffffcc', fontSize: 13, fontWeight: '700' }} numberOfLines={1}>{dateStr} · {data.family.name}</Text>
+            <Text style={[s.h1, { color: '#fff', fontSize: wide ? 30 : 27, letterSpacing: -0.7 }]} numberOfLines={1}>{tab === 'aufgaben' ? 'Einstellungen' : wide ? `${greet}, ${me.name}` : `Hallo ${me.name}`}</Text>
           </View>
           {tab === 'aufgaben' && (
             <Pressable accessibilityRole="button" accessibilityLabel="Einstellungen schließen" onPress={() => setTab('heute')}
-              style={{ width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: C.accent, ...SHADOW.sm }}>
+              style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ffffff30' }}>
               <Text style={{ fontSize: 20, color: '#fff', fontWeight: '800' }}>✕</Text>
             </Pressable>
           )}
           <View>
             <Pressable accessibilityRole="button" accessibilityLabel={`${me.name}, Menü`}
               onPress={() => setProfMenu(o => !o)}
-              style={{ borderRadius: 30 }}>
+              style={{ borderRadius: 30, borderWidth: 3, borderColor: '#ffffffcc' }}>
               <Avatar name={me.name} color={me.color} photo={(me as any).photo} size={40} />
             </Pressable>
             {profMenu && (
@@ -399,10 +404,10 @@ function Root() {
               <Pressable key={t.value} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.badge ? `${t.label}, ${t.badge} neu` : t.label}
                 onPress={() => setTab(t.value)}
                 style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, gap: 3 }}>
-                <View>
-                  <Icon name={TAB_ICON[t.value]} size={23} color={col} stroke={on ? 2.1 : 1.7} />
+                <View style={{ paddingHorizontal: 16, paddingVertical: 4, borderRadius: 16, backgroundColor: on ? C.accentSoft : 'transparent' }}>
+                  <Icon name={TAB_ICON[t.value]} size={22} color={col} stroke={on ? 2.1 : 1.7} />
                   {!!t.badge && (
-                    <View style={{ position: 'absolute', top: -4, right: -10, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+                    <View style={{ position: 'absolute', top: -2, right: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
                       <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{t.badge}</Text>
                     </View>
                   )}

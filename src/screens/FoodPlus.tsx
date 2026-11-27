@@ -11,7 +11,7 @@ import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { PhotoImg } from '../ui/PhotoImg';
 import { parse } from '../ui/CalViews';
-import { C, grad, s, TINT } from '../ui/theme';
+import { C, grad, s, STRONG } from '../ui/theme';
 import { Icon } from '../ui/Icon';
 
 const norm = (t: string) => t.trim().toLowerCase();
@@ -50,10 +50,10 @@ export async function cropDishPhoto(uri: string, box: [number, number, number, n
 /** Bild zum Gericht: eigenes Foto, sonst ein farbiger Platzhalter mit passendem Emoji. Kostet nichts. */
 export function DishTile({ title, photo, ingredients, style, emojiSize = 34 }: { title: string; photo?: string; ingredients?: string[]; style?: any; emojiSize?: number }) {
   if (photo) return <PhotoImg uri={photo} style={[{ borderRadius: 10 }, style]} resizeMode="cover" accessibilityIgnoresInvertColors />;
-  const tint = TINT[[...title].reduce((a, ch) => a + ch.charCodeAt(0), 0) % TINT.length];
+  const tint = STRONG[[...title].reduce((a, ch) => a + ch.charCodeAt(0), 0) % STRONG.length];
   return (
-    <View style={[{ borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: tint }, style]} accessibilityElementsHidden importantForAccessibility="no">
-      <Icon name="food" size={Math.round(emojiSize * 0.85)} color="#5b6168" stroke={1.7} />
+    <View style={[{ borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: tint }, style]} accessibilityElementsHidden importantForAccessibility="no">
+      <Icon name="food" size={Math.round(emojiSize * 0.95)} color={tint === STRONG[1] ? '#4a3300' : '#fff'} stroke={2.1} />
     </View>
   );
 }
