@@ -17,6 +17,8 @@ import { Avatar } from './src/ui/Avatar';
 import { Icon, IconName } from './src/ui/Icon';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
+import { DeleteAccount } from './src/screens/DeleteAccount';
+import { LegalLinks } from './src/ui/LegalLinks';
 import { AiPrivacy, Family, Holiday, ParentPin } from './src/screens/Family';
 import { WeatherSetup } from './src/ui/Weather';
 import { TrainSetup } from './src/ui/Train';
@@ -392,8 +394,10 @@ function Root() {
                 <Button title="Ja, abmelden" color={C.danger} onPress={cloud.unlink} />
               </View>
             </>}
+            {cloud.link.role === 'eltern' && <DeleteAccount onDone={cloud.unlink} />}
           </View>
         )}
+        {tab === 'aufgaben' && admin && <LegalLinks />}
       </ScrollView>
       <View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.line, alignItems: 'center', paddingBottom: 6 }]}>
         <View style={{ flexDirection: 'row', maxWidth: 640, width: '100%', paddingHorizontal: 6, paddingTop: 8 }}>

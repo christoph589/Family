@@ -101,6 +101,18 @@ export async function finishOAuth(): Promise<boolean> {
 }
 export async function signOut() { await sb().auth.signOut(); await setLink(null); }
 
+/** Konto endgültig löschen. Letztes Eltern-Konto: die ganze Familie wird mit gelöscht (fix-15). */
+export async function deleteMyAccount() {
+  const { error } = await sb().rpc('delete_my_account', { confirm: 'LÖSCHEN' });
+  if (error) {
+    if (/delete_my_account/.test(error.message) && /does not exist|Could not find/i.test(error.message)) throw new Error('Bitte zuerst das SQL „fix-15-konto-loeschen“ ausführen.');
+    throw friendly(error);
+  }
+  try { await sb().auth.signOut({ scope: 'local' }); } catch { /* Konto ist schon weg */ }
+  await setLink(null);
+  try { await AsyncStorage.clear(); } catch { /* egal */ }
+}
+
 /** Familie, in der dieses Eltern-Konto schon Mitglied ist. */
 export async function myParentFamily(): Promise<string | null> {
   const { data: u } = await sb().auth.getUser();

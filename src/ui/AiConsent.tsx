@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { setAiConsentAsker } from '../ai/generate';
 import { useFamily } from '../data/FamilyContext';
+import { LEGAL } from '../brand';
 import { Button } from './Button';
+import { openLegal } from './LegalLinks';
 import { C, s } from './theme';
 
 /** Fragt einmal pro Familie die Eltern, bevor Fotos an die KI gehen. Bestätigung mit Eltern-PIN, damit Kinder nicht selbst zustimmen. */
@@ -32,6 +34,7 @@ export function AiConsent() {
           <Text style={s.text}>Damit Famelio Lernkarten, Probe-Arbeiten oder Vokabeln erstellen kann, gehen die Fotos an die KI von Anthropic (Claude, Server in den USA). Die KI nutzt sie nur für diese eine Aufgabe und lernt nicht daraus.</Text>
           <Text style={[s.text, { fontWeight: '700' }]}>Bitte beachten:</Text>
           <Text style={s.text}>• Nur Unterlagen fotografieren, möglichst ohne Namen, Adressen oder Noten anderer.{'\n'}• Fotos und Lernkarten bleiben in eurer Familie und werden nie mit anderen geteilt.{'\n'}• Famelio löscht die Fotos automatisch, sobald die Klassenarbeit oder das Thema vorbei ist.{'\n'}• Die KI kann Fehler machen. Bitte erzeugte Karten kurz prüfen.</Text>
+          <Pressable accessibilityRole="link" onPress={() => openLegal(LEGAL.datenschutz)}><Text style={{ color: C.accent, fontWeight: '700', textDecorationLine: 'underline' }}>Mehr dazu in der Datenschutzerklärung</Text></Pressable>
           <Text style={s.label}>Zustimmen mit Eltern-PIN</Text>
           <TextInput autoFocus style={[s.input, { fontSize: 24, letterSpacing: 12, textAlign: 'center', fontWeight: '800' }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="••••"
             onChangeText={t => { const v = t.replace(/\D/g, '').slice(0, 4); setPin(v); setErr(false); if (v.length === 4) check(v); }} />
