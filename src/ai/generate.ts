@@ -579,7 +579,7 @@ Das mag die Familie besonders (Geschmack treffen, aber nicht kopieren): ${input.
 Das mag sie eher nicht: ${input.disliked.slice(0, 10).join(', ') || 'nichts bekannt'}
 Diese Woche schon geplant (Abwechslung dazu, keine gleiche Hauptzutat oder Beilage): ${input.planned.slice(0, 14).join(', ') || 'nichts'}
 Gibt es schon, NICHT wieder vorschlagen: ${input.have.slice(0, 80).join(', ') || 'nichts'}
-${input.wish ? `Wunsch der Eltern: ${input.wish.slice(0, 200)}\n` : ''}Regeln:
+${input.wish ? `Wunsch oder vorhandene Zutaten der Eltern: ${input.wish.slice(0, 200)}\n(Passt ein Wunsch nicht zu den Einschränkungen, ersetze die Zutat, z. B. laktosefreie Sahne oder Pflanzensahne, und schreibe das in die Zutatenliste.)\n` : ''}Regeln:
 - Alltagstauglich: unter 45 Minuten Arbeit, normale Supermarkt-Zutaten, kindertauglich.
 - Bunt gemischt: höchstens ein Nudel- und ein Reisgericht, mindestens ein vegetarisches, möglichst ein Gemüse- oder Ofengericht.
 - Deutsche Gerichtsnamen, kurz (max. 5 Wörter).

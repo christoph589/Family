@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DeleteButton } from '../ui/DeleteButton';
-import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
@@ -51,6 +51,7 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
   const { data, update } = useFamily();
   const [adding, setAdding] = useState<boolean | 'shot' | 'link'>(false);
   const [ideas, setIdeas] = useState(false);
+  const narrow = useWindowDimensions().width < 600;
   const [edit, setEdit] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [show, setShow] = useState<string | null>(null);
@@ -92,46 +93,46 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
         const fresh = !!r.by && !last && !(data.meals ?? []).some(m => norm(m.title) === norm(r.title));
         if (edit === r.id) return <RecipeForm key={r.id} meId={meId} parent={parent} recipe={r} onDone={() => setEdit(null)} />;
         return (
-          <View key={r.id} style={[s.card, { padding: 14, gap: 10 }]}>
-            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-              <View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: i < 3 && score > 0 ? '#fff2e0' : C.surface2, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontWeight: '800', color: i < 3 && score > 0 ? '#c27100' : C.muted }}>{i + 1}</Text>
+          <View key={r.id} style={[s.card, { padding: 12, gap: 8 }]}>
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+              <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: i < 3 && score > 0 ? '#fff2e0' : C.surface2, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontWeight: '800', fontSize: 12, color: i < 3 && score > 0 ? '#c27100' : C.muted }}>{i + 1}</Text>
               </View>
-              <DishTile title={r.title} photo={r.photo} ingredients={r.ingredients} style={{ width: 72, height: 54 }} emojiSize={26} />
+              <DishTile title={r.title} photo={r.photo} ingredients={r.ingredients} style={{ width: 60, height: 46 }} emojiSize={22} />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Text style={[s.text, { fontWeight: '800' }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}{r.ai && <Text style={{ fontSize: 12, color: C.accent }}>  ✨ KI-Idee</Text>}</Text>
                 <ConflictNote title={r.title} compact />
-                {r.ingredients.length > 0 && <Clip style={[s.muted, { fontSize: 13 }]} lines={2}>{r.ingredients.join(', ')}</Clip>}
+                {r.ingredients.length > 0 && <Clip style={[s.muted, { fontSize: 13 }]} lines={1}>{r.ingredients.join(', ')}</Clip>}
                 <Text style={[s.muted, { fontSize: 12 }]}>
-                  {[by && `Vorschlag von ${by.name}`, last ? `zuletzt ${parse(last).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : 'noch nie im Plan'].filter(Boolean).join(' · ')}
+                  {[by && `von ${by.name}`, last ? `zuletzt ${parse(last).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : 'noch nie im Plan'].filter(Boolean).join(' · ')}
                 </Text>
+                {voters.length > 0 && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                    {voters.map(({ p, v }) => (
+                      <View key={p!.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: C.surface2, borderRadius: 99, paddingRight: 6, padding: 2 }}>
+                        <Avatar name={p!.name} color={p!.color} photo={(p as any).photo} size={18} />
+                        <Text style={{ fontSize: 12 }}>{iconOf(v)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
-            {voters.length > 0 && (
-              <View style={[s.row, { gap: 6 }]}>
-                {voters.map(({ p, v }) => (
-                  <View key={p!.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.surface2, borderRadius: 99, paddingRight: 8, padding: 2 }}>
-                    <Avatar name={p!.name} color={p!.color} photo={(p as any).photo} size={22} />
-                    <Text style={{ fontSize: 13 }}>{iconOf(v)}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            <View style={[s.row, { gap: 6 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
               {VOTES.map(x => {
                 const on = r.votes?.[meId] === x.v;
                 return (
                   <Pressable key={x.v} onPress={() => vote(r, x.v)} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${r.title}: ${x.label}`}
-                    style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99, borderWidth: 1.5, borderColor: on ? C.accent : C.line, backgroundColor: on ? C.accentSoft : C.surface }}>
+                    style={{ paddingHorizontal: narrow ? 10 : 12, paddingVertical: 6, borderRadius: 99, borderWidth: 1.5, borderColor: on ? C.accent : C.line, backgroundColor: on ? C.accentSoft : C.surface }}>
                     <Text style={{ fontWeight: '700', color: C.fg }}>{x.icon}{parent ? '' : ` ${x.label}`}</Text>
                   </Pressable>
                 );
               })}
               {parent && <View style={{ flex: 1 }} />}
-              {parent && <Button title="📅 Einplanen" onPress={() => setPlan(plan === r.id ? null : r.id)} style={{ paddingVertical: 8, minHeight: 40 }} />}
-              {parent && r.ingredients.length > 0 && <Button ghost title="🛒" accessibilityLabel={`Zutaten für ${r.title} auf die Einkaufsliste`} style={{ paddingVertical: 8, minHeight: 40, paddingHorizontal: 14 }}
+              {parent && <Button title={narrow ? '📅' : '📅 Einplanen'} accessibilityLabel={`${r.title} einplanen`} onPress={() => setPlan(plan === r.id ? null : r.id)} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: narrow ? 12 : 16 }} />}
+              {parent && r.ingredients.length > 0 && <Button ghost title="🛒" accessibilityLabel={`Zutaten für ${r.title} auf die Einkaufsliste`} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: 10 }}
                 onPress={() => { onShop(r); setMsg(`Zutaten für ${r.title} stehen auf der Einkaufsliste.`); }} />}
-              {(parent || r.by === meId) && <Button ghost title="✏️" accessibilityLabel={`${r.title} bearbeiten`} style={{ paddingVertical: 8, minHeight: 40, paddingHorizontal: 14 }} onPress={() => { setEdit(r.id); setAdding(false); }} />}
+              {(parent || r.by === meId) && <Button ghost title="✏️" accessibilityLabel={`${r.title} bearbeiten`} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: 10 }} onPress={() => { setEdit(r.id); setAdding(false); }} />}
             </View>
             {(r.steps || r.link) && (show === r.id ? (
               <View style={{ gap: 6, backgroundColor: C.surface2, borderRadius: 14, padding: 12 }}>
