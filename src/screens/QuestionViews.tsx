@@ -126,10 +126,10 @@ export function TableGrid({ q, values, onCell, solution, accepted }: { q: Questi
   const cols = Math.max(1, q.table!.header.length || q.table!.rows[0]?.length || 1);
   // Spalten passen sich der Breite an, damit am Handy nichts abgeschnitten wird
   // Volle Breite: Spalten teilen sich den Platz, jede mindestens 72 breit. Mehr Spalten als Platz: seitlich wischen.
-  const cell = { flex: 1, minWidth: cols > 3 ? 72 : 0, padding: 6, borderWidth: 1, borderColor: C.line, justifyContent: 'center' as const };
+  const cell = { flex: 1, minWidth: cols > 5 ? 72 : 0, padding: 6, borderWidth: 1, borderColor: C.line, justifyContent: 'center' as const };
   return (
-    <ScrollView horizontal={cols > 3} scrollEnabled={cols > 3} contentContainerStyle={{ flexGrow: 1 }} style={{ width: '100%' }}>
-      <View style={{ flexGrow: 1, width: cols > 3 ? undefined : '100%' }}>
+    <ScrollView horizontal={cols > 5} scrollEnabled={cols > 5} contentContainerStyle={{ flexGrow: 1 }} style={{ width: '100%' }}>
+      <View style={{ flexGrow: 1, width: cols > 5 ? undefined : '100%' }}>
         <View style={{ flexDirection: 'row' }}>
           {q.table!.header.map((h, i) => <View key={i} style={[cell, { backgroundColor: C.surface2 }]}><MathText text={h} style={{ ...s.text, fontWeight: '700', fontSize: 14 }} /></View>)}
         </View>
