@@ -427,6 +427,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
           ) : card && plan ? (
             <>
               {round.free && idx === 0 && !answered && <Text style={[s.muted, { textAlign: 'center' }]}>Heute ist nichts fällig. Das ist eine freie Runde zum Festigen.</Text>}
+              {plan.mode === 'flip' && !answered ? <FlipCard key={card.id + idx} ask={ask} answer={solution} flipped={flipped} onFlip={() => setFlipped(true)} /> : (
               <Animated.View style={[{ borderRadius: 28, padding: 28, minHeight: 200, alignItems: 'center', justifyContent: 'center', gap: 10, transform: [{ scale: pop }, { translateX: shake }] },
                 answered ? { backgroundColor: answered.ok ? C.ok : C.danger } : grad('#5b4cf0', '#8a6cff'), SHADOW.lg]}>
                 <Text style={{ color: '#fff', opacity: 0.85, fontWeight: '700' }}>
@@ -443,7 +444,7 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
                 )}
                 {answered && !answered.ok && typed.trim() ? <Text style={{ color: '#fff', opacity: 0.85, textDecorationLine: 'line-through' }}>{typed.trim()}</Text> : null}
                 {answered?.ok && !answered.typo && <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>{combo >= 5 ? 'Unaufhaltsam! 🚀' : combo >= 3 ? 'Läuft! 🔥' : 'Richtig! ✓'}</Text>}
-              </Animated.View>
+              </Animated.View>)}
 
               {plan.mode === 'choice' && (
                 <View style={{ gap: 10 }}>
@@ -463,13 +464,14 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
 
               {plan.mode === 'flip' && !answered && (
                 !flipped
-                  ? <Button title="Umdrehen" onPress={() => setFlipped(true)} style={{ paddingVertical: 16 }} />
-                  : (
+                  ? <Button title="Antwort zeigen" onPress={() => setFlipped(true)} style={{ paddingVertical: 16 }} />
+                  : (<View style={{ gap: 8 }}>
+                    <Text style={[s.muted, { textAlign: 'center' }]}>Hast du es gewusst? Sei ehrlich: Was du nicht wusstest, kommt öfter dran.</Text>
                     <View style={[s.row, { flexWrap: 'nowrap' }]}>
-                      <Button ghost title="😅 Wusste ich nicht" style={{ flex: 1, paddingVertical: 16 }} onPress={() => answer(false)} />
-                      <Button color={C.ok} title="✅ Wusste ich" style={{ flex: 1, paddingVertical: 16 }} onPress={() => answer(true)} />
+                      <Button color={C.danger} title="Nein, noch nicht" style={{ flex: 1, paddingVertical: 16 }} onPress={() => answer(false)} />
+                      <Button color={C.ok} title="Ja, gewusst" style={{ flex: 1, paddingVertical: 16 }} onPress={() => answer(true)} />
                     </View>
-                  )
+                  </View>)
               )}
 
               {plan.mode === 'type' && !answered && (
@@ -511,6 +513,46 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
         </ScrollView>
       </View>
     </Modal>
+  );
+}
+
+/** Lernkarte mit echter Kartenwende: vorn die Frage (weiß), hinten die Antwort (farbig). Antippen dreht um. */
+function FlipCard({ ask, answer, flipped, onFlip }: { ask: string; answer: string; flipped: boolean; onFlip: () => void }) {
+  const rot = useRef(new Animated.Value(0)).current;
+  const [back, setBack] = useState(false);
+  const native = Platform.OS !== 'web';
+  useEffect(() => {
+    if (!flipped || back) return;
+    Animated.timing(rot, { toValue: 1, duration: 170, easing: Easing.in(Easing.quad), useNativeDriver: native }).start(() => {
+      setBack(true); rot.setValue(-1);
+      Animated.timing(rot, { toValue: 0, duration: 190, easing: Easing.out(Easing.quad), useNativeDriver: native }).start();
+    });
+  }, [flipped]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rotateY = rot.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-90deg', '0deg', '90deg'] });
+  const tag = (t: string, color: string, bg: string) => (
+    <View style={{ alignSelf: 'center', backgroundColor: bg, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 4 }}>
+      <Text style={{ color, fontWeight: '800', fontSize: 12, letterSpacing: 1 }}>{t}</Text>
+    </View>
+  );
+  return (
+    <Pressable onPress={onFlip} disabled={back} accessibilityRole="button" accessibilityLabel={back ? `Antwort: ${answer}` : `Frage: ${ask}. Zum Umdrehen tippen`}>
+      <Animated.View style={[{ borderRadius: 24, padding: 24, minHeight: 230, gap: 14, justifyContent: 'center', borderWidth: 2,
+        transform: [{ perspective: 1000 }, { rotateY }] },
+        back ? { backgroundColor: C.accent, borderColor: C.accent } : { backgroundColor: C.surface, borderColor: C.line }, SHADOW.md]}>
+        {back ? (<>
+          {tag('ANTWORT', C.accent, '#fff')}
+          <Text style={{ color: '#fff', opacity: 0.8, fontSize: 15, textAlign: 'center' }} numberOfLines={3}>{ask}</Text>
+          <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.35)', marginHorizontal: 20 }} />
+          <Text style={{ color: '#fff', fontSize: answer.length > 50 ? 22 : 27, fontWeight: '800', textAlign: 'center' }}>{answer}</Text>
+        </>) : (<>
+          {tag('FRAGE', C.accent, C.accentSoft)}
+          <Text style={{ color: C.fg, fontSize: ask.length > 60 ? 21 : 25, fontWeight: '800', textAlign: 'center', lineHeight: ask.length > 60 ? 28 : 32 }}>{ask}</Text>
+          <Text style={{ color: C.muted, fontSize: 14, textAlign: 'center' }}>Erst im Kopf antworten, dann tippen zum Umdrehen</Text>
+        </>)}
+        {/* Ecke als Hinweis, dass es eine Rückseite gibt */}
+        {!back && <View style={{ position: 'absolute', right: 0, bottom: 0, width: 34, height: 34, borderTopLeftRadius: 14, borderBottomRightRadius: 22, backgroundColor: C.accentSoft }} />}
+      </Animated.View>
+    </Pressable>
   );
 }
 
