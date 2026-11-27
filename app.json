@@ -1,13 +1,20 @@
 {
   "expo": {
     "name": "Famelio",
-    "slug": "familienplaner",
+    "slug": "famelio",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "de.famelio.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Famelio nutzt die Kamera, um Arbeitsblätter, Vokabeln, Stundenpläne und Elternbriefe zu fotografieren.",
+        "NSPhotoLibraryUsageDescription": "Famelio nutzt deine Fotos, wenn du Arbeitsblätter oder Profilbilder aus der Mediathek auswählst."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,13 +23,25 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "de.famelio.app",
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro",
       "output": "single",
       "favicon": "./assets/favicon.png",
       "name": "Famelio"
-    }
+    },
+    "scheme": "famelio",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Famelio nutzt deine Fotos, wenn du Arbeitsblätter oder Profilbilder aus der Mediathek auswählst.",
+          "cameraPermission": "Famelio nutzt die Kamera, um Arbeitsblätter, Vokabeln, Stundenpläne und Elternbriefe zu fotografieren."
+        }
+      ]
+    ]
   }
 }

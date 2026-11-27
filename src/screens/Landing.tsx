@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Image, ImageSourcePropType, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { BRAND } from '../brand';
+import { LegalLinks } from '../ui/LegalLinks';
 import { LogoMark } from '../ui/Logo';
 import { C, grad, SHADOW } from '../ui/theme';
 
@@ -255,6 +256,7 @@ export function Landing({ onNew, onLogin, onKid }: { onNew: () => void; onLogin:
       </View>
       <View style={[wrap, { paddingVertical: 24, flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }]}>
         <Text style={{ color: SOFT, fontSize: 13 }}>© {new Date().getFullYear()} {BRAND.name}</Text>
+        <LegalLinks color={SOFT} center={false} />
         <Text style={{ color: SOFT, fontSize: 13 }}>Mit ❤️ für große und kleine Familien gebaut</Text>
       </View>
     </ScrollView>

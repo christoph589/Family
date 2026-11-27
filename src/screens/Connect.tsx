@@ -7,6 +7,7 @@ import { Button, Segmented } from '../ui/Button';
 import { C, s } from '../ui/theme';
 import { Setup } from './Setup';
 import { Landing } from './Landing';
+import { LegalLinks } from '../ui/LegalLinks';
 
 const sso = { borderRadius: 14, paddingVertical: 14, alignItems: 'center' as const };
 const ssoT = { fontSize: 16, fontWeight: '700' as const };
@@ -66,7 +67,7 @@ export function Connect({ onLinked }: { onLinked: (l: DeviceLink) => void }) {
   };
 
   const box = (children: React.ReactNode) => (
-    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { maxWidth: 560 }]}>{children}</ScrollView>
+    <ScrollView style={s.screen} contentContainerStyle={[s.pad, { maxWidth: 560 }]}>{children}<LegalLinks /></ScrollView>
   );
   const error = !!err && <Text style={{ color: C.danger }}>{err}</Text>;
   const back = <Button ghost title="Zurück" onPress={() => { setStep('start'); setErr(''); }} />;
