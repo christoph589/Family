@@ -29,6 +29,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MIG_SPLIT, splitPrepVocab } from './src/data/vocab';
 import { birthdaysOn, extraStates, isAdmin, parentsOf, payAllowances, peopleOf, pruneAiPhotos, ensurePackTasks, today } from './src/data/logic';
 import { PackSetup } from './src/screens/PackSetup';
+import { setPinFamily, usePinEntry, usePinStatus } from './src/data/pin';
 import { AiConsent } from './src/ui/AiConsent';
 import { OperatorEntry } from './src/ui/OperatorEntry';
 import { PhotoCollector } from './src/screens/PhotoCollector';
@@ -79,7 +80,7 @@ function CloudApp() {
   const leave = () => { cleanUrl(); setStart(false); };
   const reload = () => Promise.all([getLink(), supportBack()]).then(([l, b]) => { setLinkState(l); setBack(b); }, () => setLinkState(null));
   useEffect(() => { reload(); }, []);
-  const store = useMemo(() => (link ? cloudStore(link.familyId) : null), [link?.familyId]);
+  const store = useMemo(() => { setPinFamily(link?.familyId ?? null); return link ? cloudStore(link.familyId) : null; }, [link?.familyId]);
   const wish = wishToken();
   if (wish) return <SafeAreaView style={s.screen}><StatusBar style="dark" /><PublicWishes token={wish} /></SafeAreaView>;
   if (start) return <Landing onNew={leave} onLogin={leave} onKid={leave} />;
@@ -169,8 +170,13 @@ function Root() {
   useEffect(() => { AsyncStorage.getItem('familienplaner:board').then(v => v === '1' && setBoardState(true), () => {}); }, []);
   const setBoard = (on: boolean) => { setBoardState(on); AsyncStorage.setItem('familienplaner:board', on ? '1' : '0').catch(() => {}); };
   useEffect(() => { scroller.current?.scrollTo({ y: 0, animated: false }); }, [tab]);
-  const [pin, setPin] = useState('');
-  const [pinErr, setPinErr] = useState(false);
+  // PIN wird auf dem Server geprüft (fix-16). Admins melden sich mit der Eltern-PIN an, andere Erwachsene mit ihrer eigenen.
+  const askWho = data && askPin && askPin !== '__out' ? parentsOf(data).find(p => p.id === askPin) : undefined;
+  const login = usePinEntry(askPin === '__out' || !askWho || isAdmin(askWho) ? 'admin' : askWho.id, () => {
+    if (askPin === '__out') { setAskPin(null); cloud?.unlink(); return; }
+    if (askPin) { setProfile({ kind: 'eltern', id: askPin }); setAskPin(null); setTab('heute'); }
+  });
+  const pinStatus = usePinStatus(askPin ? 1 : 0);
   useUntisSync(data, update);
 
   if (loading) return <View style={[s.screen, { justifyContent: 'center' }]}><ActivityIndicator color={C.accent} /></View>;
@@ -188,14 +194,6 @@ function Root() {
   // Admin = volle Rechte. Andere Erwachsene (z. B. Oma, Opa) sehen alles, haken ab und tragen Termine ein, aber keine Einstellungen, Geld und Punkte.
   const admin = parent && isAdmin(parentsOf(data).find(p => p.id === profile?.id) ?? parentsOf(data)[0]);
   if (!profile) {
-    const tryPin = (pin_ = pin) => {
-      const pin = pin_;
-      if (askPin === '__out') { if (pin === data.family.parentPin) { setAskPin(null); setPin(''); cloud?.unlink(); } else { setPinErr(true); setPin(''); } return; }
-      const who = parentsOf(data).find(p => p.id === askPin);
-      const ok = isAdmin(who) ? pin === data.family.parentPin : !!who?.pin && pin === who.pin;
-      if (ok) { setProfile({ kind: 'eltern', id: askPin! }); setAskPin(null); setPin(''); setTab('heute'); }
-      else { setPinErr(true); setPin(''); }
-    };
     const hour = new Date().getHours();
     const hello = hour < 11 ? 'Guten Morgen' : hour < 17 ? 'Hallo' : hour < 22 ? 'Guten Abend' : 'Gute Nacht';
     const asking = people.find(p => p.id === askPin);
@@ -213,7 +211,7 @@ function Root() {
               const bday = p.role === 'kind' && birthdaysOn(data, today()).some(b => b.child.id === p.id);
               return (
                 <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.name}
-                  onPress={() => { setPinErr(false); setPin(''); if (p.role === 'kind') { setProfile({ kind: 'kind', id: p.id }); setTab('heute'); } else setAskPin(p.id); }}
+                  onPress={() => { login.reset(); if (p.role === 'kind') { setProfile({ kind: 'kind', id: p.id }); setTab('heute'); } else setAskPin(p.id); }}
                   style={({ pressed }) => [{ width: 140, alignItems: 'center', paddingTop: 20, paddingBottom: 16, gap: 10, borderRadius: 26, backgroundColor: '#ffffff', ...SHADOW.lg, transform: [{ scale: pressed ? 0.96 : askPin === p.id ? 1.04 : 1 }], borderWidth: 3, borderColor: askPin === p.id ? p.color : 'transparent' }]}>
                   <View style={{ padding: 4, borderRadius: 50, ...grad(p.color, p.color + '66') }}>
                     <View style={{ borderRadius: 46, borderWidth: 3, borderColor: '#fff' }}>
@@ -241,7 +239,7 @@ function Root() {
             </Pressable>
           )}
           {cloud && (
-            <Pressable accessibilityRole="button" onPress={() => { setPin(''); setPinErr(false); setAskPin('__out'); }} style={{ alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 }}>
+            <Pressable accessibilityRole="button" onPress={() => { login.reset(); setAskPin('__out'); }} style={{ alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 }}>
               <Text style={{ color: '#ffffffcc', fontWeight: '700' }}>Abmelden</Text>
             </Pressable>
           )}
@@ -254,10 +252,10 @@ function Root() {
                   {asking ? <Avatar name={asking.name} color={asking.color} photo={asking.photo} size={52} /> : null}
                   <Text style={s.h2}>{asking ? `PIN für ${asking.name}` : 'Gerät abmelden'}</Text>
                   {!asking && <Text style={[s.muted, { textAlign: 'center' }]}>Mit der Eltern-PIN bestätigen. Eure Daten bleiben gespeichert.</Text>}
-                  <TextInput autoFocus style={[s.input, { fontSize: 28, letterSpacing: 14, textAlign: 'center', width: '100%', fontWeight: '800' }]} value={pin} secureTextEntry keyboardType="number-pad"
-                    onSubmitEditing={() => tryPin()} placeholder="••••"
-                    onChangeText={t => { const v = t.replace(/\D/g, '').slice(0, 4); setPin(v); setPinErr(false); if (v.length === 4) tryPin(v); }} />
-                  {pinErr && <Text style={{ color: C.danger, textAlign: 'center' }}>{(() => { const w = parentsOf(data).find(p => p.id === askPin); return w && !isAdmin(w) && !w.pin ? 'Für diese Person ist noch keine PIN festgelegt. Mama oder Papa legt sie unter ⚙️ › Familie fest.' : 'PIN stimmt nicht.'; })()}</Text>}
+                  <TextInput autoFocus editable={!login.busy} style={[s.input, { fontSize: 28, letterSpacing: 14, textAlign: 'center', width: '100%', fontWeight: '800' }]} value={login.pin} secureTextEntry keyboardType="number-pad"
+                    placeholder="••••" onChangeText={login.onChange} />
+                  {login.busy && <Text style={[s.muted, { textAlign: 'center' }]}>Prüfe …</Text>}
+                  {!!login.msg && <Text style={{ color: C.danger, textAlign: 'center' }}>{login.msg.startsWith('PIN stimmt nicht') && askWho && !isAdmin(askWho) && pinStatus && !pinStatus.people.includes(askWho.id) ? 'Für diese Person ist noch keine PIN festgelegt. Mama oder Papa legt sie unter ⚙️ › Familie fest.' : login.msg}</Text>}
                   <View style={[s.row, { width: '100%' }]}>
                     <Button ghost title="Abbrechen" onPress={() => setAskPin(null)} style={{ flex: 1 }} />
                   </View>

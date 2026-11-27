@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { loadHolidays, STATES } from '../data/holidays';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
+import { changeAdminPin, pinMessage, setPersonPin, usePinStatus } from '../data/pin';
 import { ALL_COLORS, autoHolidayOn, freeColor, isAdmin, CHILD_COLORS, manualHolidayOn, parentsOf, PARENT_COLORS, today, uid } from '../data/logic';
 import { TEMPLATES } from '../data/templates';
 import { ageOf, currentGrade, gradeLabel, pruneAiPhotos, removeChild, schoolYearOf } from '../data/logic';
@@ -108,12 +109,7 @@ export function Family() {
                 {adm ? (
                   <Text style={[s.muted, { fontSize: 13 }]}>{lastAdmin ? 'Mindestens eine Person muss Admin bleiben. ' : ''}Meldet sich mit der Eltern-PIN an.</Text>
                 ) : (<>
-                  <View style={[s.row, { flexWrap: 'nowrap' }]}>
-                    <Text style={s.text}>Eigene PIN</Text>
-                    <TextInput style={[s.input, { width: 110, letterSpacing: 6, textAlign: 'center' }]} value={p.pin ?? ''} keyboardType="number-pad" placeholder="4 Ziffern"
-                      accessibilityLabel={`PIN für ${r.name}`} onChangeText={t => set({ pin: t.replace(/\D/g, '').slice(0, 4) })} />
-                    {(p.pin ?? '').length !== 4 && <Text style={{ color: C.warn, fontWeight: '700', flexShrink: 1 }}>fehlt noch</Text>}
-                  </View>
+                  <PersonPin id={r.id} name={r.name} />
                   <Text style={[s.muted, { fontSize: 13 }]}>Darf: alles sehen, Aufgaben abhaken und bestätigen, Termine, Essen und Einkauf eintragen, Lernen begleiten. Darf nicht: Einstellungen, Taschengeld, Punkte und Belohnungen, Noten.</Text>
                 </>)}
               </View>
@@ -297,7 +293,6 @@ function KidState({ child, onSave }: { child: Child; onSave: (st: string | undef
   );
 }
 
-/** Eltern-PIN ändern. Die alte PIN wird abgefragt, falls das Tablet gerade offen herumliegt. */
 /** Einwilligung zur KI-Verarbeitung und Fotos löschen. */
 export function AiPrivacy() {
   const { data, update } = useFamily();
@@ -319,19 +314,77 @@ export function AiPrivacy() {
   );
 }
 
+/** Eigene PIN für Oma, Opa usw. Liegt nur verschlüsselt auf dem Server, Ändern braucht die Eltern-PIN. */
+function PersonPin({ id, name }: { id: string; name: string }) {
+  const { data, update } = useFamily();
+  const [tick, setTick] = useState(0);
+  const st = usePinStatus(tick);
+  const [open, setOpen] = useState(false);
+  const [pin, setPin] = useState('');
+  const [admin, setAdmin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  if (!data) return null;
+  const has = st?.people.includes(id);
+  const digits = (t: string) => t.replace(/\D/g, '').slice(0, 4);
+  async function save(next: string) {
+    setBusy(true); setMsg(null);
+    const r = await setPersonPin(data!, update, admin, id, next);
+    setBusy(false); setAdmin('');
+    if (!r.ok) return setMsg({ ok: false, text: r.reason === 'wrong' ? 'Die Eltern-PIN stimmt nicht.' : pinMessage(r) });
+    setPin(''); setOpen(false); setTick(t => t + 1);
+    setMsg({ ok: true, text: next ? `PIN für ${name} gespeichert.` : `PIN für ${name} gelöscht.` });
+  }
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={[s.row, { flexWrap: 'nowrap' }]}>
+        <Text style={s.text}>Eigene PIN</Text>
+        {st === null ? <Text style={s.muted}>…</Text> : has
+          ? <Text style={{ color: C.ok, fontWeight: '700' }}>festgelegt</Text>
+          : <Text style={{ color: C.warn, fontWeight: '700', flexShrink: 1 }}>fehlt noch</Text>}
+        {!open && <Button ghost title={has ? 'Ändern' : 'Festlegen'} onPress={() => { setOpen(true); setMsg(null); }} />}
+      </View>
+      {open && (
+        <View style={[s.row, { alignItems: 'flex-end' }]}>
+          <View style={{ gap: 4 }}>
+            <Text style={s.label}>Neue PIN für {name}</Text>
+            <TextInput style={[s.input, { width: 120, letterSpacing: 6, textAlign: 'center' }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="••••"
+              accessibilityLabel={`Neue PIN für ${name}`} onChangeText={t => { setPin(digits(t)); setMsg(null); }} />
+          </View>
+          <View style={{ gap: 4 }}>
+            <Text style={s.label}>Deine Eltern-PIN</Text>
+            <TextInput style={[s.input, { width: 120, letterSpacing: 6, textAlign: 'center' }]} value={admin} secureTextEntry keyboardType="number-pad" placeholder="••••"
+              accessibilityLabel="Eltern-PIN zum Bestätigen" onChangeText={t => { setAdmin(digits(t)); setMsg(null); }} />
+          </View>
+          <Button title={busy ? 'Moment …' : 'Speichern'} disabled={busy || pin.length !== 4 || admin.length !== 4} onPress={() => save(pin)} />
+          {has && <Button ghost title="PIN löschen" disabled={busy || admin.length !== 4} onPress={() => save('')} />}
+          <Button ghost title="Abbrechen" onPress={() => { setOpen(false); setPin(''); setAdmin(''); setMsg(null); }} />
+        </View>
+      )}
+      {msg && <Text style={{ color: msg.ok ? C.ok : C.danger, fontWeight: '700' }}>{msg.text}</Text>}
+    </View>
+  );
+}
+
 export function ParentPin() {
   const { data, update } = useFamily();
+  const st = usePinStatus();
   const [old, setOld] = useState('');
   const [pin, setPin] = useState('');
   const [pin2, setPin2] = useState('');
+  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   if (!data) return null;
+  // Noch keine Eltern-PIN auf dem Server (sollte nur bei sehr alten Familien vorkommen): ohne alte festlegen
+  const first = st !== null && !st.admin;
   const digits = (t: string) => t.replace(/\D/g, '').slice(0, 4);
-  function save() {
-    if (old !== data!.family.parentPin) return setMsg({ ok: false, text: 'Die bisherige PIN stimmt nicht.' });
+  async function save() {
     if (pin.length !== 4) return setMsg({ ok: false, text: 'Die neue PIN braucht 4 Ziffern.' });
     if (pin !== pin2) return setMsg({ ok: false, text: 'Die beiden neuen PINs sind nicht gleich.' });
-    update(d => ({ ...d, family: { ...d.family, parentPin: pin } }));
+    setBusy(true); setMsg(null);
+    const r = await changeAdminPin(data!, update, old, pin);
+    setBusy(false);
+    if (!r.ok) { setOld(''); return setMsg({ ok: false, text: r.reason === 'wrong' ? 'Die bisherige PIN stimmt nicht.' : pinMessage(r) }); }
     setOld(''); setPin(''); setPin2('');
     setMsg({ ok: true, text: 'Neue Eltern-PIN gespeichert. Sie gilt sofort auf allen Geräten.' });
   }
@@ -344,14 +397,15 @@ export function ParentPin() {
   );
   return (
     <View style={s.card}>
-      <Text style={s.h2}>Eltern-PIN ändern</Text>
+      <Text style={s.h2}>{first ? 'Eltern-PIN festlegen' : 'Eltern-PIN ändern'}</Text>
       <Text style={s.muted}>Mit dieser PIN melden sich alle Erwachsenen mit Admin-Rechten an. Oma, Opa und andere ohne Admin haben ihre eigene PIN, die stellst du oben bei der Person ein.</Text>
+      <Text style={[s.muted, { fontSize: 13 }]}>Die PIN liegt nur verschlüsselt auf dem Server und wird dort geprüft, nicht auf den Geräten. Nach mehreren falschen Versuchen gibt es eine Pause. Ohne Internet lässt sie sich nicht prüfen.</Text>
       <View style={[s.row, { alignItems: 'flex-end' }]}>
-        {field('Bisherige PIN', old, setOld)}
+        {!first && field('Bisherige PIN', old, setOld)}
         {field('Neue PIN', pin, setPin)}
         {field('Neue PIN nochmal', pin2, setPin2)}
       </View>
-      <Button title="PIN ändern" disabled={old.length !== 4 || pin.length !== 4 || pin2.length !== 4} onPress={save} />
+      <Button title={busy ? 'Moment …' : first ? 'PIN festlegen' : 'PIN ändern'} disabled={busy || (!first && old.length !== 4) || pin.length !== 4 || pin2.length !== 4} onPress={save} />
       {msg && <Text style={{ color: msg.ok ? C.ok : C.danger, fontWeight: '700' }}>{msg.text}</Text>}
     </View>
   );

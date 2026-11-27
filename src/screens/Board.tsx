@@ -21,6 +21,7 @@ import { useFeedItems } from '../data/feeds';
 import { useIcloudItems } from '../data/icloud';
 import { WeatherPill } from '../ui/Weather';
 import { TrainCards } from '../ui/Train';
+import { usePinEntry } from '../data/pin';
 
 const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 
@@ -118,7 +119,7 @@ export function Board({ onExit }: { onExit: () => void }) {
   const { width, height } = useWindowDimensions();
   const [now, setNow] = useState(new Date());
   const [ask, setAsk] = useState(false);
-  const [pin, setPin] = useState('');
+  const pin = usePinEntry('admin', () => { setAsk(false); onExit(); });
   const [mode, setMode] = useState<CalMode>('woche');
   const [anchor, setAnchor] = useState(today());
   const [touched, setTouched] = useState(0);
@@ -179,9 +180,10 @@ export function Board({ onExit }: { onExit: () => void }) {
             </Pressable>
           ) : (
             <View style={[s.row, { flexWrap: 'nowrap' }]}>
-              <TextInput autoFocus style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="PIN"
-                onChangeText={t => { const v = t.replace(/\D/g, '').slice(0, 4); setPin(v); if (v === data.family.parentPin) { setAsk(false); setPin(''); onExit(); } }} />
-              <Button ghost title="✕" onPress={() => { setAsk(false); setPin(''); }} />
+              <TextInput autoFocus style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin.pin} editable={!pin.busy} secureTextEntry keyboardType="number-pad" placeholder="PIN"
+                onChangeText={pin.onChange} />
+              <Button ghost title="✕" onPress={() => { setAsk(false); pin.reset(); }} />
+              {(pin.busy || !!pin.msg) && <Text style={{ color: pin.msg ? C.danger : C.muted, fontWeight: '700', fontSize: 12, maxWidth: 220 }}>{pin.busy ? 'Prüfe …' : pin.msg}</Text>}
             </View>
           )}
     </View>

@@ -75,7 +75,7 @@ export interface MoneyAccount {
 }
 /** Elternteil, z. B. Mama oder Papa. Für Kalender und Anzeige, wer gerade am Pad ist. */
 /** Erwachsene in der Familie. admin=false: z. B. Oma/Opa, eigene PIN, keine Einstellungen, kein Geld, keine Punkte-Freigabe. */
-export interface Parent { id: string; name: string; color: string; admin?: boolean; pin?: string; photo?: string; /** z. B. Papa, Mama, Oma */ title?: string }
+export interface Parent { id: string; name: string; color: string; admin?: boolean; /** Nur Altbestand bzw. lokal, seit fix-16 serverseitig */ pin?: string; photo?: string; /** z. B. Papa, Mama, Oma */ title?: string }
 export interface Task {
   id: string; childId: string; title: string; kind: TaskKind; points: number;
   repeat: Repeat; date?: string; // date nur bei 'einmal' (YYYY-MM-DD)
@@ -208,7 +208,8 @@ export interface GiftOccasion { id: string; title: string; md: string; forId?: s
 
 export interface FamilyData {
   version: 1;
-  family: { id: string; name: string; parentPin: string };
+  /** parentPin: nur noch beim Anlegen und für Familien, die nur auf einem Gerät liegen. Der Server (fix-16) übernimmt sie als Hash und entfernt sie aus dem Stand. */
+  family: { id: string; name: string; parentPin?: string };
   children: Child[];
   parents?: Parent[];
   tasks: Task[];
