@@ -8,15 +8,39 @@ export const norm = (v: string) => v.toLowerCase().replace(/\s+/g, '').replace(/
 
 /** Zahl mit angehängter Einheit zerlegen: "4000g" → 4000 + "g". */
 const numUnit = (v: string) => { const m = norm(v).match(/^(-?\d+(?:\.\d+)?)([a-zµ²³°%€\/.]*)$/); return m ? { n: Number(m[1]), u: m[2].replace(/\.$/, '') } : null; };
-/**
- * Antworten vergleichen: Leerzeichen, Groß-/Kleinschreibung und Komma/Punkt egal.
- * Verlangt die Aufgabe nur die Zahl („4 kg = … g“), ist eine angehängte Einheit („4000 g“) auch richtig.
- * Stehen auf beiden Seiten verschiedene Einheiten, bleibt es falsch.
- */
-export function sameAnswer(a: string, sol: string) {
+/** Gleichwertige Lösungen: „Durchschlag (oder Sieb)“ → Durchschlag, Sieb; „A oder B“ → A, B. */
+export function alternatives(sol: string) {
+  const out = [sol];
+  const base = sol.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  const split = (x: string) => x.split(/\s+oder\s+|;/i).map(y => y.replace(/^(oder|auch|bzw\.?|z\.\s*b\.)\s+/i, '').trim());
+  if (base) out.push(...split(base));
+  for (const m of sol.matchAll(/\(([^)]*)\)/g)) out.push(...split(m[1]));
+  return [...new Set(out.filter(Boolean))];
+}
+const exact = (a: string, sol: string) => {
   if (norm(a) === norm(sol)) return true;
   const x = numUnit(a), y = numUnit(sol);
   return !!x && !!y && x.n === y.n && (x.u === y.u || !y.u || !x.u);
+};
+function lev(a: string, b: string) {
+  const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) { let prev = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const tmp = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = tmp; } }
+  return d[b.length];
+}
+/**
+ * Antworten vergleichen: Leerzeichen, Groß-/Kleinschreibung und Komma/Punkt egal.
+ * Verlangt die Aufgabe nur die Zahl („4 kg = … g“), ist eine angehängte Einheit („4000 g“) auch richtig.
+ * Stehen auf beiden Seiten verschiedene Einheiten, bleibt es falsch. Alternativen in Klammern oder mit „oder“ zählen.
+ */
+export function sameAnswer(a: string, sol: string) {
+  return alternatives(sol).some(s => exact(a, s));
+}
+/** 'ok' = richtig, 'near' = nur ein kleiner Tippfehler (ab 5 Buchstaben 1, ab 9 Buchstaben 2), sonst 'no'. */
+export function matchLevel(a: string, sol: string): 'ok' | 'near' | 'no' {
+  if (sameAnswer(a, sol)) return 'ok';
+  const x = norm(a);
+  if (!/[a-zäöüß]/.test(x)) return 'no';
+  return alternatives(sol).some(s => { const y = norm(s); const tol = y.length >= 9 ? 2 : y.length >= 5 ? 1 : 0; return /[a-zäöüß]/.test(y) && tol > 0 && lev(x, y) <= tol; }) ? 'near' : 'no';
 }
 
 /** Ankreuz-Tabelle: alle Lösungen sind "x" oder "-". Dann gibt es Kästchen statt Tippen. */
@@ -44,6 +68,17 @@ export function isCorrect(q: Question, a: string) {
     return want.length === got.length && want.every((w, i) => (isCheckTable(q) ? w === got[i] : sameAnswer(got[i], w)));
   }
   return sameAnswer(a, q.solution);
+}
+
+/** Richtig oder höchstens kleine Tippfehler (nur ein Vorschlag, die Eltern bestätigen). */
+export function isNearCorrect(q: Question, a: string) {
+  if (q.type === 'choice') return isCorrect(q, a);
+  if (q.type === 'table') {
+    if (isCheckTable(q)) return isCorrect(q, a);
+    const want = q.solution.split('|'), got = splitAnswer(q, a);
+    return want.length === got.length && want.every((w, i) => matchLevel(got[i], w.trim()) !== 'no');
+  }
+  return matchLevel(a, q.solution) !== 'no';
 }
 
 /** Frage zum Beantworten: Text, Auswahl oder Tabelle. */
@@ -86,14 +121,15 @@ export function splitAnswer(q: Question, value: string) {
 }
 
 /** Tabelle: "?" ist ein Eingabefeld. Mit solution/values wird sie zur Abgleich-Ansicht. */
-export function TableGrid({ q, values, onCell, solution }: { q: Question; values: string[]; onCell?: (k: number, v: string) => void; solution?: string[] }) {
+export function TableGrid({ q, values, onCell, solution, accepted }: { q: Question; values: string[]; onCell?: (k: number, v: string) => void; solution?: string[]; accepted?: boolean }) {
   let k = -1;
+  const cols = Math.max(1, q.table!.header.length || q.table!.rows[0]?.length || 1);
   // Spalten passen sich der Breite an, damit am Handy nichts abgeschnitten wird
   // Volle Breite: Spalten teilen sich den Platz, jede mindestens 72 breit. Mehr Spalten als Platz: seitlich wischen.
-  const cell = { flex: 1, minWidth: 72, padding: 6, borderWidth: 1, borderColor: C.line, justifyContent: 'center' as const };
+  const cell = { flex: 1, minWidth: cols > 3 ? 72 : 0, padding: 6, borderWidth: 1, borderColor: C.line, justifyContent: 'center' as const };
   return (
-    <ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}>
-      <View style={{ flexGrow: 1 }}>
+    <ScrollView horizontal={cols > 3} scrollEnabled={cols > 3} contentContainerStyle={{ flexGrow: 1 }} style={{ width: '100%' }}>
+      <View style={{ flexGrow: 1, width: cols > 3 ? undefined : '100%' }}>
         <View style={{ flexDirection: 'row' }}>
           {q.table!.header.map((h, i) => <View key={i} style={[cell, { backgroundColor: C.surface2 }]}><MathText text={h} style={{ ...s.text, fontWeight: '700', fontSize: 14 }} /></View>)}
         </View>
@@ -124,11 +160,14 @@ export function TableGrid({ q, values, onCell, solution }: { q: Question; values
                     style={{ width: '100%', minWidth: 56, paddingVertical: 6, paddingHorizontal: 6, fontSize: 15, color: C.fg, backgroundColor: C.bg, borderRadius: 6, textAlign: 'center' }} />
                 </View>
               );
-              const ok = solution ? sameAnswer(values[idx] ?? '', solution[idx] ?? '') : true;
+              const lv = solution ? matchLevel(values[idx] ?? '', solution[idx] ?? '') : 'ok';
+              // Hat die KI oder haben die Eltern die Aufgabe als richtig bestätigt, zeigt jede Zelle ✓ (Abweichung nur als Hinweis)
+              const good = lv === 'ok' || !!accepted;
+              const hint = lv === 'ok' ? '' : good ? `Schreibweise: ${solution?.[idx]}` : lv === 'near' ? `fast richtig: ${solution?.[idx]}` : `richtig: ${solution?.[idx]}`;
               return (
-                <View key={ci} style={[cell, { backgroundColor: ok ? C.okSoft : '#f8dcd8' }]}>
-                  <Text style={{ fontWeight: '700', color: C.fg, textAlign: 'center' }}>{solution ? (ok ? '✓ ' : '✗ ') : ''}{values[idx] || '–'}</Text>
-                  {!ok && <Text style={{ fontSize: 12, color: C.muted, textAlign: 'center' }}>richtig: {solution?.[idx]}</Text>}
+                <View key={ci} style={[cell, { backgroundColor: good ? C.okSoft : lv === 'near' ? C.warnSoft : '#f8dcd8' }]}>
+                  <Text style={{ fontWeight: '700', color: C.fg, textAlign: 'center' }}>{solution ? (good ? '✓ ' : lv === 'near' ? '≈ ' : '✗ ') : ''}{values[idx] || '–'}</Text>
+                  {!!hint && <Text style={{ fontSize: 12, color: C.muted, textAlign: 'center' }}>{hint}</Text>}
                 </View>
               );
             })}
@@ -140,13 +179,13 @@ export function TableGrid({ q, values, onCell, solution }: { q: Question; values
 }
 
 /** Abgleich-Ansicht für Eltern und für das Kind nach der Prüfung. */
-export function AnswerView({ q, answer }: { q: Question; answer: string }) {
+export function AnswerView({ q, answer, accepted }: { q: Question; answer: string; accepted?: boolean }) {
   return (
     <View style={{ gap: 6 }}>
       <MathText text={qText(q)} style={{ ...s.text, fontWeight: '700' }} />
       <Figure svg={q.figure} />
       {q.type === 'table' && q.table ? (
-        <TableGrid q={q} values={splitAnswer(q, answer)} solution={q.solution.split('|').map(x => x.trim())} />
+        <TableGrid q={q} values={splitAnswer(q, answer)} solution={q.solution.split('|').map(x => x.trim())} accepted={accepted} />
       ) : (
         <>
           <View style={[s.row, { gap: 6 }]}><Text style={s.text}>Antwort:</Text><MathText text={answer || '–'} style={{ ...s.text, fontWeight: '700' }} /></View>

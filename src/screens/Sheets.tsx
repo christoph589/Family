@@ -7,7 +7,7 @@ import { examScore, finishCheck, selfBonus, EXAM_PREP_POINTS, setSheet, today, u
 import { PRACTICE_POINTS, Question, Topic, Understanding, Worksheet } from '../data/types';
 import { Button } from '../ui/Button';
 import { MathText } from '../ui/Math';
-import { AnswerView, isAnswered, isCorrect, QuestionInput } from './QuestionViews';
+import { AnswerView, isAnswered, isCorrect, isNearCorrect, QuestionInput } from './QuestionViews';
 import { C, s } from '../ui/theme';
 import { PaperScore, ResultLine, scanAndGrade } from './Exam';
 import { printHtml, sheetHtml } from '../ui/Print';
@@ -302,7 +302,7 @@ function ReviewDigital(props: { sheet: Worksheet; name: string }) {
 function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string }) {
   const { data, update } = useFamily();
   const ai = sheet.aiCheck;
-  const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isCorrect(q, sheet.answers?.[i] ?? '') || !!ai?.ok[i]));
+  const [res, setRes] = useState<boolean[]>(sheet.questions.map((q, i) => isNearCorrect(q, sheet.answers?.[i] ?? '') || !!ai?.ok[i]));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const want = (!ai || (sheet.exam && !ai.pts)) && needsCheck(sheet);
@@ -320,7 +320,7 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
             <Text style={s.label}>Aufgabe {i + 1}</Text>
             <Text style={{ fontWeight: '800', fontSize: 13, color: ai.pts![i] >= sheet.exam!.points[i] ? C.ok : ai.pts![i] > 0 ? C.warn : C.danger }}>{String(ai.pts![i]).replace('.', ',')} / {sheet.exam!.points[i]}</Text>
           </View>
-          <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} />
+          <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} accepted={ai.pts![i] >= sheet.exam!.points[i]} />
           {ai.notes[i] ? <Text style={{ fontSize: 13, color: C.muted }}>{ai.notes[i]}</Text> : null}
         </View>
       ))}
@@ -341,7 +341,7 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
         <View key={i} style={[s.row, { flexWrap: 'nowrap', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }]}>
           <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
             <Text style={s.label}>{sheet.exam ? `Aufgabe ${i + 1}` : `Frage ${i + 1}`}</Text>
-            <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} />
+            <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} accepted={res[i]} />
             {ai?.notes[i] && !isCorrect(q, sheet.answers?.[i] ?? '') ? <Text style={{ fontSize: 13, color: ai.ok[i] ? C.ok : C.muted }}>{ai.notes[i]}</Text> : null}
           </View>
           <Pressable accessibilityRole="switch" accessibilityState={{ checked: res[i] }} onPress={() => setRes(r => r.map((x, j) => (j === i ? !x : x)))}
@@ -389,7 +389,7 @@ export function SheetResult({ sheet }: { sheet: Worksheet }) {
               <Text style={s.label}>{sheet.exam ? 'Aufgabe' : 'Frage'} {i + 1}</Text>
               <Text style={{ fontWeight: '800', fontSize: 13, color: ok ? C.ok : C.danger }}>{pts && got !== undefined ? `${String(got).replace('.', ',')} / ${pts[i]} P.` : ok ? '✓ richtig' : '✗ falsch'}</Text>
             </View>
-            <AnswerView q={q} answer={sheet.answers?.[i] ?? (sheet.scan ? '(auf Papier)' : '')} />
+            <AnswerView q={q} answer={sheet.answers?.[i] ?? (sheet.scan ? '(auf Papier)' : '')} accepted={!!ok || (!!pts && got !== undefined && got >= pts[i])} />
           </View>
         );
       })}
