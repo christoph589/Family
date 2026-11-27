@@ -10,13 +10,14 @@ import { DateField } from '../ui/DateField';
 import { Button, Segmented } from '../ui/Button';
 import { addDays, daysOf, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
+import { Icon } from '../ui/Icon';
 import { Recipes, recipeScore } from './Recipes';
 import { ConflictNote, DietEditor, DishTile, pickDishPhoto, WeekCheck, WeekPlanner } from './FoodPlus';
 import { parseSpoken, recipeOf } from '../data/food';
 import { canDictate, DictateButton } from '../ui/Dictate';
 
 const SLOTS: { value: MealSlot; label: string; icon: string }[] = [
-  { value: 'mittag', label: 'Mittag', icon: '☀️' }, { value: 'abend', label: 'Abend', icon: '🌙' },
+  { value: 'mittag', label: 'Mittag', icon: '' }, { value: 'abend', label: 'Abend', icon: '' },
 ];
 const norm = (t: string) => t.trim().toLowerCase();
 
@@ -53,7 +54,7 @@ export function Food({ who, meId, parent = true }: { who: string; meId?: string;
     <View style={{ gap: 16 }}>
       <Segmented value={tab} onChange={setTab} options={narrow
         ? [{ value: 'plan', label: 'Plan' }, { value: 'rezepte', label: 'Rezepte' }, { value: 'liste', label: `Liste${open ? ` (${open})` : ''}` }, { value: 'wer', label: 'Wer isst was' }]
-        : [{ value: 'plan', label: '🍽️ Essensplan' }, { value: 'rezepte', label: '❤️ Lieblingsrezepte' }, { value: 'liste', label: `🛒 Einkaufsliste${open ? ` (${open})` : ''}` }, { value: 'wer', label: '🥦 Wer isst was' }]} />
+        : [{ value: 'plan', label: 'Essensplan' }, { value: 'rezepte', label: 'Lieblingsrezepte' }, { value: 'liste', label: `Einkaufsliste${open ? ` (${open})` : ''}` }, { value: 'wer', label: 'Wer isst was' }]} />
       {tab === 'plan' && <MealPlan who={who} readOnly={!parent} onWish={() => setTab('rezepte')} />}
       {tab === 'rezepte' && meId && (
         <Recipes meId={meId} parent={parent}
@@ -89,7 +90,7 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
           {parse(days[0]).getDate()}.–{parse(days[6]).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}
         </Text>
       </View>
-      {!readOnly && !planning && <Button ghost title={hasIdeas ? '✨ Vorschlag für die Woche ansehen' : '✨ Woche planen'} onPress={() => { setPlanning(true); setEdit(null); }} style={{ alignSelf: 'flex-start' }} />}
+      {!readOnly && !planning && <Button ghost title={hasIdeas ? 'Vorschlag für die Woche ansehen' : 'Woche planen'} onPress={() => { setPlanning(true); setEdit(null); }} style={{ alignSelf: 'flex-start' }} />}
       {!readOnly && planning && <WeekPlanner days={days} onDone={() => setPlanning(false)} />}
       {edit && <MealEditor key={edit.date + edit.slot} date={edit.date} slot={edit.slot} onDone={() => setEdit(null)} />}
       {narrow ? (
@@ -106,9 +107,9 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                   const m = (data.meals ?? []).find(x => x.date === d && x.slot === sl.value);
                   return (
                     <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
-                      style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent' }}>
+                      style={{ flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', backgroundColor: m ? C.accentSoft : C.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8 }}>
                       {m && dishPhoto(data, m.title) ? <PhotoImg uri={dishPhoto(data, m.title)} style={{ width: '100%', height: 54, borderRadius: 8, marginBottom: 4 }} resizeMode="cover" /> : null}
-                      <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
+                      <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.label}</Text>
                       <Clip lines={2} longPress style={{ fontSize: 14, fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? '–' : '+')}</Clip>
                       {m && <ConflictNote title={m.title} compact />}
                     </Pressable>
@@ -129,9 +130,9 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
                 const m = (data.meals ?? []).find(x => x.date === d && x.slot === sl.value);
                 return (
                   <Pressable key={sl.value} disabled={readOnly} onPress={() => setEdit({ date: d, slot: sl.value })} accessibilityLabel={`${sl.label} am ${d}: ${m?.title ?? 'leer'}`}
-                    style={{ backgroundColor: m ? '#fff2e0' : C.bg, borderRadius: 10, padding: 8, borderWidth: 1, borderColor: m ? '#f0c98f' : 'transparent', borderStyle: m ? 'solid' : 'dashed' }}>
+                    style={{ backgroundColor: m ? C.accentSoft : C.bg, borderRadius: 10, padding: 8, borderWidth: m ? 0 : 1, borderColor: C.line, borderStyle: m ? 'solid' : 'dashed' }}>
                     {m ? <DishTile title={m.title} photo={dishPhoto(data, m.title)} ingredients={recipeOf(data, m.title)?.ingredients} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 8, marginBottom: 6 }} emojiSize={30} /> : null}
-                    <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.icon} {sl.label}</Text>
+                    <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{sl.label}</Text>
                     <Text style={{ fontWeight: m ? '700' : '400', color: m ? C.fg : C.muted }}>{m?.title ?? (readOnly ? 'noch offen' : '+ eintragen')}</Text>
                     {m && <ConflictNote title={m.title} compact />}
                   </Pressable>
@@ -145,16 +146,15 @@ export function MealPlan({ who, readOnly, onWish }: { who: string; readOnly?: bo
       <WeekCheck days={days} readOnly={readOnly} />
       {readOnly && onWish && (
         <Pressable onPress={onWish} accessibilityRole="button" style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: C.accentSoft }]}>
-          <Text style={{ fontSize: 26 }}>❤️</Text>
           <View style={{ flex: 1 }}>
             <Text style={[s.text, { fontWeight: '800' }]}>Worauf hast du Lust?</Text>
             <Text style={s.muted}>Den Plan machen Mama und Papa. Bewerte Gerichte oder schlag neue vor, dann sehen sie, was du gern isst.</Text>
           </View>
-          <Text style={{ fontSize: 22, color: C.accent }}>›</Text>
+          <Icon name="chev" size={18} color={C.accent} />
         </Pressable>
       )}
       {!readOnly && weekIngredients.length > 0 && (
-        <Button title={`🛒 Zutaten der Woche auf die Einkaufsliste (${weekIngredients.length})`} onPress={() => { update(d => addToShopping(d, weekIngredients, who)); setMsg('Zutaten sind auf der Einkaufsliste. Doppelte habe ich weggelassen.'); }} />
+        <Button title={`Zutaten der Woche auf die Einkaufsliste (${weekIngredients.length})`} onPress={() => { update(d => addToShopping(d, weekIngredients, who)); setMsg('Zutaten sind auf der Einkaufsliste. Doppelte habe ich weggelassen.'); }} />
       )}
       {!!msg && <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text>}
       {!readOnly && <Text style={[s.muted, { fontSize: 13 }]}>Tipp: Gerichte merkt sich die App unter Lieblingsrezepte. Dort seht ihr auch, was die Kinder am liebsten essen.</Text>}
@@ -189,13 +189,13 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
   };
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent }]}>
-      <Text style={s.h2}>{SLOTS.find(x => x.value === slot)?.icon} {SLOTS.find(x => x.value === slot)?.label}, {parse(date).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+      <Text style={s.h2}>{SLOTS.find(x => x.value === slot)?.label}, {parse(date).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
       {favs.length > 0 && (
         <View style={[s.row, { gap: 6 }]}>
           {favs.map(r => (
             <Pressable key={r.id} onPress={() => { setTitle(r.title); setIngredients(r.ingredients.join(', ')); setPhoto(r.photo); }}
               style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: C.accent, backgroundColor: norm(r.title) === norm(title) ? C.accent : C.surface }}>
-              <Text style={{ color: norm(r.title) === norm(title) ? '#fff' : C.fg, fontWeight: '700' }}>{r.title}{recipeScore(r) > 0 ? ` ❤️${recipeScore(r)}` : ''}</Text>
+              <Text style={{ color: norm(r.title) === norm(title) ? '#fff' : C.fg, fontWeight: '700' }}>{r.title}{recipeScore(r) > 0 ? ` ♥ ${recipeScore(r)}` : ''}</Text>
             </Pressable>
           ))}
         </View>
@@ -206,7 +206,7 @@ function MealEditor({ date, slot, onDone }: { date: string; slot: MealSlot; onDo
       <ConflictNote title={title} ingredients={ingredients.split(/[,\n]/).map(x => x.trim()).filter(Boolean)} />
       <View style={[s.row, { alignItems: 'center', gap: 10 }]}>
         {photo ? <PhotoImg uri={photo} style={{ width: 96, height: 72, borderRadius: 10 }} resizeMode="cover" /> : null}
-        <Button ghost title={photoBusy ? 'Lädt …' : photo ? '📷 Anderes Foto' : '📷 Foto vom Gericht'} disabled={photoBusy}
+        <Button ghost title={photoBusy ? 'Lädt …' : photo ? 'Anderes Foto' : 'Foto vom Gericht'} disabled={photoBusy}
           onPress={async () => { setPhotoBusy(true); try { const p = await pickDishPhoto(); if (p) setPhoto(p); } finally { setPhotoBusy(false); } }} />
         {photo && <Button ghost title="Foto entfernen" onPress={() => setPhoto(undefined)} />}
       </View>
@@ -337,7 +337,7 @@ export function Shopping({ who, meId }: { who: string; meId?: string }) {
           <Pressable onPress={() => setByStore(v => !v)}><Text style={{ color: C.accent, fontWeight: '700' }}>{byStore ? 'Nach Datum' : 'Nach Laden sortieren'}</Text></Pressable>
         )}
       </View>
-      {open.length === 0 && <Text style={s.muted}>Alles da. 🎉</Text>}
+      {open.length === 0 && <Text style={s.muted}>Alles da.</Text>}
       {groups.map(g => (
         <View key={g.st || '-'}>
           {byStore && <Text style={[s.label, { marginTop: 6, color: C.accent }]}>{g.st || 'Egal wo'}</Text>}
@@ -353,7 +353,7 @@ export function Shopping({ who, meId }: { who: string; meId?: string }) {
           {done.map(i => (
             <Pressable key={i.id} onPress={() => toggle(i.id)} accessibilityRole="checkbox" accessibilityState={{ checked: true }} accessibilityLabel={i.title}
               style={[s.row, { flexWrap: 'nowrap', paddingVertical: 6, opacity: 0.5 }]}>
-              <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: C.ok, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontWeight: '800' }}>✓</Text></View>
+              <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: C.ok, alignItems: 'center', justifyContent: 'center' }}><Icon name="check" size={16} color="#fff" stroke={2.6} /></View>
               <Text style={[s.text, { flex: 1, textDecorationLine: 'line-through' }]}>{i.title}</Text>
             </Pressable>
           ))}

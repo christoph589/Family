@@ -49,14 +49,14 @@ const CSS = `
   @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 8pt Arial, sans-serif; color: #8a8fa8; } }
 * { box-sizing: border-box; }
 body { font: 11pt/1.5 Arial, Helvetica, sans-serif; color: #15182b; margin: 0; background: #fff; }
-.bar { position: sticky; top: 0; z-index: 2; background: #5b4cf0; color: #fff; padding: 12px 16px; display: flex; gap: 12px; align-items: center; font-weight: 700; }
-.bar button { font: inherit; padding: 10px 18px; border-radius: 10px; border: 0; background: #fff; color: #5b4cf0; cursor: pointer; }
+.bar { position: sticky; top: 0; z-index: 2; background: #3a7d74; color: #fff; padding: 12px 16px; display: flex; gap: 12px; align-items: center; font-weight: 700; }
+.bar button { font: inherit; padding: 10px 18px; border-radius: 10px; border: 0; background: #fff; color: #3a7d74; cursor: pointer; }
 .page { max-width: 180mm; margin: 0 auto; padding: 8mm 14px 12mm; }
 .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2.5px solid #15182b; padding-bottom: 3mm; margin-bottom: 4mm; gap: 6mm; }
-.kind { font-size: 8.5pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #5b4cf0; }
+.kind { font-size: 8.5pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #3a7d74; }
 h1 { font-size: 19pt; line-height: 1.2; margin: 1mm 0 0; }
 .subj { font-size: 11pt; color: #4a4f6a; margin-top: 1mm; }
-.badge { flex: none; border: 1.5px solid #5b4cf0; color: #5b4cf0; border-radius: 99px; padding: 1.5mm 4mm; font-size: 9pt; font-weight: 700; white-space: nowrap; }
+.badge { flex: none; border: 1.5px solid #3a7d74; color: #3a7d74; border-radius: 99px; padding: 1.5mm 4mm; font-size: 9pt; font-weight: 700; white-space: nowrap; }
 .badge.red { border-color: #c62839; color: #c62839; }
 .info { display: grid; grid-template-columns: 2.2fr 1fr 1.3fr 1fr; border: 1.5px solid #15182b; border-radius: 3mm; overflow: hidden; margin-bottom: 4mm; }
 .info div { padding: 1.8mm 3mm; min-height: 12mm; border-right: 1px solid #c9ccd9; border-top: 1px solid #c9ccd9; }
@@ -172,7 +172,7 @@ export function sheetHtml(sheet: Worksheet, o: { name: string; grade?: string; s
  *  wird der Tab blockiert, über einen unsichtbaren Rahmen. In der App über expo-print. */
 export async function printHtml(html: string): Promise<void> {
   if (Platform.OS !== 'web') { const Print = await import('expo-print'); await Print.printAsync({ html }); return; }
-  const withBar = html.includes('class="bar"') ? html : html.replace(/<body([^>]*)>/i, `<body$1><style>@media print{.bar{display:none}}</style><div class="bar" style="position:sticky;top:0;background:#5b4cf0;color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:center;font:700 15px Arial"><span style="flex:1">Druckansicht: im Druckmenü „Als PDF sichern“ oder Drucker wählen</span><button onclick="window.print()" style="font:inherit;padding:10px 18px;border-radius:10px;border:0;background:#fff;color:#5b4cf0">Drucken / PDF</button></div>`);
+  const withBar = html.includes('class="bar"') ? html : html.replace(/<body([^>]*)>/i, `<body$1><style>@media print{.bar{display:none}}</style><div class="bar" style="position:sticky;top:0;background:#3a7d74;color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:center;font:700 15px Arial"><span style="flex:1">Druckansicht: im Druckmenü „Als PDF sichern“ oder Drucker wählen</span><button onclick="window.print()" style="font:inherit;padding:10px 18px;border-radius:10px;border:0;background:#fff;color:#3a7d74">Drucken / PDF</button></div>`);
   const url = URL.createObjectURL(new Blob([withBar], { type: 'text/html' }));
   setTimeout(() => URL.revokeObjectURL(url), 300000);
   if (window.open(url, '_blank')) return;

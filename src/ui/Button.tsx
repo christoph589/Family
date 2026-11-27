@@ -13,8 +13,8 @@ export function Segmented<T extends string>({ value, options, onChange }: { valu
     <View style={[s.row, { backgroundColor: C.surface2, padding: 4, borderRadius: 12, gap: 4, flexShrink: 1, maxWidth: '100%' }]}>
       {options.map(o => (
         <Pressable key={o.value} onPress={() => onChange(o.value)} accessibilityRole="tab" accessibilityState={{ selected: value === o.value }}
-          style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, backgroundColor: value === o.value ? C.surface : 'transparent' }}>
-          <Text style={{ fontWeight: '700', color: C.fg }}>{o.label}</Text>
+          style={{ paddingHorizontal: 11, paddingVertical: 8, borderRadius: 9, backgroundColor: value === o.value ? C.surface : 'transparent' }}>
+          <Text style={{ fontWeight: '700', fontSize: 14, color: C.fg }}>{o.label}</Text>
         </Pressable>
       ))}
     </View>
