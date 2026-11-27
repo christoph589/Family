@@ -88,7 +88,7 @@ export function AutoCam({ count, max, onShot, onClose }: { count: number; max: n
       {flash && <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff', opacity: 0.7 }} />}
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: 16, paddingTop: 50, backgroundColor: 'rgba(0,0,0,0.45)', gap: 6 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>📄 {count} {count === 1 ? 'Seite' : 'Seiten'}</Text>
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18 }}>{count} {count === 1 ? 'Seite' : 'Seiten'}</Text>
           <Pressable onPress={() => setAuto(a => !a)} accessibilityRole="switch" accessibilityState={{ checked: auto }}
             style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 99, backgroundColor: auto ? C.ok : 'rgba(255,255,255,0.25)' }}>
             <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{auto ? 'Automatisch an' : 'Automatisch aus'}</Text>

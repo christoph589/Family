@@ -69,7 +69,7 @@ export function DishIdeas({ onPlan, onClose }: { onPlan: (r: Recipe, date: strin
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent, gap: 12 }]}>
       <View style={[s.row, { justifyContent: 'space-between' }]}>
-        <Text style={s.h2}>💡 Rezeptvorschläge</Text>
+        <Text style={s.h2}>Rezeptvorschläge</Text>
         <Button ghost title="Schließen" onPress={onClose} />
       </View>
       <Text style={s.muted}>Neue Gerichte, die zu euren Unverträglichkeiten, Lieblingen und dem Monat passen. Antippen zum Merken oder Einplanen.</Text>
@@ -86,7 +86,7 @@ export function DishIdeas({ onPlan, onClose }: { onPlan: (r: Recipe, date: strin
       </View>
       <TextInput style={s.input} value={wish} onChangeText={setWish} placeholder="Wunsch oder Zutaten (optional), z. B. Hackfleisch, Paprika" />
       <View style={s.row}>
-        <Button title={busy ? 'KI denkt nach …' : items.length ? '✨ Weitere Ideen' : '✨ Ideen holen'} disabled={busy} onPress={ask} />
+        <Button title={busy ? 'KI denkt nach …' : items.length ? 'Weitere Ideen' : 'Ideen holen'} disabled={busy} onPress={ask} />
       </View>
       {busy && <ActivityIndicator color={C.accent} />}
       <Text style={[s.muted, { fontSize: 12 }]}>Ein KI-Aufruf mit dem günstigen Modell (zählt zum Tageslimit). Es gehen nur Gerichtsnamen und anonyme Unverträglichkeiten raus, keine Namen und keine Fotos. Die Erkennung von Unverträglichkeiten ist ohne Gewähr, bitte Zutaten kurz prüfen.</Text>
@@ -101,15 +101,15 @@ export function DishIdeas({ onPlan, onClose }: { onPlan: (r: Recipe, date: strin
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Text style={[s.text, { fontWeight: '800' }]}>{i.title}<Text style={{ fontSize: 12, color: C.accent }}>  ✨ NEU</Text></Text>
                 {!!i.why && <Text style={[s.muted, { fontSize: 13 }]}>{[i.why, i.time && `⏱ ${i.time}`].filter(Boolean).join(' · ')}</Text>}
-                {soft.length > 0 && <Text style={{ fontSize: 12, fontWeight: '700', color: C.warn }}>{soft.map(c => `👎 ${c.name}: ${c.why}`).join(' · ')}</Text>}
+                {soft.length > 0 && <Text style={{ fontSize: 12, fontWeight: '700', color: C.warn }}>{soft.map(c => `${c.name}: ${c.why}`).join(' · ')}</Text>}
                 <Clip style={[s.muted, { fontSize: 13 }]} lines={2}>{i.ingredients.join(', ')}</Clip>
               </View>
             </View>
             <View style={[s.row, { gap: 6 }]}>
               <Button title="➕ Merken" accessibilityLabel={`${i.title} in die Rezepte übernehmen`} style={{ paddingVertical: 8, minHeight: 40 }}
                 onPress={() => { keep(i); drop(i.id); setMsg(`${i.title} steht jetzt bei den Rezepten.`); }} />
-              <Button ghost title="📅 Einplanen" style={{ paddingVertical: 8, minHeight: 40 }} onPress={() => setPlan(plan === i.id ? null : i.id)} />
-              <Button ghost title={open === i.id ? 'Zuklappen' : '📖 Ansehen'} style={{ paddingVertical: 8, minHeight: 40 }} onPress={() => setOpen(open === i.id ? null : i.id)} />
+              <Button ghost title="Einplanen" style={{ paddingVertical: 8, minHeight: 40 }} onPress={() => setPlan(plan === i.id ? null : i.id)} />
+              <Button ghost title={open === i.id ? 'Zuklappen' : 'Ansehen'} style={{ paddingVertical: 8, minHeight: 40 }} onPress={() => setOpen(open === i.id ? null : i.id)} />
               <Button ghost title="✕ Nicht so" accessibilityLabel={`${i.title} verwerfen`} style={{ paddingVertical: 8, minHeight: 40 }} onPress={() => drop(i.id)} />
             </View>
             {open === i.id && (

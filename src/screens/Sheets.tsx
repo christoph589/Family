@@ -245,13 +245,13 @@ function ScanReview({ sheet, name }: { sheet: Worksheet; name: string }) {
         <View style={{ gap: 6 }}>
           {!!scan.error && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{scan.error}</Text>}
           <View style={s.row}>
-            {scan.photos.length > 0 && <Button title="🤖 KI-Vorkorrektur starten" onPress={() => scanAndGrade(sheet, scan.photos, who, update as any, scan.by)} style={{ paddingVertical: 8, minHeight: 40 }} />}
+            {scan.photos.length > 0 && <Button title="KI-Vorkorrektur starten" onPress={() => scanAndGrade(sheet, scan.photos, who, update as any, scan.by)} style={{ paddingVertical: 8, minHeight: 40 }} />}
           </View>
         </View>
       )}
-      {scan.ai?.summary ? <Text style={[s.text, { fontSize: 14 }]}>🤖 {scan.ai.summary}</Text> : null}
+      {scan.ai?.summary ? <Text style={[s.text, { fontSize: 14 }]}>{scan.ai.summary}</Text> : null}
       <View style={s.row}>
-        <Button ghost title="🔑 Lösungsblatt" onPress={() => printHtml(sheetHtml(sheet, { name: who.name, grade: who.grade, subject, solutions: true })).catch(() => {})} style={{ paddingVertical: 8, minHeight: 40 }} />
+        <Button ghost title="Lösungsblatt" onPress={() => printHtml(sheetHtml(sheet, { name: who.name, grade: who.grade, subject, solutions: true })).catch(() => {})} style={{ paddingVertical: 8, minHeight: 40 }} />
       </View>
       {!pending && <PaperScore key={scan.ai ? 'ai' : 'leer'} sheet={sheet} />}
       <Text style={[s.muted, { fontSize: 12 }]}>Die KI kann Handschrift und Zeichnungen falsch lesen. Die Note zählt erst, wenn du auf „Fertig“ tippst.</Text>
@@ -306,10 +306,10 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
         <View key={i} style={{ gap: 2, borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 8 }}>
           <View style={[s.row, { justifyContent: 'space-between' }]}>
             <Text style={s.label}>Aufgabe {i + 1}</Text>
-            <Text style={{ fontWeight: '800', fontSize: 13, color: ai.pts![i] >= sheet.exam!.points[i] ? C.ok : ai.pts![i] > 0 ? C.warn : C.danger }}>🤖 {String(ai.pts![i]).replace('.', ',')} / {sheet.exam!.points[i]}</Text>
+            <Text style={{ fontWeight: '800', fontSize: 13, color: ai.pts![i] >= sheet.exam!.points[i] ? C.ok : ai.pts![i] > 0 ? C.warn : C.danger }}>{String(ai.pts![i]).replace('.', ',')} / {sheet.exam!.points[i]}</Text>
           </View>
           <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} />
-          {ai.notes[i] ? <Text style={{ fontSize: 13, color: C.muted }}>🤖 {ai.notes[i]}</Text> : null}
+          {ai.notes[i] ? <Text style={{ fontSize: 13, color: C.muted }}>{ai.notes[i]}</Text> : null}
         </View>
       ))}
       <PaperScore sheet={sheet} />
@@ -322,7 +322,7 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
       {!busy && want && (
         <View style={{ gap: 6 }}>
           {!!err && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{err}</Text>}
-          <Button ghost title="🤖 Von der KI prüfen lassen" onPress={start} style={{ paddingVertical: 8, minHeight: 40 }} />
+          <Button ghost title="Von der KI prüfen lassen" onPress={start} style={{ paddingVertical: 8, minHeight: 40 }} />
         </View>
       )}
       {sheet.questions.map((q, i) => (
@@ -330,7 +330,7 @@ function ReviewDigitalInner({ sheet, name }: { sheet: Worksheet; name: string })
           <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
             <Text style={s.label}>{sheet.exam ? `Aufgabe ${i + 1}` : `Frage ${i + 1}`}</Text>
             <AnswerView q={q} answer={sheet.answers?.[i] ?? ''} />
-            {ai?.notes[i] && !isCorrect(q, sheet.answers?.[i] ?? '') ? <Text style={{ fontSize: 13, color: ai.ok[i] ? C.ok : C.muted }}>🤖 {ai.notes[i]}</Text> : null}
+            {ai?.notes[i] && !isCorrect(q, sheet.answers?.[i] ?? '') ? <Text style={{ fontSize: 13, color: ai.ok[i] ? C.ok : C.muted }}>{ai.notes[i]}</Text> : null}
           </View>
           <Pressable accessibilityRole="switch" accessibilityState={{ checked: res[i] }} onPress={() => setRes(r => r.map((x, j) => (j === i ? !x : x)))}
             style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: res[i] ? C.okSoft : '#f8dcd8', borderWidth: 1, borderColor: res[i] ? C.ok : C.danger }}>

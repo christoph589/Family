@@ -68,7 +68,7 @@ export function ExamPrepScreen({ childIds, parent, meId, onSolve }: { childIds: 
     <View style={{ gap: 16 }}>
       <View style={[s.card, { gap: 8 }]}>
         <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
-          <Text style={[s.h2, { flex: 1 }]}>📝 Klassenarbeiten{active.length ? ` (${active.length})` : ''}</Text>
+          <Text style={[s.h2, { flex: 1 }]}>Klassenarbeiten{active.length ? ` (${active.length})` : ''}</Text>
           <Pressable onPress={() => setHowto(x => !x)} style={{ padding: 6 }}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>{howto ? 'Schließen' : 'So geht\'s'}</Text></Pressable>
         </View>
         {howto && <Text style={s.muted}>Alles hochladen, was drankommt: Heft, Arbeitsblätter, Buchseiten, auch über mehrere Tage, bis zu {MAX} Fotos. 1. Die KI macht daraus sofort einen Merkzettel in kleinen Portionen, Lernkarten und einen Lernplan bis zum Termin. Jeden Tag steht auf Heute, was dran ist. 2. Wenn die meisten Karten sitzen, gibt es eine Probe-Klassenarbeit auf dem Niveau von Klasse, Schulform und Bundesland. 3. Nach der echten Arbeit die Note eintragen.</Text>}
@@ -140,7 +140,7 @@ function FixHints({ prep, parent }: { prep: ExamPrep; parent: boolean }) {
       )}
       {noDate && (
         <View style={{ backgroundColor: C.accentSoft, borderRadius: 14, padding: 12, gap: 8 }}>
-          <Text style={[s.text, { fontWeight: '800' }]}>📅 Wann wird die Arbeit geschrieben?</Text>
+          <Text style={[s.text, { fontWeight: '800' }]}>Wann wird die Arbeit geschrieben?</Text>
           <Text style={[s.muted, { fontSize: 13 }]}>Mit Datum gibt es den Countdown und einen Eintrag im Kalender.</Text>
           <View style={[s.row, { flexWrap: 'wrap', gap: 8 }]}>
             <DateField value={date} onChange={setDate} label="Datum der Klassenarbeit" min={today()} />
@@ -213,7 +213,7 @@ function PrepForm({ childIds, meId, onDone }: { childIds: string[]; meId?: strin
         </ScrollView>
       )}
       <View style={s.row}>
-        {photos.length < MAX && <Button ghost title={busy ? 'Lädt …' : '📸 Fotos aufnehmen'} disabled={busy} onPress={add} />}
+        {photos.length < MAX && <Button ghost title={busy ? 'Lädt …' : 'Fotos aufnehmen'} disabled={busy} onPress={add} />}
       </View>
       <Text style={[s.muted, { fontSize: 13 }]}>Du kannst später weitere Fotos nachreichen.</Text>
       <View style={s.row}>
@@ -373,14 +373,14 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
               <Text style={[s.text, { fontSize: 14 }]}>{parent ? `Liegt bei ${child?.name}. Am Gerät lösen oder ausdrucken.` : 'Du kannst sie hier lösen oder ausdrucken und auf Papier schreiben.'}</Text>
               <View style={s.row}>
                 {onSolve && <Button title="✍️ Am Gerät lösen" onPress={() => onSolve(open.id)} style={btnS} />}
-                <Button ghost title="🖨️ Drucken" onPress={() => print(false)} style={btnS} />
-                {parent && <Button ghost title="🔑 Lösungsblatt" onPress={() => print(true)} style={btnS} />}
+                <Button ghost title="Drucken" onPress={() => print(false)} style={btnS} />
+                {parent && <Button ghost title="Lösungsblatt" onPress={() => print(true)} style={btnS} />}
               </View>
               <View style={{ gap: 6, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 }}>
                 <Text style={[s.text, { fontWeight: '700', fontSize: 14 }]}>Auf Papier fertig?</Text>
                 <Text style={[s.muted, { fontSize: 12 }]}>{parent ? 'Alle Seiten fotografieren. Die KI korrigiert vor, du bestätigst die Punkte. Oder du korrigierst selbst mit dem Lösungsblatt.' : 'Fotografiere alle Seiten. Die KI schaut drüber, dann prüfen Mama oder Papa.'}</Text>
                 <View style={s.row}>
-                  {ai && <Button title="📸 Fotos hochladen" onPress={upload} style={btnS} />}
+                  {ai && <Button title="Fotos hochladen" onPress={upload} style={btnS} />}
                   {parent && <Button ghost title="Punkte selbst eintragen" onPress={() => setScoring(true)} style={btnS} />}
                 </View>
               </View>
@@ -400,7 +400,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
         {past && (
           <Step n={3} title="Echte Arbeit" on={stepNow === 3}>
             {prep.grade ? (
-              <Text style={[s.text, { fontWeight: '800' }]}>🏫 Note {prep.grade}{last?.exam && last.results ? ` · Probe war ungefähr ${examScore(last, last.results).note}` : ''}</Text>
+              <Text style={[s.text, { fontWeight: '800' }]}>Note {prep.grade}{last?.exam && last.results ? ` · Probe war ungefähr ${examScore(last, last.results).note}` : ''}</Text>
             ) : parent ? (<>
               <Text style={[s.text, { fontSize: 14 }]}>Welche Note gab es?</Text>
               <View style={[s.row, { gap: 6 }]}>{[1, 2, 3, 4, 5, 6].map(g => <Chip key={g} on={false} label={`${g}${EXAM_POINTS[g] ? ` · +${EXAM_POINTS[g]} P` : ''}`} onPress={() => setGrade(g)} />)}</View>
@@ -412,7 +412,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
 
       {/* Fuß: Unterlagen und Löschen */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.line }}>
-        <Text style={[s.muted, { flex: 1, fontSize: 13 }]}>📎 {prep.photos.length} {prep.photos.length === 1 ? 'Foto' : 'Fotos'} Unterlagen</Text>
+        <Text style={[s.muted, { flex: 1, fontSize: 13 }]}>{prep.photos.length} {prep.photos.length === 1 ? 'Foto' : 'Fotos'} Unterlagen</Text>
         {prep.photos.length < MAX && !busy && <Button ghost title="+ Fotos" onPress={addPhotos} style={btnS} />}
         {!busy && <DeleteButton parent={parent} onDelete={remove} />}
       </View>
@@ -488,7 +488,7 @@ export function PaperScore({ sheet, onDone }: { sheet: Worksheet; onDone?: () =>
           <Pressable accessibilityLabel={`Aufgabe ${i + 1} volle Punkte`} onPress={() => set(i, pts[i])} style={[stepBtn, { width: 50, backgroundColor: got[i] === pts[i] ? C.okSoft : C.surface2 }]}><Text style={{ fontWeight: '700', color: C.ok }}>Voll</Text></Pressable>
         </View>
         {ai && (!!ai.notes[i] || ai.unsure[i]) && (
-          <Text style={{ fontSize: 12, color: ai.unsure[i] ? C.warn : C.muted }}>{ai.unsure[i] ? '⚠️ Unsicher: ' : '🤖 '}{ai.notes[i] || 'Bitte selbst prüfen.'}</Text>
+          <Text style={{ fontSize: 12, color: ai.unsure[i] ? C.warn : C.muted }}>{ai.unsure[i] ? '⚠️ Unsicher: ' : ''}{ai.notes[i] || 'Bitte selbst prüfen.'}</Text>
         )}
         </View>
       ))}

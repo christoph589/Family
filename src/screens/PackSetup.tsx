@@ -13,7 +13,7 @@ export function PackSetup() {
   const set = (id: string, patch: Partial<Task>) => update(d => ({ ...d, tasks: d.tasks.map(t => (t.id === id ? { ...t, ...patch } : t)) }));
   return (
     <View style={s.card}>
-      <Text style={s.h2}>🎒 Sachen richten am Vorabend</Text>
+      <Text style={s.h2}>Sachen richten am Vorabend</Text>
       <Text style={s.muted}>Steht Sport oder Schwimmen im Stundenplan, bekommt das Kind am Abend vorher automatisch die Aufgabe dazu. Wechselt Schwimmen wochenweise (z. B. Mädchen und Jungs), stell hier die Woche ein.</Text>
       {!tasks.length && <Text style={s.muted}>Noch kein Sport oder Schwimmen im Stundenplan gefunden.</Text>}
       {tasks.map(t => {

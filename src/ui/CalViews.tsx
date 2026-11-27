@@ -54,16 +54,16 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
   const kids = data.children.filter(k => !childIds || childIds.includes(k.id));
   // Kürzel: erster Buchstabe, bei gleichem Anfangsbuchstaben zwei (Mia/Mama -> Mi/Ma)
   const ini = (n: string) => (people.filter(p => p.name[0] === n[0]).length > 1 ? n.slice(0, 2) : n[0]);
-  const bd: CalItem[] = birthdaysOn(data, date).map(b => ({ key: 'b' + b.child.id, title: `🎂 ${b.child.name}${b.age !== undefined ? ` wird ${b.age}` : ''}`, color: b.child.color, tag: 'Geburtstag', who: [b.child.id] }));
+  const bd: CalItem[] = birthdaysOn(data, date).map(b => ({ key: 'b' + b.child.id, title: `${b.child.name}${b.age !== undefined ? ` wird ${b.age}` : ''}`, color: b.child.color, tag: 'Geburtstag', who: [b.child.id] }));
   const school = kids.flatMap(k => {
     const sd = schoolOn(data, k.id, date);
-    return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, end: sd.to, title: `🏫 ${k.name}`, color: k.color, tag: 'Schule', who: [k.id], people: [{ id: k.id, name: k.name, color: k.color, photo: k.photo }] }] : [];
+    return sd && (sd.from || sd.to) ? [{ key: 's' + k.id, time: sd.from, end: sd.to, title: `${k.name}`, color: k.color, tag: 'Schule', who: [k.id], people: [{ id: k.id, name: k.name, color: k.color, photo: k.photo }] }] : [];
   });
   const ev = eventsOn(data, date, childIds, onlyOwn, viewer).map(e => {
     const ps = e.who.map(w => people.find(p => p.id === w)).filter(Boolean) as typeof people;
     const nm = (id?: string) => (id ? people.find(p => p.id === id)?.name ?? id : undefined);
     const b = nm(e.bring), pk = nm(e.pick);
-    const drive = b && pk && b === pk ? `🚗 ${b} hin und zurück` : [b && `🚗 ${b}`, pk && `🏠 ${pk}`].filter(Boolean).join(' · ') || undefined;
+    const drive = b && pk && b === pk ? `${b} hin und zurück` : [b && `${b}`, pk && `${pk}`].filter(Boolean).join(' · ') || undefined;
     return { key: e.id, time: e.time, end: e.end, title: `${e.icon ? e.icon + ' ' : ''}${e.title}`, color: ps.length === 1 ? ps[0].color : C.accent, tag: ps.length ? ps.map(p => p.name).join(', ') : 'Alle', who: e.who, people: ps, drive, note: e.note };
   });
   const tasks = data.tasks
@@ -72,9 +72,9 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
   // Feiertage jeden Tag, Schulferien nur am ersten und letzten Tag (sonst ist der Monat voll davon)
   const fmt = (x: string) => parse(x).toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' });
   const hol: CalItem[] = data.settings?.autoHoliday?.on === false ? [] : (data.settings?.autoHoliday?.ranges ?? []).flatMap(r => {
-    if (r.kind === 'feiertag') return r.from <= date && date <= r.to ? [{ key: 'h' + r.from + r.name, title: `🎉 ${r.name}`, color: '#b26a00', tag: 'Feiertag' }] : [];
-    if (date === r.from) return [{ key: 'h' + r.from + r.name, title: `🏖️ ${r.name}${r.to !== r.from ? ` bis ${fmt(r.to)}` : ''}`, color: '#0f6e73', tag: 'Ferien' }];
-    if (date === r.to) return [{ key: 'h' + r.to + r.name + 'e', title: `🏖️ Letzter Tag ${r.name}`, color: '#0f6e73', tag: 'Ferien' }];
+    if (r.kind === 'feiertag') return r.from <= date && date <= r.to ? [{ key: 'h' + r.from + r.name, title: `${r.name}`, color: '#b26a00', tag: 'Feiertag' }] : [];
+    if (date === r.from) return [{ key: 'h' + r.from + r.name, title: `${r.name}${r.to !== r.from ? ` bis ${fmt(r.to)}` : ''}`, color: '#0f6e73', tag: 'Ferien' }];
+    if (date === r.to) return [{ key: 'h' + r.to + r.name + 'e', title: `Letzter Tag ${r.name}`, color: '#0f6e73', tag: 'Ferien' }];
     return [];
   });
   // Kinder mit eigenem Bundesland: deren Ferien und abweichende Feiertage mit Namen
@@ -85,9 +85,9 @@ export function baseItems(data: FamilyData, date: string, childIds: string[] | n
     if (!ks.length) return [];
     const nm = ks.map(k => k.name).join(', ');
     return (a?.extra?.[st]?.ranges ?? []).filter(r => !famKeys.has(r.from + r.to + r.name)).flatMap(r => {
-      if (r.kind === 'feiertag') return r.from <= date && date <= r.to ? [{ key: 'h' + st + r.from + r.name, title: `🎉 ${r.name} (${nm})`, color: '#b26a00', tag: 'Feiertag', who: ks.map(k => k.id) }] : [];
-      if (date === r.from) return [{ key: 'h' + st + r.from + r.name, title: `🏖️ ${nm}: ${r.name}${r.to !== r.from ? ` bis ${fmt(r.to)}` : ''}`, color: '#0f6e73', tag: 'Ferien', who: ks.map(k => k.id) }];
-      if (date === r.to) return [{ key: 'h' + st + r.to + r.name + 'e', title: `🏖️ ${nm}: Letzter Tag ${r.name}`, color: '#0f6e73', tag: 'Ferien', who: ks.map(k => k.id) }];
+      if (r.kind === 'feiertag') return r.from <= date && date <= r.to ? [{ key: 'h' + st + r.from + r.name, title: `${r.name} (${nm})`, color: '#b26a00', tag: 'Feiertag', who: ks.map(k => k.id) }] : [];
+      if (date === r.from) return [{ key: 'h' + st + r.from + r.name, title: `${nm}: ${r.name}${r.to !== r.from ? ` bis ${fmt(r.to)}` : ''}`, color: '#0f6e73', tag: 'Ferien', who: ks.map(k => k.id) }];
+      if (date === r.to) return [{ key: 'h' + st + r.to + r.name + 'e', title: `${nm}: Letzter Tag ${r.name}`, color: '#0f6e73', tag: 'Ferien', who: ks.map(k => k.id) }];
       return [];
     });
   });
@@ -231,7 +231,7 @@ function Agenda({ days, itemsFor, onItemPress, onPickDay }: { days: string[]; it
               {school.length > 0 && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <View style={{ flexDirection: 'row', gap: 2 }}>{school.map(x => <View key={x.key} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: x.color }} />)}</View>
-                  <Text style={{ fontSize: 12.5, color: C.muted }} numberOfLines={1}>🏫 Schule {from ?? ''}{to ? `–${to}` : ''}{school.length === 1 ? ` · ${school[0].title.replace('🏫 ', '')}` : ''}</Text>
+                  <Text style={{ fontSize: 12.5, color: C.muted }} numberOfLines={1}>Schule {from ?? ''}{to ? `–${to}` : ''}{school.length === 1 ? ` · ${school[0].title.replace('', '')}` : ''}</Text>
                 </View>
               )}
               {rest.map(it => (

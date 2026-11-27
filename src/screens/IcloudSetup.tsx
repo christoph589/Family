@@ -20,7 +20,7 @@ export function IcloudSetup() {
   const [note, setNote] = useState('');
   useEffect(() => {
     const ret = consumeGoogleReturn();
-    if (ret === 'ok') setNote('✅ Google-Kalender verbunden. Wähle unten, welche Kalender in Famelio erscheinen.');
+    if (ret === 'ok') setNote('Google-Kalender verbunden. Wähle unten, welche Kalender in Famelio erscheinen.');
     else if (ret === 'abgebrochen') setNote('Google-Verbindung abgebrochen.');
     else if (ret) setErr('Google-Verbindung hat nicht geklappt. Bitte nochmal versuchen.');
     Promise.all([
@@ -71,11 +71,11 @@ export function IcloudSetup() {
   const anyConn = !!conn?.connected || !!gConn?.connected;
   const connections = (
     <View style={s.card}>
-      <Text style={s.h2}>📱 Handy-Kalender verbinden</Text>
+      <Text style={s.h2}>Handy-Kalender verbinden</Text>
       <Text style={s.muted}>Termine aus euren Handy-Kalendern direkt in Famelio sehen, anlegen und ändern. Änderungen landen sofort auf dem Handy.</Text>
       <View style={{ gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.line }}>
         <View style={[s.row, { flexWrap: 'wrap' }]}>
-          <Text style={[s.text, { fontWeight: '800', flex: 1, minWidth: 180 }]}>🤖 Google / Android{gConn?.connected ? `\n` : ''}{gConn?.connected && <Text style={[s.muted, { fontWeight: '400', fontSize: 13 }]}>Verbunden{gConn.email ? ` als ${gConn.email}` : ''}</Text>}</Text>
+          <Text style={[s.text, { fontWeight: '800', flex: 1, minWidth: 180 }]}>Google / Android{gConn?.connected ? `\n` : ''}{gConn?.connected && <Text style={[s.muted, { fontWeight: '400', fontSize: 13 }]}>Verbunden{gConn.email ? ` als ${gConn.email}` : ''}</Text>}</Text>
           {gConn?.connected ? <Button ghost title="Trennen" disabled={busy} onPress={gDisconnect} />
             : <Button title={busy ? 'Moment …' : 'Mit Google verbinden'} disabled={busy || !gConn?.ready} onPress={gConnect} />}
         </View>
@@ -83,7 +83,7 @@ export function IcloudSetup() {
       </View>
       <View style={{ gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.line }}>
         <View style={[s.row, { flexWrap: 'wrap' }]}>
-          <Text style={[s.text, { fontWeight: '800', flex: 1, minWidth: 180 }]}>🍎 iPhone / iCloud{conn?.connected ? `\n` : ''}{conn?.connected && <Text style={[s.muted, { fontWeight: '400', fontSize: 13 }]}>Verbunden{conn.user ? ` als ${conn.user}` : ''}</Text>}</Text>
+          <Text style={[s.text, { fontWeight: '800', flex: 1, minWidth: 180 }]}>iPhone / iCloud{conn?.connected ? `\n` : ''}{conn?.connected && <Text style={[s.muted, { fontWeight: '400', fontSize: 13 }]}>Verbunden{conn.user ? ` als ${conn.user}` : ''}</Text>}</Text>
           {conn?.connected ? <Button ghost title="Trennen" disabled={busy} onPress={disconnect} />
             : !showIc && <Button title="Verbinden" disabled={busy} onPress={() => setShowIc(true)} />}
         </View>
@@ -105,7 +105,7 @@ export function IcloudSetup() {
   return (<>
     {connections}
     <View style={s.card}>
-      <Text style={s.h2}>📅 Welche Kalender sollen erscheinen?</Text>
+      <Text style={s.h2}>Welche Kalender sollen erscheinen?</Text>
       {!!st?.error && chosen.length > 0 && <Text style={{ color: C.danger, fontWeight: '700' }}>{st.error}</Text>}
       {all.map(c => {
         const on = chosen.find(x => x.href === c.href);
@@ -136,7 +136,7 @@ export function IcloudSetup() {
         <View style={{ gap: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.line }}>
           <Text style={[s.text, { fontWeight: '800' }]}>Neue Termine eintragen in</Text>
           <Segmented value={eventTarget(data.settings)} onChange={v => update(d => ({ ...d, settings: { ...d.settings, newEvents: v } }))}
-            options={[{ value: 'icloud', label: '📱 Handy-Kalender' }, { value: 'app', label: '🏠 Famelio' }, { value: 'both', label: 'Beides zur Wahl' }]} />
+            options={[{ value: 'icloud', label: 'Handy-Kalender' }, { value: 'app', label: 'Famelio' }, { value: 'both', label: 'Beides zur Wahl' }]} />
           <Text style={[s.muted, { fontSize: 13 }]}>
             {eventTarget(data.settings) === 'icloud' ? 'Alle neuen Termine landen in eurem Handy-Kalender (Apple oder Google). Am einfachsten, wenn ihr sowieso dort plant.'
               : eventTarget(data.settings) === 'app' ? 'Neue Termine bleiben in Famelio. Auf dem Handy erscheinen sie nur über das Familienkalender-Abo (nur lesen).'

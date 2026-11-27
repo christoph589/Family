@@ -76,8 +76,8 @@ export function PhotoCollector() {
           {!!msg && <Text style={{ color: C.danger, fontWeight: '700' }}>{msg}</Text>}
           {room > 0 && (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Button title={canAuto ? (photos.length ? '📸 Weiter scannen' : '📸 Scannen') : photos.length ? '📸 Nächste Seite' : '📸 Foto aufnehmen'} disabled={busy} style={{ flex: 1, paddingVertical: 16 }} onPress={() => add(true)} />
-              <Button ghost title="🖼️ Galerie" disabled={busy} style={{ paddingVertical: 16 }} onPress={() => add(false)} />
+              <Button title={canAuto ? (photos.length ? 'Weiter scannen' : 'Scannen') : photos.length ? 'Nächste Seite' : 'Foto aufnehmen'} disabled={busy} style={{ flex: 1, paddingVertical: 16 }} onPress={() => add(true)} />
+              <Button ghost title="Galerie" disabled={busy} style={{ paddingVertical: 16 }} onPress={() => add(false)} />
             </View>
           )}
           <View style={{ flexDirection: 'row', gap: 8 }}>

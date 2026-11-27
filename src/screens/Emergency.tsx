@@ -72,13 +72,13 @@ export function EmergencyCard({ child, onClose }: { child: Child; onClose: () =>
               <View key={f.key} style={{ gap: 2 }}>
                 <Text style={s.label}>{f.label}</Text>
                 {f.phone
-                  ? <Pressable onPress={() => call(e[f.key])} accessibilityRole="link"><Text style={{ color: C.accent, fontSize: 20, fontWeight: '800' }}>📞 {e[f.key]}</Text></Pressable>
+                  ? <Pressable onPress={() => call(e[f.key])} accessibilityRole="link"><Text style={{ color: C.accent, fontSize: 20, fontWeight: '800' }}>{e[f.key]}</Text></Pressable>
                   : <Text style={[s.text, { fontSize: 17, fontWeight: f.key === 'allergies' || f.key === 'meds' ? '800' : '500', color: f.key === 'allergies' ? C.danger : C.fg }]}>{e[f.key]}</Text>}
               </View>
             ))}
             <Text style={[s.muted, { fontSize: 13 }]}>Im echten Notfall immer zuerst 112 anrufen.</Text>
             <View style={s.row}>
-              {Platform.OS !== 'web' && <Button color={C.danger} title="📞 112" onPress={() => call('112')} />}
+              {Platform.OS !== 'web' && <Button color={C.danger} title="112" onPress={() => call('112')} />}
               <Button ghost title="Schließen" onPress={onClose} />
             </View>
           </ScrollView>
