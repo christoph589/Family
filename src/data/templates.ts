@@ -30,6 +30,6 @@ export const SCHOOL_PACK: TaskTemplate[] = [
 ];
 TEMPLATES.push(...SCHOOL_PACK);
 
-export const TIME_LABEL: Record<DayTime, string> = { morgens: '🌅 Morgens', mittags: '☀️ Nach der Schule', abends: '🌙 Abends' };
+export const TIME_LABEL: Record<DayTime, string> = { morgens: 'Morgens', mittags: 'Nach der Schule', abends: 'Abends' };
 export const TIME_ORDER: Record<string, number> = { morgens: 0, mittags: 1, abends: 2, '': 3 };
 export const KIND_LABEL: Record<TaskKind, string> = { routine: 'Routine', hausaufgabe: 'Hausaufgabe', pflicht: 'Haushalt' };

@@ -14,6 +14,7 @@ import { Landing } from './src/screens/Landing';
 import { Operator } from './src/screens/Operator';
 import { SupportSetup } from './src/screens/SupportSetup';
 import { Avatar } from './src/ui/Avatar';
+import { Icon, IconName } from './src/ui/Icon';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
 import { AiPrivacy, Family, Holiday, ParentPin } from './src/screens/Family';
@@ -109,7 +110,7 @@ function CloudApp() {
 }
 
 
-const TAB_ICON: Record<Tab, string> = { heute: '🏠', kalender: '📅', lernen: '📚', punkte: '⭐', geld: '💶', essen: '🍽️', aufgaben: '⚙️' };
+const TAB_ICON: Record<Tab, IconName> = { heute: 'home', kalender: 'cal', lernen: 'book', punkte: 'star', geld: 'wallet', essen: 'food', aufgaben: 'home' };
 
 type Section = 'familie' | 'aufgaben' | 'schule' | 'geld' | 'ferien' | 'kalender' | 'geraete';
 const SETTINGS: { value: Section; label: string; hint: string; cloud?: boolean }[] = [
@@ -195,7 +196,7 @@ function Root() {
     const hello = hour < 11 ? 'Guten Morgen' : hour < 17 ? 'Hallo' : hour < 22 ? 'Guten Abend' : 'Gute Nacht';
     const asking = people.find(p => p.id === askPin);
     return (
-      <SafeAreaView style={[s.screen, grad('#5b4cf0', '#ff6a5c', 150)]}>
+      <SafeAreaView style={[s.screen, grad('#3a7d74', '#2c5f58', 150)]}>
         <ScrollView contentContainerStyle={[s.pad, { maxWidth: 820, paddingTop: 48, paddingBottom: 48, gap: 26 }]}>
           <View style={{ alignItems: 'center', gap: 6 }}>
             <View style={[s.row, { gap: 8, marginBottom: 6 }]}><LogoMark size={36} /><Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>{BRAND.name}</Text></View>
@@ -286,7 +287,7 @@ function Root() {
         <View style={[s.row, { flexWrap: 'nowrap', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10, maxWidth: 1100, width: '100%', alignSelf: 'center' }]}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[s.muted, { fontSize: 13, fontWeight: '700' }]} numberOfLines={1}>{dateStr} · {data.family.name}</Text>
-            <Text style={[s.h1, { fontSize: wide ? 28 : 24 }]} numberOfLines={1}>{tab === 'aufgaben' ? 'Einstellungen' : wide ? `${greet}, ${me.name}` : `Hallo ${me.name} 👋`}</Text>
+            <Text style={[s.h1, { fontSize: wide ? 28 : 24 }]} numberOfLines={1}>{tab === 'aufgaben' ? 'Einstellungen' : wide ? `${greet}, ${me.name}` : `Hallo ${me.name}`}</Text>
           </View>
           {tab === 'aufgaben' && (
             <Pressable accessibilityRole="button" accessibilityLabel="Einstellungen schließen" onPress={() => setTab('heute')}
@@ -297,10 +298,8 @@ function Root() {
           <View>
             <Pressable accessibilityRole="button" accessibilityLabel={`${me.name}, Menü`}
               onPress={() => setProfMenu(o => !o)}
-              style={{ borderRadius: 30, padding: 3, ...grad(me.color, me.color + '55') }}>
-              <View style={{ borderRadius: 26, borderWidth: 2, borderColor: '#fff' }}>
-                <Avatar name={me.name} color={me.color} photo={(me as any).photo} size={42} />
-              </View>
+              style={{ borderRadius: 30 }}>
+              <Avatar name={me.name} color={me.color} photo={(me as any).photo} size={40} />
             </Pressable>
             {profMenu && (
               <>
@@ -309,11 +308,11 @@ function Root() {
                   <Text style={[s.label, { paddingHorizontal: 16, paddingVertical: 8 }]} numberOfLines={1}>{me.name}</Text>
                   {admin && tab !== 'aufgaben' && (
                     <Pressable accessibilityRole="menuitem" onPress={() => { setProfMenu(false); setMenu(true); setTab('aufgaben'); }} style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-                      <Text style={[s.text, { fontWeight: '700' }]}>⚙️  Einstellungen</Text>
+                      <Text style={[s.text, { fontWeight: '700' }]}>Einstellungen</Text>
                     </Pressable>
                   )}
                   <Pressable accessibilityRole="menuitem" onPress={() => { setProfMenu(false); setProfile(null); setTab('heute'); }} style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-                    <Text style={[s.text, { fontWeight: '700' }]}>👥  Person wechseln</Text>
+                    <Text style={[s.text, { fontWeight: '700' }]}>Person wechseln</Text>
                   </Pressable>
                 </View>
               </>
@@ -321,7 +320,7 @@ function Root() {
           </View>
         </View>
       </View>
-      <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingTop: 6, paddingBottom: 170 }]}>
+      <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingTop: 6, paddingBottom: 120 }]}>
         {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
         {tab === 'heute' && <Today childIds={childIds} parent={parent} meId={profile.id} admin={admin} />}
         {tab === 'kalender' && <Calendar childIds={childIds} parent={parent} meId={profile.id} />}
@@ -391,23 +390,24 @@ function Root() {
           </View>
         )}
       </ScrollView>
-      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 14, alignItems: 'center', paddingHorizontal: 12 }}>
-        <View style={[{ flexDirection: 'row', maxWidth: 640, width: '100%', padding: 6, borderRadius: 28, backgroundColor: '#ffffffeb', ...SHADOW.lg, borderWidth: 1, borderColor: '#ffffff' }, Platform.OS === 'web' ? ({ backdropFilter: 'blur(18px)' } as any) : null]}>
+      <View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.line, alignItems: 'center', paddingBottom: 6 }]}>
+        <View style={{ flexDirection: 'row', maxWidth: 640, width: '100%', paddingHorizontal: 6, paddingTop: 8 }}>
           {shownTabs.map(t => {
             const on = tab === t.value;
+            const col = on ? C.accent : C.muted;
             return (
               <Pressable key={t.value} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={t.badge ? `${t.label}, ${t.badge} neu` : t.label}
                 onPress={() => setTab(t.value)}
-                style={[{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 22, gap: 1 }, on ? grad(C.accent, '#7d5cf6') : null, on ? SHADOW.md : null]}>
+                style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, gap: 3 }}>
                 <View>
-                  <Text style={{ fontSize: 21, opacity: on ? 1 : 0.7 }}>{TAB_ICON[t.value]}</Text>
+                  <Icon name={TAB_ICON[t.value]} size={23} color={col} stroke={on ? 2.1 : 1.7} />
                   {!!t.badge && (
-                    <View style={{ position: 'absolute', top: -4, right: -12, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#fff' }}>
+                    <View style={{ position: 'absolute', top: -4, right: -10, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
                       <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{t.badge}</Text>
                     </View>
                   )}
                 </View>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: on ? '#fff' : C.muted }} numberOfLines={1}>{t.label}</Text>
+                <Text style={{ fontSize: 11, fontWeight: on ? '800' : '600', color: col }} numberOfLines={1}>{t.label}</Text>
               </Pressable>
             );
           })}

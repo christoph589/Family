@@ -5,17 +5,18 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-nativ
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
 import { FamilyData, MealIdea, MealSlot } from '../data/types';
-import { ALLERGENS, autoFill, conflictsOf, Diet, dietOf, dietSummary, dishInfo, recipeOf, STYLES, swapCandidates, tileOf, weekCheck } from '../data/food';
+import { ALLERGENS, autoFill, conflictsOf, Diet, dietOf, dietSummary, dishInfo, recipeOf, STYLES, swapCandidates, weekCheck } from '../data/food';
 import { AI_ERROR, suggestWeek } from '../ai/generate';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { PhotoImg } from '../ui/PhotoImg';
 import { parse } from '../ui/CalViews';
-import { C, grad, s } from '../ui/theme';
+import { C, grad, s, TINT } from '../ui/theme';
+import { Icon } from '../ui/Icon';
 
 const norm = (t: string) => t.trim().toLowerCase();
 const dayLabel = (d: string) => parse(d).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' });
-const slotLabel = (sl: MealSlot) => (sl === 'mittag' ? '☀️ Mittag' : sl === 'abend' ? '🌙 Abend' : '🥣 Frühstück');
+const slotLabel = (sl: MealSlot) => (sl === 'mittag' ? 'Mittag' : sl === 'abend' ? 'Abend' : 'Frühstück');
 
 /** Foto auswählen und auf ca. 480 px klein rechnen (etwa 30 KB), damit die Familiendaten schlank bleiben. */
 export async function pickDishPhoto(): Promise<string | null> {
@@ -49,10 +50,10 @@ export async function cropDishPhoto(uri: string, box: [number, number, number, n
 /** Bild zum Gericht: eigenes Foto, sonst ein farbiger Platzhalter mit passendem Emoji. Kostet nichts. */
 export function DishTile({ title, photo, ingredients, style, emojiSize = 34 }: { title: string; photo?: string; ingredients?: string[]; style?: any; emojiSize?: number }) {
   if (photo) return <PhotoImg uri={photo} style={[{ borderRadius: 10 }, style]} resizeMode="cover" accessibilityIgnoresInvertColors />;
-  const [a, b] = tileOf(title);
+  const tint = TINT[[...title].reduce((a, ch) => a + ch.charCodeAt(0), 0) % TINT.length];
   return (
-    <View style={[{ borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, grad(a, b), style]} accessibilityElementsHidden importantForAccessibility="no">
-      <Text style={{ fontSize: emojiSize }}>{dishInfo(title, ingredients).emoji}</Text>
+    <View style={[{ borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: tint }, style]} accessibilityElementsHidden importantForAccessibility="no">
+      <Icon name="food" size={Math.round(emojiSize * 0.85)} color="#5b6168" stroke={1.7} />
     </View>
   );
 }
@@ -110,7 +111,7 @@ function DietRow({ p, parent, mine, open, onToggle, set, diet: x }: { p: { id: s
           <Text style={[s.text, { fontWeight: '800' }]}>{p.name}</Text>
           <Text style={{ fontSize: 13, color: hard ? C.danger : C.muted, fontWeight: hard ? '700' : '500' }} numberOfLines={open ? undefined : 2}>{summary || 'isst alles'}</Text>
         </View>
-        {canSoft && <Text style={{ fontSize: 18, color: C.muted }}>{open ? '▴' : '✏️'}</Text>}
+        {canSoft && <Text style={{ fontSize: 16, color: C.muted, fontWeight: '700' }}>{open ? 'Schließen' : 'Ändern'}</Text>}
       </Pressable>
       {open && (
         <>
@@ -165,10 +166,10 @@ export function WeekCheck({ days, readOnly }: { days: string[]; readOnly?: boole
   const people = peopleOf(data);
   const r = weekCheck(data, days);
   if (r.rating === 'leer') return null;
-  const head = r.rating === 'bunt' ? { icon: '🌈', text: 'Schön abwechslungsreich diese Woche.', bg: C.okSoft } : r.rating === 'okay' && !r.hints.length ? { icon: '👍', text: r.count < 3 ? 'Noch zu wenig geplant für eine Einschätzung.' : 'Die Woche sieht gut aus.', bg: C.okSoft } : { icon: '💡', text: r.rating === 'einseitig' ? 'Die Woche ist etwas einseitig. Ideen:' : 'Eine kleine Idee für mehr Abwechslung:', bg: C.warnSoft };
+  const head = r.rating === 'bunt' ? { icon: '', text: 'Schön abwechslungsreich diese Woche.', bg: C.okSoft } : r.rating === 'okay' && !r.hints.length ? { icon: '', text: r.count < 3 ? 'Noch zu wenig geplant für eine Einschätzung.' : 'Die Woche sieht gut aus.', bg: C.okSoft } : { icon: '', text: r.rating === 'einseitig' ? 'Die Woche ist etwas einseitig. Ideen:' : 'Eine kleine Idee für mehr Abwechslung:', bg: C.warnSoft };
   return (
     <View style={[s.card, { padding: 14, gap: 8, backgroundColor: head.bg }]}>
-      <Text style={[s.text, { fontWeight: '800' }]}>{head.icon} {head.text}</Text>
+      <Text style={[s.text, { fontWeight: '800' }]}>{head.text}</Text>
       {r.hints.map(h => {
         const cands = h.swap ? swapCandidates(data, days, h.swap.want, people) : [];
         const meal = h.swap && data.meals?.find(m => m.id === h.swap!.mealId);
@@ -187,7 +188,7 @@ export function WeekCheck({ days, readOnly }: { days: string[]; readOnly?: boole
                   ))}
                 </View>
               </View>
-            ) : <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => setOpenHint(h.id)}>🔄 Tauschvorschlag ansehen</Text>)}
+            ) : <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => setOpenHint(h.id)}>Tauschvorschlag ansehen</Text>)}
           </View>
         );
       })}
@@ -248,7 +249,7 @@ export function WeekPlanner({ days, onDone }: { days: string[]; onDone: () => vo
 
   return (
     <View style={[s.card, { borderWidth: 2, borderColor: C.accent, gap: 12 }]}>
-      <Text style={s.h2}>✨ Woche planen</Text>
+      <Text style={s.h2}>Woche planen</Text>
       {!ideas.length ? (
         <>
           <Text style={s.label}>Welche Mahlzeiten</Text>
@@ -269,8 +270,8 @@ export function WeekPlanner({ days, onDone }: { days: string[]; onDone: () => vo
           <Text style={s.muted}>{free.length ? `${free.length} freie Plätze. Schon Eingetragenes bleibt.` : 'Keine freien Plätze in dieser Auswahl.'}</Text>
           <TextInput style={s.input} value={wish} onChangeText={setWish} placeholder="Wunsch für die KI (optional), z. B. Mittwoch wenig Zeit, mal was Asiatisches" />
           <View style={s.row}>
-            <Button ghost title="❤️ Aus Lieblingsgerichten (gratis)" disabled={!free.length || busy} onPress={local} />
-            <Button title={busy ? 'KI plant …' : '✨ Mit KI, auch neue Ideen'} disabled={!free.length || busy} onPress={ai} />
+            <Button ghost title="Aus Lieblingsgerichten (gratis)" disabled={!free.length || busy} onPress={local} />
+            <Button title={busy ? 'KI plant …' : 'Mit KI, auch neue Ideen'} disabled={!free.length || busy} onPress={ai} />
             <Button ghost title="Abbrechen" onPress={onDone} />
           </View>
           {busy && <ActivityIndicator color={C.accent} />}

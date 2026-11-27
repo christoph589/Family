@@ -71,9 +71,9 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
         <Text style={[s.muted, { flex: 1, minWidth: 200 }]}>
           {parent ? 'Ganz oben steht, was die Familie am liebsten isst. Antippen zum Einplanen.' : 'Bewerte die Gerichte oder schlag ein neues vor. Mama und Papa sehen das Ranking und planen danach.'}
         </Text>
-        {!adding && parent && <Button ghost title="💡 Vorschläge" accessibilityLabel="Neue Rezepte vorschlagen lassen" onPress={() => setIdeas(v => !v)} />}
-        {!adding && parent && <Button ghost title="🔗 Aus Link" accessibilityLabel="Rezept von einer Webseite übernehmen" onPress={() => { setAdding('link'); setEdit(null); setIdeas(false); }} />}
-        {!adding && parent && <Button ghost title="📷 Aus Screenshot" accessibilityLabel="Rezept aus Screenshot oder Foto übernehmen" onPress={() => { setAdding('shot'); setEdit(null); }} />}
+        {!adding && parent && <Button ghost title="Vorschläge" accessibilityLabel="Neue Rezepte vorschlagen lassen" onPress={() => setIdeas(v => !v)} />}
+        {!adding && parent && <Button ghost title="Aus Link" accessibilityLabel="Rezept von einer Webseite übernehmen" onPress={() => { setAdding('link'); setEdit(null); setIdeas(false); }} />}
+        {!adding && parent && <Button ghost title="Aus Screenshot" accessibilityLabel="Rezept aus Screenshot oder Foto übernehmen" onPress={() => { setAdding('shot'); setEdit(null); }} />}
         {!adding && <Button title={parent ? '+ Gericht' : '+ Vorschlagen'} onPress={() => { setAdding(true); setEdit(null); }} />}
       </View>
       {ideas && !adding && parent && <DishIdeas onPlan={onPlan} onClose={() => setIdeas(false)} />}
@@ -81,7 +81,6 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
       {!!msg && <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text>}
       {list.length === 0 && !adding && (
         <View style={[s.card, { alignItems: 'center' }]}>
-          <Text style={{ fontSize: 34 }}>🍲</Text>
           <Text style={s.muted}>Noch keine Gerichte. Jedes Gericht aus dem Essensplan landet automatisch hier.</Text>
         </View>
       )}
@@ -93,14 +92,14 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
         const fresh = !!r.by && !last && !(data.meals ?? []).some(m => norm(m.title) === norm(r.title));
         if (edit === r.id) return <RecipeForm key={r.id} meId={meId} parent={parent} recipe={r} onDone={() => setEdit(null)} />;
         return (
-          <View key={r.id} style={[s.card, { padding: 12, gap: 8 }]}>
+          <View key={r.id} style={[s.card, { padding: 12, gap: 8, borderWidth: 1, borderColor: C.line, borderRadius: 16, boxShadow: 'none', shadowOpacity: 0, elevation: 0 } as any]}>
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
-              <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: i < 3 && score > 0 ? '#fff2e0' : C.surface2, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontWeight: '800', fontSize: 12, color: i < 3 && score > 0 ? '#c27100' : C.muted }}>{i + 1}</Text>
+              <View style={{ width: 20, alignItems: 'center', paddingTop: 2 }}>
+                <Text style={{ fontWeight: '700', fontSize: 13, color: i < 3 && score > 0 ? C.accent : C.muted }}>{i + 1}</Text>
               </View>
               <DishTile title={r.title} photo={r.photo} ingredients={r.ingredients} style={{ width: 60, height: 46 }} emojiSize={22} />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <Text style={[s.text, { fontWeight: '800' }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}{r.ai && <Text style={{ fontSize: 12, color: C.accent }}>  ✨ KI-Idee</Text>}</Text>
+                <Text style={[s.text, { fontWeight: '800' }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}{r.ai && <Text style={{ fontSize: 12, color: C.accent }}>  KI-Idee</Text>}</Text>
                 <ConflictNote title={r.title} compact />
                 {r.ingredients.length > 0 && <Clip style={[s.muted, { fontSize: 13 }]} lines={1}>{r.ingredients.join(', ')}</Clip>}
                 <Text style={[s.muted, { fontSize: 12 }]}>
@@ -123,26 +122,26 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
                 const on = r.votes?.[meId] === x.v;
                 return (
                   <Pressable key={x.v} onPress={() => vote(r, x.v)} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${r.title}: ${x.label}`}
-                    style={{ paddingHorizontal: narrow ? 10 : 12, paddingVertical: 6, borderRadius: 99, borderWidth: 1.5, borderColor: on ? C.accent : C.line, backgroundColor: on ? C.accentSoft : C.surface }}>
-                    <Text style={{ fontWeight: '700', color: C.fg }}>{x.icon}{parent ? '' : ` ${x.label}`}</Text>
+                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: on ? C.accent : C.line, backgroundColor: on ? C.accentSoft : C.surface }}>
+                    <Text style={{ fontWeight: '700', fontSize: 13, color: C.fg }}>{x.icon}{parent ? '' : ` ${x.v === 2 ? 'Liebling' : x.v === 1 ? 'Mag ich' : 'Nein'}`}</Text>
                   </Pressable>
                 );
               })}
               {parent && <View style={{ flex: 1 }} />}
-              {parent && <Button title={narrow ? '📅' : '📅 Einplanen'} accessibilityLabel={`${r.title} einplanen`} onPress={() => setPlan(plan === r.id ? null : r.id)} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: narrow ? 12 : 16 }} />}
-              {parent && r.ingredients.length > 0 && <Button ghost title="🛒" accessibilityLabel={`Zutaten für ${r.title} auf die Einkaufsliste`} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: 10 }}
+              {parent && <Button title="Einplanen" accessibilityLabel={`${r.title} einplanen`} onPress={() => setPlan(plan === r.id ? null : r.id)} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: narrow ? 12 : 16 }} />}
+              {parent && r.ingredients.length > 0 && <Button ghost title="Einkauf" accessibilityLabel={`Zutaten für ${r.title} auf die Einkaufsliste`} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: 12 }}
                 onPress={() => { onShop(r); setMsg(`Zutaten für ${r.title} stehen auf der Einkaufsliste.`); }} />}
-              {(parent || r.by === meId) && <Button ghost title="✏️" accessibilityLabel={`${r.title} bearbeiten`} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: 10 }} onPress={() => { setEdit(r.id); setAdding(false); }} />}
+              {(parent || r.by === meId) && <Button ghost title="Ändern" accessibilityLabel={`${r.title} bearbeiten`} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: 12 }} onPress={() => { setEdit(r.id); setAdding(false); }} />}
             </View>
             {(r.steps || r.link) && (show === r.id ? (
               <View style={{ gap: 6, backgroundColor: C.surface2, borderRadius: 14, padding: 12 }}>
                 {r.ingredients.length > 0 && <Text style={s.text}><Text style={{ fontWeight: '800' }}>Zutaten{'\n'}</Text>{r.ingredients.map(x => `• ${x}`).join('\n')}</Text>}
                 {r.steps && <Text style={s.text}><Text style={{ fontWeight: '800' }}>Zubereitung{'\n'}</Text>{r.steps}</Text>}
-                {r.link && <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => Linking.openURL(r.link!)}>🔗 Originalrezept öffnen</Text>}
+                {r.link && <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => Linking.openURL(r.link!)}>Originalrezept öffnen</Text>}
                 {r.photoSrc && <Text style={[s.muted, { fontSize: 11 }]}>Bild: {r.photoSrc}</Text>}
                 <Text style={{ color: C.muted, fontWeight: '700' }} onPress={() => setShow(null)}>Zuklappen</Text>
               </View>
-            ) : <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => setShow(r.id)}>📖 Rezept ansehen</Text>)}
+            ) : <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => setShow(r.id)}>Rezept ansehen</Text>)}
             {plan === r.id && <PlanPicker onPick={(date, slot) => { onPlan(r, date, slot); setPlan(null); setMsg(`${r.title} steht am ${parse(date).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'numeric' })} im Plan.`); }} />}
           </View>
         );
