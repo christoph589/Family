@@ -43,7 +43,7 @@ export interface TrainTest {
   /** Erste Zeilen der Abfahrtstafel zum Vergleichen */
   sample: { line: string; dest: string; planned: string; actual?: string; platform?: string }[];
   /** Nur bei Fehlern: Rohantwort gekürzt, damit man das Format sehen kann */
-  raw?: string; status?: number;
+  raw?: string; status?: number; source?: string;
 }
 export const trainTest = (c: Pick<Commute, 'fromEva' | 'depart' | 'line'>) => call<TrainTest>({ action: 'train_test', eva: c.fromEva, depart: c.depart, line: c.line });
 export const trainStatus = () => call<{ statuses: Record<string, TrainStatus> }>({ action: 'train_status' });

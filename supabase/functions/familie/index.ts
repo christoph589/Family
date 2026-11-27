@@ -552,51 +552,76 @@ async function pushAction(body: any, userId: string, admin: any) {
 }
 
 // ---------- Zugprüfung (Schulweg) ----------
-// Quelle: inoffizielle Abfahrtstafel von bahnhof.de (ohne Schlüssel, ohne Vertrag). Nur für den Familientest gedacht.
-// Das Antwortformat ist NICHT gegen die echte Schnittstelle geprüft: parseBoard() sucht deshalb mehrere übliche Feldnamen.
-// Zum Austauschen der Quelle nur fetchBoard() und parseBoard() ersetzen, der Rest arbeitet mit Dep.
+// Quelle: Timetables-XML der DB (Plan + Änderungen). Gleiches Format bei zwei Zugängen:
+//  1) offen, ohne Schlüssel: https://iris.noncd.db.de/iris-tts/timetable (von der DB als veraltet gekennzeichnet, kann abgeschaltet werden)
+//  2) DB API Marketplace "Timetables" mit Schlüssel: Secrets TRAIN_BASE, DB_CLIENT_ID, DB_API_KEY setzen
+// Das XML-Format ist aus dem Gedächtnis umgesetzt und NICHT gegen die echte Schnittstelle geprüft. Siehe Testknopf in der App.
+// Zum Austauschen der Quelle nur fetchBoard() ersetzen, der Rest arbeitet mit Dep. Zeiten sind "naive Minuten" (Berliner Ortszeit als Minuten seit 1970).
 type Dep = { line: string; dest: string; planned: number | null; actual: number | null; plat?: string; platPlanned?: string; cancelled: boolean };
-const TRAIN_URL = Deno.env.get('TRAIN_BOARD_URL') ?? 'https://www.bahnhof.de/api/boards/departures';
+const TT_BASE = (Deno.env.get('TRAIN_BASE') ?? 'https://iris.noncd.db.de/iris-tts/timetable').replace(/\/$/, '');
+const TT_HEADERS: Record<string, string> = { Accept: 'application/xml', 'User-Agent': 'Famelio/1.0' };
+if (Deno.env.get('DB_CLIENT_ID') && Deno.env.get('DB_API_KEY')) { TT_HEADERS['DB-Client-Id'] = Deno.env.get('DB_CLIENT_ID')!; TT_HEADERS['DB-Api-Key'] = Deno.env.get('DB_API_KEY')!; }
 
-const dig = (o: any, ...keys: string[]) => {
-  for (const k of keys) { const v = k.split('.').reduce((a: any, p) => (a == null ? undefined : a[p]), o); if (v !== undefined && v !== null && v !== '') return v; }
-  return undefined;
-};
-const ms = (v: any) => { if (v == null) return null; const t = typeof v === 'number' ? v : Date.parse(String(v)); return Number.isFinite(t) ? t : null; };
+const xAttrs = (s: string) => { const o: Record<string, string> = {}; for (const m of s.matchAll(/([\w:-]+)="([^"]*)"/g)) o[m[1]] = m[2]; return o; };
+const xTag = (body: string, name: string) => { const m = new RegExp(`<${name}(\\s[^>]*?)?/?>`).exec(body); return m ? xAttrs(m[1] ?? '') : undefined; };
+/** "2611270659" (JJMMTTHHMM, Berliner Ortszeit) zu naiven Minuten */
+const ttMin = (v?: string) => (v && /^\d{10}$/.test(v) ? Date.UTC(2000 + +v.slice(0, 2), +v.slice(2, 4) - 1, +v.slice(4, 6), +v.slice(6, 8), +v.slice(8, 10)) / 60000 : null);
+type TtStop = { id: string; c?: string; n?: string; dp?: Record<string, string>; l?: string; dest?: string };
+function parseTt(xml: string): Map<string, TtStop> {
+  const out = new Map<string, TtStop>();
+  for (const m of xml.matchAll(/<s\s([^>]*)>([\s\S]*?)<\/s>/g)) {
+    const id = xAttrs(m[1]).id; if (!id) continue;
+    const tl = xTag(m[2], 'tl'), dp = xTag(m[2], 'dp');
+    const ppth = dp?.ppth ?? dp?.cpth;
+    out.set(id, { id, c: tl?.c, n: tl?.n, dp, l: dp?.l, dest: ppth ? ppth.split('|').pop() : undefined });
+  }
+  return out;
+}
 
-function parseBoard(j: any): Dep[] {
-  const list: any[] = Array.isArray(j) ? j : (dig(j, 'entries', 'departures', 'items', 'journeys') ?? []);
-  return list.map((e: any): Dep => {
-    const cat = dig(e, 'transport.category', 'transport.type', 'category', 'train.category');
-    const num = dig(e, 'transport.number', 'transport.line', 'number', 'line', 'train.number');
-    const label = dig(e, 'transport.label', 'transport.name', 'lineName', 'name', 'train.name');
-    const planned = ms(dig(e, 'timeSchedule', 'timeScheduled', 'scheduledTime', 'plannedWhen', 'time.planned', 'departure.timeSchedule', 'time'));
-    const actual = ms(dig(e, 'timePredicted', 'timeExpected', 'predictedTime', 'when', 'time.predicted', 'departure.timePredicted'));
-    return {
-      line: String(label ?? [cat, num].filter(x => x != null).join(' ')).trim(),
-      dest: String(dig(e, 'transport.destination.name', 'transport.destination', 'destination.name', 'destination', 'direction') ?? ''),
-      planned,
-      actual: actual ?? null,
-      plat: dig(e, 'platformPredicted', 'platform', 'platform.actual', 'platformActual') != null ? String(dig(e, 'platformPredicted', 'platform', 'platform.actual', 'platformActual')) : undefined,
-      platPlanned: dig(e, 'platformSchedule', 'platformScheduled', 'plannedPlatform', 'platform.planned') != null ? String(dig(e, 'platformSchedule', 'platformScheduled', 'plannedPlatform', 'platform.planned')) : undefined,
-      cancelled: !!dig(e, 'canceled', 'cancelled', 'isCancelled', 'departureCancelled'),
-    };
-  }).filter(d => d.planned !== null || d.actual !== null);
+async function ttGet(path: string) {
+  const r = await fetch(`${TT_BASE}/${path}`, { headers: TT_HEADERS });
+  return { status: r.status, text: await r.text() };
 }
 
 async function fetchBoard(eva: string): Promise<{ deps: Dep[]; status: number; raw?: string; station?: string }> {
-  const r = await fetch(`${TRAIN_URL}?evaNumbers=${encodeURIComponent(eva)}&duration=120&locale=de`, { headers: { Accept: 'application/json', 'User-Agent': 'Famelio/1.0' } });
-  const text = await r.text();
-  let j: any; try { j = JSON.parse(text); } catch { return { deps: [], status: r.status, raw: text.slice(0, 300) }; }
-  const deps = r.ok ? parseBoard(j) : [];
-  const first = (Array.isArray(j) ? j : dig(j, 'entries', 'departures', 'items') ?? [])[0];
-  const station = dig(first, 'venue.name', 'station.name', 'stationName') as string | undefined;
-  return { deps, status: r.status, raw: deps.length || r.ok && Object.keys(j ?? {}).length === 0 ? undefined : text.slice(0, 300), station };
+  const now = berlinNowMin();
+  const plans = new Map<string, TtStop>();
+  let status = 0, raw: string | undefined, station: string | undefined;
+  for (const h of [0, 1]) {
+    const t = new Date((now + h * 60) * 60000).toISOString(); // naive Minuten, daher UTC-Teile
+    const yymmdd = t.slice(2, 4) + t.slice(5, 7) + t.slice(8, 10), hh = t.slice(11, 13);
+    const r = await ttGet(`plan/${encodeURIComponent(eva)}/${yymmdd}/${hh}`);
+    status = r.status;
+    if (r.status !== 200 || !/<timetable/.test(r.text)) { raw = r.text.slice(0, 300); return { deps: [], status, raw }; }
+    station ??= xAttrs(/<timetable\s([^>]*)>/.exec(r.text)?.[1] ?? '').station;
+    for (const [k, v] of parseTt(r.text)) plans.set(k, v);
+  }
+  // Änderungen (Verspätung, Gleis, Ausfall) kommen getrennt. Ohne sie gilt der Plan.
+  let changes = new Map<string, TtStop>();
+  try { const r = await ttGet(`fchg/${encodeURIComponent(eva)}`); if (r.status === 200) changes = parseTt(r.text); } catch { /* Plan reicht */ }
+  const deps: Dep[] = [];
+  for (const [id, p] of plans) {
+    if (!p.dp) continue; // endet hier
+    const ch = changes.get(id)?.dp ?? {};
+    const planned = ttMin(p.dp.pt);
+    deps.push({
+      line: `${p.c ?? ''} ${p.l ?? p.n ?? ''}`.trim(),
+      dest: p.dest ?? '',
+      planned,
+      actual: ttMin(ch.ct) ?? planned,
+      plat: ch.cp ?? p.dp.pp,
+      platPlanned: p.dp.pp,
+      cancelled: ch.cs === 'c',
+    });
+  }
+  deps.sort((a, b) => (a.planned ?? 0) - (b.planned ?? 0));
+  return { deps, status, raw, station };
 }
 
 const normLine = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
-const berlinHm = (t: number) => new Intl.DateTimeFormat('de-DE', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(t));
-const berlinMinOf = (t: number) => { const [h, m] = berlinHm(t).split(':').map(Number); return (h % 24) * 60 + m; };
+/** naive Minuten (Berliner Ortszeit) zu HH:MM */
+const berlinHm = (bm: number) => { const x = ((bm % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+const berlinMinOf = (bm: number) => ((bm % 1440) + 1440) % 1440;
 
 /** Den Zug zur geplanten Abfahrt finden: gleiche Minute (±1) und, falls angegeben, passende Linie. */
 function findTrain(deps: Dep[], depart: string, line?: string) {
@@ -613,7 +638,7 @@ function evalTrain(d: Dep | undefined, boardNonEmpty: boolean, minsToDep: number
   const checkedAt = new Date().toISOString();
   if (!d) return { state: boardNonEmpty ? 'missing' : 'unknown', checkedAt };
   const planned = d.planned ?? d.actual!, actual = d.actual ?? planned;
-  const delay = Math.round((actual - planned) / 60000);
+  const delay = actual - planned;
   const platChanged = !!d.plat && !!d.platPlanned && d.plat !== d.platPlanned;
   const state = d.cancelled ? 'cancelled' : delay >= 3 ? 'delay' : platChanged ? 'platform' : 'ok';
   return { state, planned: berlinHm(planned), actual: berlinHm(actual), delay: Math.max(0, delay), platform: d.plat, platformPlanned: d.platPlanned, line: d.line, dest: d.dest, checkedAt };
@@ -692,7 +717,7 @@ async function trainAction(body: any, userId: string, admin: any) {
       const b = await fetchBoard(eva);
       const sample = b.deps.slice(0, 5).map(d => ({ line: d.line, dest: d.dest, planned: d.planned ? berlinHm(d.planned) : '?', actual: d.actual ? berlinHm(d.actual) : undefined, platform: d.plat }));
       const hit = /^\d\d:\d\d$/.test(String(body.depart ?? '')) ? findTrain(b.deps, String(body.depart), body.line ? String(body.line) : undefined) : undefined;
-      return json({ ok: b.status >= 200 && b.status < 300 && b.deps.length > 0, status: b.status, raw: b.raw, count: b.deps.length, stationName: b.station, sample,
+      return json({ ok: b.status >= 200 && b.status < 300 && b.deps.length > 0, source: TT_BASE, status: b.status, raw: b.raw, count: b.deps.length, stationName: b.station, sample,
         match: hit ? { line: hit.line, planned: berlinHm(hit.planned ?? hit.actual!), actual: hit.actual ? berlinHm(hit.actual) : undefined, platform: hit.plat, cancelled: hit.cancelled } : undefined });
     } catch (e) { return json({ error: 'train_failed', detail: (e as Error).message }, 502); }
   }
