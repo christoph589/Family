@@ -48,6 +48,14 @@ export function TrainCards({ childIds, big }: { childIds?: string[]; big?: boole
   );
 }
 
+/** "6:59", "6.59", "659" oder "06:59" wird zu "06:59". Ungültig = null. */
+export function normTime(v: string): string | null {
+  const m = /^\s*(\d{1,2})\s*[:.hH]?\s*(\d{2})\s*(?:Uhr)?\s*$/.exec(v);
+  if (!m) return null;
+  const h = +m[1], mi = +m[2];
+  return h < 24 && mi < 60 ? `${String(h).padStart(2, '0')}:${m[2]}` : null;
+}
+
 const DAYS = [{ n: 1, l: 'Mo' }, { n: 2, l: 'Di' }, { n: 3, l: 'Mi' }, { n: 4, l: 'Do' }, { n: 5, l: 'Fr' }];
 
 /** Einstellungen › Familie › Schulweg mit dem Zug (nur Admins). */
@@ -59,12 +67,21 @@ export function TrainSetup() {
   if (!data || !data.children.length) return null;
   const child = data.children.find(c => c.id === kid) ?? data.children[0];
   const setCommutes = (fn: (l: Commute[]) => Commute[]) => update(d => ({ ...d, children: d.children.map(c => (c.id === child.id ? { ...c, commutes: fn(c.commutes ?? []) } : c)) }));
-  const valid = !!draft && /^\d{6,8}$/.test(draft.fromEva.trim()) && /^\d\d:\d\d$/.test(draft.depart) && !!draft.from.trim() && draft.days.length > 0;
+  const [tried, setTried] = useState(false);
+  const bad = {
+    from: !draft?.from.trim(),
+    eva: !/^\d{6,8}$/.test(draft?.fromEva.trim() ?? ''),
+    time: !normTime(draft?.depart ?? ''),
+    days: !draft?.days.length,
+  };
+  const missing = [bad.from && 'Einstieg', bad.eva && 'Bahnhofsnummer (6 bis 8 Ziffern)', bad.time && 'Abfahrt (z. B. 6:59)', bad.days && 'Wochentage'].filter(Boolean) as string[];
+  const red = (b: boolean) => (tried && b ? { borderColor: C.danger, borderWidth: 2 } : null);
   const save = () => {
-    if (!draft || !valid) return;
-    const c: Commute = { ...draft, from: draft.from.trim(), fromEva: draft.fromEva.trim(), to: draft.to.trim(), line: draft.line?.trim() || undefined, link: draft.link?.trim() || undefined };
+    if (!draft) return;
+    if (missing.length) { setTried(true); return; }
+    const c: Commute = { ...draft, depart: normTime(draft.depart)!, from: draft.from.trim(), fromEva: draft.fromEva.trim(), to: draft.to.trim(), line: draft.line?.trim() || undefined, link: draft.link?.trim() || undefined };
     setCommutes(l => (l.some(x => x.id === c.id) ? l.map(x => (x.id === c.id ? c : x)) : [...l, c]));
-    setDraft(null);
+    setDraft(null); setTried(false);
   };
   const run = async (c: Commute) => {
     setTest({ id: c.id, busy: true });
@@ -101,15 +118,15 @@ export function TrainSetup() {
       ))}
       {draft ? (
         <View style={{ gap: 8 }}>
-          <TextInput style={s.input} value={draft.from} onChangeText={v => set({ from: v })} placeholder="Einstieg, z. B. Mannheim-Friedrichsfeld Süd" />
-          <TextInput style={s.input} value={draft.fromEva} onChangeText={v => set({ fromEva: v.replace(/\D/g, '') })} keyboardType="number-pad" placeholder="Bahnhofsnummer (EVA) des Einstiegs, 7 Ziffern" />
+          <TextInput style={[s.input, red(bad.from)]} value={draft.from} onChangeText={v => set({ from: v })} placeholder="Einstieg, z. B. Mannheim-Friedrichsfeld Süd" />
+          <TextInput style={[s.input, red(bad.eva)]} value={draft.fromEva} onChangeText={v => set({ fromEva: v.replace(/\D/g, '') })} keyboardType="number-pad" placeholder="Bahnhofsnummer (EVA) des Einstiegs, 7 Ziffern" />
           <Text style={[s.muted, { fontSize: 12 }]}>Die EVA-Nummer steht bei der DB in den Stationsdaten (z. B. Heidelberg Hbf 8000156).</Text>
           <TextInput style={s.input} value={draft.to} onChangeText={v => set({ to: v })} placeholder="Ausstieg, z. B. Heidelberg Hbf" />
           <View style={[s.row, { flexWrap: 'nowrap' }]}>
-            <TextInput style={[s.input, { flex: 1 }]} value={draft.depart} onChangeText={v => set({ depart: v })} placeholder="Abfahrt 06:59" />
+            <TextInput style={[s.input, { flex: 1 }, red(bad.time)]} value={draft.depart} onChangeText={v => set({ depart: v })} placeholder="Abfahrt 06:59" />
             <TextInput style={[s.input, { flex: 1 }]} value={draft.line ?? ''} onChangeText={v => set({ line: v })} placeholder="Linie, z. B. S3" />
           </View>
-          <View style={s.row}>
+          <View style={[s.row, tried && bad.days ? { borderWidth: 2, borderColor: C.danger, borderRadius: 14, padding: 4 } : null]}>
             {DAYS.map(d => {
               const on = draft.days.includes(d.n);
               return (
@@ -121,9 +138,10 @@ export function TrainSetup() {
           </View>
           <TextInput style={s.input} value={draft.link ?? ''} onChangeText={v => set({ link: v })} autoCapitalize="none" placeholder="bahn.de-Link (optional, nur als Verweis)" />
           <View style={s.row}>
-            <Button title="Speichern" disabled={!valid} onPress={save} />
-            <Button ghost title="Abbrechen" onPress={() => setDraft(null)} />
+            <Button title="Speichern" onPress={save} />
+            <Button ghost title="Abbrechen" onPress={() => { setDraft(null); setTried(false); }} />
           </View>
+          {tried && missing.length > 0 && <Text style={{ color: C.danger, fontWeight: '700' }}>Bitte noch ausfüllen: {missing.join(', ')}</Text>}
         </View>
       ) : (
         <Button title="Zug hinzufügen" onPress={() => setDraft({ id: uid(), from: '', fromEva: '', to: '', depart: '', days: [1, 2, 3, 4, 5] })} />
