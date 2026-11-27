@@ -380,7 +380,8 @@ export function SheetResult({ sheet }: { sheet: Worksheet }) {
     <View style={{ gap: 8, backgroundColor: C.bg, padding: 12, borderRadius: 12 }}>
       {sheet.exam ? <ResultLine sheet={sheet} /> : sheet.understanding ? <View style={s.row}><UnderstandingChip u={sheet.understanding} /><Text style={s.muted}>{res.filter(Boolean).length} von {sheet.questions.length} richtig</Text></View> : null}
       {sheet.questions.map((q, i) => {
-        const ok = res[i];
+        // Ältere Ergebnisse: Antwort mit angehängter Einheit („4000g“ statt 4000) gilt jetzt auch als richtig
+        const ok = res[i] || (!sheet.paperScore && !sheet.scan && q.type !== 'choice' && !!sheet.answers?.[i]?.trim() && isCorrect(q, sheet.answers[i]));
         const got = sheet.paperScore?.[i];
         return (
           <View key={i} style={{ gap: 2, borderTopWidth: i ? 1 : 0, borderTopColor: C.line, paddingTop: i ? 8 : 0 }}>

@@ -1,10 +1,23 @@
-import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Question } from '../data/types';
 import { Figure, MathText } from '../ui/Math';
 import { C, s } from '../ui/theme';
 
 export const SEP = ' | ';
 export const norm = (v: string) => v.toLowerCase().replace(/\s+/g, '').replace(/,/g, '.').replace(/[×*]/g, '·').replace(/^(ja|yes)$/, 'ja');
+
+/** Zahl mit angehängter Einheit zerlegen: "4000g" → 4000 + "g". */
+const numUnit = (v: string) => { const m = norm(v).match(/^(-?\d+(?:\.\d+)?)([a-zµ²³°%€\/.]*)$/); return m ? { n: Number(m[1]), u: m[2].replace(/\.$/, '') } : null; };
+/**
+ * Antworten vergleichen: Leerzeichen, Groß-/Kleinschreibung und Komma/Punkt egal.
+ * Verlangt die Aufgabe nur die Zahl („4 kg = … g“), ist eine angehängte Einheit („4000 g“) auch richtig.
+ * Stehen auf beiden Seiten verschiedene Einheiten, bleibt es falsch.
+ */
+export function sameAnswer(a: string, sol: string) {
+  if (norm(a) === norm(sol)) return true;
+  const x = numUnit(a), y = numUnit(sol);
+  return !!x && !!y && x.n === y.n && (x.u === y.u || !y.u || !x.u);
+}
 
 /** Ankreuz-Tabelle: alle Lösungen sind "x" oder "-". Dann gibt es Kästchen statt Tippen. */
 export function isCheckTable(q: Question) {
@@ -28,9 +41,9 @@ export function isCorrect(q: Question, a: string) {
   if (q.type === 'table') {
     const fix = (v: string) => (isCheckTable(q) ? (checked(v) ? 'x' : '-') : norm(v));
     const want = q.solution.split('|').map(fix), got = splitAnswer(q, a).map(fix);
-    return want.length === got.length && want.every((w, i) => w === got[i]);
+    return want.length === got.length && want.every((w, i) => (isCheckTable(q) ? w === got[i] : sameAnswer(got[i], w)));
   }
-  return norm(a) === norm(q.solution);
+  return sameAnswer(a, q.solution);
 }
 
 /** Frage zum Beantworten: Text, Auswahl oder Tabelle. */
@@ -76,13 +89,11 @@ export function splitAnswer(q: Question, value: string) {
 export function TableGrid({ q, values, onCell, solution }: { q: Question; values: string[]; onCell?: (k: number, v: string) => void; solution?: string[] }) {
   let k = -1;
   // Spalten passen sich der Breite an, damit am Handy nichts abgeschnitten wird
-  const { width } = useWindowDimensions();
-  const cols = Math.max(1, q.table!.header.length || q.table!.rows[0]?.length || 1);
-  const cw = Math.max(56, Math.min(84, Math.floor((Math.min(width, 700) - 72) / cols)));
-  const cell = { width: cw, padding: 6, borderWidth: 1, borderColor: C.line, justifyContent: 'center' as const };
+  // Volle Breite: Spalten teilen sich den Platz, jede mindestens 72 breit. Mehr Spalten als Platz: seitlich wischen.
+  const cell = { flex: 1, minWidth: 72, padding: 6, borderWidth: 1, borderColor: C.line, justifyContent: 'center' as const };
   return (
-    <ScrollView horizontal>
-      <View>
+    <ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}>
+      <View style={{ flexGrow: 1 }}>
         <View style={{ flexDirection: 'row' }}>
           {q.table!.header.map((h, i) => <View key={i} style={[cell, { backgroundColor: C.surface2 }]}><MathText text={h} style={{ ...s.text, fontWeight: '700', fontSize: 14 }} /></View>)}
         </View>
@@ -110,14 +121,14 @@ export function TableGrid({ q, values, onCell, solution }: { q: Question; values
               if (onCell) return (
                 <View key={ci} style={[cell, { padding: 2 }]}>
                   <TextInput value={values[idx]} onChangeText={v => onCell(idx, v)} placeholder="?" autoCapitalize="none"
-                    style={{ width: cw - 8, paddingVertical: 6, paddingHorizontal: 6, fontSize: 15, color: C.fg, backgroundColor: C.bg, borderRadius: 6, textAlign: 'center' }} />
+                    style={{ width: '100%', minWidth: 56, paddingVertical: 6, paddingHorizontal: 6, fontSize: 15, color: C.fg, backgroundColor: C.bg, borderRadius: 6, textAlign: 'center' }} />
                 </View>
               );
-              const ok = solution ? norm(values[idx] ?? '') === norm(solution[idx] ?? '') : true;
+              const ok = solution ? sameAnswer(values[idx] ?? '', solution[idx] ?? '') : true;
               return (
                 <View key={ci} style={[cell, { backgroundColor: ok ? C.okSoft : '#f8dcd8' }]}>
-                  <Text style={{ fontWeight: '700', color: C.fg, textAlign: 'center' }}>{values[idx] || '–'}</Text>
-                  {!ok && <Text style={{ fontSize: 11, color: C.muted, textAlign: 'center' }}>{solution?.[idx]}</Text>}
+                  <Text style={{ fontWeight: '700', color: C.fg, textAlign: 'center' }}>{solution ? (ok ? '✓ ' : '✗ ') : ''}{values[idx] || '–'}</Text>
+                  {!ok && <Text style={{ fontSize: 12, color: C.muted, textAlign: 'center' }}>richtig: {solution?.[idx]}</Text>}
                 </View>
               );
             })}
