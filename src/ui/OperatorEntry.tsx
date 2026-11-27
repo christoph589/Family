@@ -40,7 +40,7 @@ export function OperatorEntry() {
   return (
     <>
       <Pressable accessibilityRole="button" onPress={() => { setOpen(true); setPw(''); setErr(''); }} style={{ alignSelf: 'center', paddingVertical: 6, paddingHorizontal: 16 }}>
-        <Text style={{ color: '#ffffffaa', fontWeight: '700', fontSize: 13 }}>🛠 Operator-Ansicht</Text>
+        <Text style={{ color: '#ffffffaa', fontWeight: '700', fontSize: 13 }}>Operator-Ansicht</Text>
       </Pressable>
       {open && (
         <View style={{ position: 'fixed' as any, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#1a1530aa', paddingTop: 70, paddingHorizontal: 16, zIndex: 20 }}>

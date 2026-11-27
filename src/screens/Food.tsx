@@ -32,7 +32,7 @@ export function DishLine({ title, icon, photo, size = 20 }: { title: string; ico
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <DishTile title={title} photo={photo} style={{ width: size * 3.6, height: size * 2.7, borderRadius: 12 }} emojiSize={size * 1.4} />
-      <Clip style={[s.text, { fontWeight: '800', fontSize: size, flex: 1 }]} lines={2}>{icon} {title}</Clip>
+      <Clip style={[s.text, { fontWeight: '800', fontSize: size, flex: 1 }]} lines={2}>{title}</Clip>
     </View>
   );
 }

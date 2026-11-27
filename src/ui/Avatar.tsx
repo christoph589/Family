@@ -102,23 +102,20 @@ export function PhotoCropper({ src, onDone, onCancel }: { src: string; onDone: (
   );
 }
 
-/** Kopfzeile einer Personen-Karte: farbiges Band mit Foto, Name und einer Zahl rechts. */
+/** Kopfzeile einer Personen-Karte: Foto, Name und eine Zahl rechts (gelbe Pille). */
 export function PersonHead({ name, color, photo, sub, value }: { name: string; color: string; photo?: string; sub?: string; value?: string }) {
   return (
-    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, margin: -20, marginBottom: 2, padding: 16, paddingHorizontal: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24 }, gradBand(color)]}>
-      <View style={{ borderRadius: 28, borderWidth: 3, borderColor: '#ffffffaa' }}>
-        <Avatar name={name} color={color} photo={photo} size={44} />
-      </View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderLeftWidth: 0 }}>
+      <Avatar name={name} color={color} photo={photo} size={46} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 }} numberOfLines={1}>{name}</Text>
-        {sub ? <Text style={{ color: '#ffffffd0', fontSize: 13, fontWeight: '600' }} numberOfLines={1}>{sub}</Text> : null}
+        <Text style={{ color: C.fg, fontSize: 20, fontWeight: '800', letterSpacing: -0.3 }} numberOfLines={1}>{name}</Text>
+        {sub ? <Text style={{ color: C.muted, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>{sub}</Text> : null}
       </View>
       {value ? (
-        <View style={{ backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}>
-          <Text style={{ fontSize: 18, fontWeight: '800', color }}>{value}</Text>
+        <View style={{ backgroundColor: C.sun, borderRadius: 99, paddingHorizontal: 13, paddingVertical: 6 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: C.sunInk }}>{value}</Text>
         </View>
       ) : null}
     </View>
   );
 }
-const gradBand = (c: string) => grad(c, c + 'c0');

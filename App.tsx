@@ -96,7 +96,7 @@ function CloudApp() {
         <View style={{ flex: 1, flexDirection: 'column' }}>
         {back && (
           <View style={{ flexGrow: 0, flexShrink: 0, backgroundColor: C.ok, paddingHorizontal: 16, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-            <Text style={{ color: '#fff', fontWeight: '800', flexShrink: 1, fontSize: 13 }} numberOfLines={2}>🛟 Support-Modus: andere Familie, Änderungen sind echt.</Text>
+            <Text style={{ color: '#fff', fontWeight: '800', flexShrink: 1, fontSize: 13 }} numberOfLines={2}>Support-Modus: andere Familie, Änderungen sind echt.</Text>
             <Pressable onPress={() => leaveSupport().then(reload)} style={{ backgroundColor: '#ffffff33', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 }}>
               <Text style={{ color: '#fff', fontWeight: '800' }}>Zurück zu meiner Familie</Text>
             </Pressable>
@@ -112,12 +112,14 @@ function CloudApp() {
 
 const TAB_ICON: Record<Tab, IconName> = { heute: 'home', kalender: 'cal', lernen: 'book', punkte: 'star', geld: 'wallet', essen: 'food', aufgaben: 'home' };
 
+const SECTION_ICON: Record<string, IconName> = { familie: 'user', aufgaben: 'check', schule: 'book', geld: 'wallet', ferien: 'cal', kalender: 'cal', geraete: 'home' };
+
 type Section = 'familie' | 'aufgaben' | 'schule' | 'geld' | 'ferien' | 'kalender' | 'geraete';
 const SETTINGS: { value: Section; label: string; hint: string; cloud?: boolean }[] = [
-  { value: 'familie', label: '👪 Familie', hint: 'Personen, Fotos, PINs, Schule' }, { value: 'aufgaben', label: '✅ Aufgaben', hint: 'Aufgaben, Routinen, Haushalt' },
-  { value: 'schule', label: '🏫 Stundenplan', hint: 'Hochladen, bearbeiten, WebUntis' },
-  { value: 'geld', label: '💶 Geld', hint: 'Taschengeld und Spartöpfe' }, { value: 'ferien', label: '🏖️ Ferien', hint: 'Ferien und Feiertage' },
-  { value: 'kalender', label: '📅 Kalender', hint: 'Handy-Kalender, Abo', cloud: true }, { value: 'geraete', label: '📱 Geräte', hint: 'Partner einladen, Kindergeräte', cloud: true },
+  { value: 'familie', label: 'Familie', hint: 'Personen, Fotos, PINs, Schule' }, { value: 'aufgaben', label: 'Aufgaben', hint: 'Aufgaben, Routinen, Haushalt' },
+  { value: 'schule', label: 'Stundenplan', hint: 'Hochladen, bearbeiten, WebUntis' },
+  { value: 'geld', label: 'Geld', hint: 'Taschengeld und Spartöpfe' }, { value: 'ferien', label: 'Ferien', hint: 'Ferien und Feiertage' },
+  { value: 'kalender', label: 'Kalender', hint: 'Handy-Kalender, Abo', cloud: true }, { value: 'geraete', label: 'Geräte', hint: 'Partner einladen, Kindergeräte', cloud: true },
 ];
 
 function Root() {
@@ -219,7 +221,7 @@ function Root() {
                   {bday && <Text style={{ position: 'absolute', top: 6, right: 10, fontSize: 26 }}>🎂</Text>}
                   <Text style={[s.h2, { textAlign: 'center', fontSize: 18 }]} numberOfLines={1}>{p.name}</Text>
                   <View style={[s.chip, { backgroundColor: p.role === 'kind' ? p.color + '1f' : C.surface2 }]}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: p.role === 'kind' ? p.color : C.muted }}>{p.role === 'kind' ? 'Kind' : `🔒 ${p.title || (p.admin ? 'Eltern' : 'Familie')}`}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: p.role === 'kind' ? p.color : C.muted }}>{p.role === 'kind' ? 'Kind' : `${p.title || (p.admin ? 'Eltern' : 'Familie')}`}</Text>
                   </View>
                 </Pressable>
               );
@@ -228,7 +230,7 @@ function Root() {
           {!ownChild && (
             <Pressable accessibilityRole="button" accessibilityLabel="Wandansicht" onPress={() => setBoard(true)}
               style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 14, maxWidth: 480, alignSelf: 'center', width: '100%', padding: 16, borderRadius: 22, backgroundColor: '#ffffff26', borderWidth: 1, borderColor: '#ffffff55', opacity: pressed ? 0.8 : 1 }]}>
-              <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: '#ffffff33', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 26 }}>📺</Text></View>
+              <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: '#ffffff33', alignItems: 'center', justifyContent: 'center' }}><Icon name="cal" size={26} color="#fff" /></View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>Wandansicht starten</Text>
                 <Text style={{ color: '#ffffffcc', fontSize: 13 }}>Alles auf einen Blick fürs Tablet an der Wand. Beenden mit PIN.</Text>
@@ -349,9 +351,9 @@ function Root() {
             {SETTINGS.filter(x => (cloud || !x.cloud) && !(x.value === 'geld' && !isOn('geld', flags))).map((x, i) => (
               <Pressable key={x.value} accessibilityRole="button" onPress={() => { setSection(x.value); setMenu(false); scroller.current?.scrollTo?.({ y: 0, animated: false }); }}
                 style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 18, gap: 12, backgroundColor: pressed ? C.surface2 : 'transparent', borderTopWidth: i ? 1 : 0, borderTopColor: C.line }]}>
-                <Text style={{ fontSize: 26 }}>{x.label.split(' ')[0]}</Text>
+                <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: ['#1f6f63', '#3d7bd1', '#e8923a', '#8e63c7', '#e5533d', '#4fa36a'][SETTINGS.indexOf(x) % 6], alignItems: 'center', justifyContent: 'center' }}><Icon name={SECTION_ICON[x.value]} size={22} color="#fff" stroke={2.2} /></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[s.text, { fontWeight: '800', fontSize: 17 }]}>{x.label.split(' ').slice(1).join(' ')}</Text>
+                  <Text style={[s.text, { fontWeight: '800', fontSize: 17 }]}>{x.label}</Text>
                   <Text style={[s.muted, { fontSize: 13 }]}>{x.hint}</Text>
                 </View>
                 <Text style={{ fontSize: 22, color: C.muted }}>›</Text>

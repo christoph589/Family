@@ -58,12 +58,12 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
     <View style={{ gap: 16 }}>
       {kids.length > 1 && <Segmented value={kid.id} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
 
-      <View style={[{ borderRadius: 24, padding: 20, gap: 14 }, grad('#5b4cf0', '#ff6a5c'), SHADOW.md]}>
+      <View style={[{ borderRadius: 24, padding: 20, gap: 14 }, grad('#1f6f63', '#17564d'), SHADOW.md]}>
         <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
           <View style={{ flexShrink: 1 }}>
             <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: 1, opacity: 0.85 }}>VOKABELTRAINER{parent ? ` · ${kid.name.toUpperCase()}` : ''}</Text>
             <Text style={{ color: '#fff', fontSize: 26, fontWeight: '800' }}>
-              {due ? `${due} ${due === 1 ? 'Vokabel wartet' : 'Vokabeln warten'}` : decks.length ? 'Alles geschafft für heute 🎉' : 'Los geht’s mit Vokabeln'}
+              {due ? `${due} ${due === 1 ? 'Vokabel wartet' : 'Vokabeln warten'}` : decks.length ? 'Alles geschafft für heute' : 'Los geht’s mit Vokabeln'}
             </Text>
           </View>
           <View style={{ alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 }}>
@@ -202,7 +202,7 @@ export function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: Voc
       </View>
 
       <View style={{ backgroundColor: C.accentSoft, borderRadius: 16, padding: 14, gap: 8 }}>
-        <Text style={[s.text, { fontWeight: '800' }]}>📸 Seite im Buch fotografieren</Text>
+        <Text style={[s.text, { fontWeight: '800' }]}>Seite im Buch fotografieren</Text>
         {ai ? (
           <>
             <Text style={s.muted}>Die KI liest die Vokabeln ab und schreibt sie unten in die Liste. Bis zu {MAX_PHOTOS} Fotos.</Text>
@@ -214,7 +214,7 @@ export function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: Voc
               </View>
             ) : (
               <View style={s.row}>
-                <Button title="📸 Seiten fotografieren" onPress={photo} />
+                <Button title="Seiten fotografieren" onPress={photo} />
               </View>
             )}
           </>
@@ -257,7 +257,7 @@ export function DeckEditor({ deck, childId, meId, parent, onDone }: { deck?: Voc
 // ---------------- Üben ----------------
 
 export function Confetti() {
-  const pieces = useMemo(() => Array.from({ length: 22 }, (_, i) => ({ x: Math.random() * 100, d: 900 + Math.random() * 900, e: ['🎉', '⭐', '✨', '🟣', '🟠', '💛'][i % 6], r: Math.random() * 360 })), []);
+  const pieces = useMemo(() => Array.from({ length: 22 }, (_, i) => ({ x: Math.random() * 100, d: 900 + Math.random() * 900, e: ['🎉', '★', '✨', '🟣', '🟠', '💛'][i % 6], r: Math.random() * 360 })), []);
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: false }).start(); }, [v]);
   return (
@@ -417,9 +417,9 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
               <Text style={{ fontSize: 18, fontWeight: '800', color: C.fg }}>✕</Text>
             </Pressable>
             <View style={{ flex: 1, height: 14, borderRadius: 7, backgroundColor: C.line, overflow: 'hidden' }}>
-              <View style={[{ height: '100%', borderRadius: 7, width: `${reward ? 100 : Math.round((idx / Math.max(1, queue.length)) * 100)}%` }, grad('#5b4cf0', '#ff6a5c', 90)]} />
+              <View style={[{ height: '100%', borderRadius: 7, width: `${reward ? 100 : Math.round((idx / Math.max(1, queue.length)) * 100)}%` }, grad('#ffc94d', '#e8923a', 90)]} />
             </View>
-            <Text style={{ fontWeight: '800', color: combo >= 3 ? C.accent2 : C.muted, minWidth: 54, textAlign: 'right' }}>{combo >= 2 ? `🔥 ×${combo}` : `${Math.min(idx + 1, queue.length)}/${queue.length}`}</Text>
+            <Text style={{ fontWeight: '800', color: combo >= 3 ? C.accent2 : C.muted, minWidth: 54, textAlign: 'right' }}>{combo >= 2 ? `×${combo}` : `${Math.min(idx + 1, queue.length)}/${queue.length}`}</Text>
           </View>
 
           {reward ? (
@@ -429,21 +429,21 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
               {round.free && idx === 0 && !answered && <Text style={[s.muted, { textAlign: 'center' }]}>Heute ist nichts fällig. Das ist eine freie Runde zum Festigen.</Text>}
               {plan.mode === 'flip' && !answered ? <FlipCard key={card.id + idx} ask={ask} answer={solution} flipped={flipped} onFlip={() => setFlipped(true)} /> : (
               <Animated.View style={[{ borderRadius: 28, padding: 28, minHeight: 200, alignItems: 'center', justifyContent: 'center', gap: 10, transform: [{ scale: pop }, { translateX: shake }] },
-                answered ? { backgroundColor: answered.ok ? C.ok : C.danger } : grad('#5b4cf0', '#8a6cff'), SHADOW.lg]}>
+                answered ? { backgroundColor: answered.ok ? C.ok : C.danger } : grad(C.accent, '#8a6cff'), SHADOW.lg]}>
                 <Text style={{ color: '#fff', opacity: 0.85, fontWeight: '700' }}>
                   {deck.prepId ? (plan.mode === 'choice' ? 'Was stimmt?' : 'Weißt du es? Erst überlegen, dann umdrehen.') : plan.mode === 'type' ? (plan.reverse ? `Schreib es auf ${deck.lang === 'Andere' ? 'in der Fremdsprache' : deck.lang} ✍️` : 'Schreib es auf Deutsch ✍️') : plan.reverse ? `Wie heißt das auf ${deck.lang === 'Andere' ? 'der Fremdsprache' : deck.lang}?` : 'Was heißt das auf Deutsch?'}
                 </Text>
                 <Text style={{ color: '#fff', fontSize: deck.prepId ? (ask.length > 60 ? 20 : 24) : 34, fontWeight: '800', textAlign: 'center' }}>{ask}</Text>
                 {askForeign && L.speech && canSpeak() && (
                   <Pressable accessibilityLabel="Vorlesen" onPress={() => speak(card.front, L.speech)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                    <Text style={{ color: '#fff', fontWeight: '700' }}>🔊 Anhören</Text>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Anhören</Text>
                   </Pressable>
                 )}
                 {(flipped || (answered && !answered.ok) || answered?.typo) && (
                   <Text style={{ color: '#fff', fontSize: deck.prepId ? 19 : 24, fontWeight: '700', textAlign: 'center' }}>{answered?.judged && answered.ok ? `✓ Richtig! Buch: ${solution}` : answered?.typo ? `Fast! Richtig: ${solution}` : solution}</Text>
                 )}
                 {answered && !answered.ok && typed.trim() ? <Text style={{ color: '#fff', opacity: 0.85, textDecorationLine: 'line-through' }}>{typed.trim()}</Text> : null}
-                {answered?.ok && !answered.typo && <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>{combo >= 5 ? 'Unaufhaltsam! 🚀' : combo >= 3 ? 'Läuft! 🔥' : 'Richtig! ✓'}</Text>}
+                {answered?.ok && !answered.typo && <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>{combo >= 5 ? 'Unaufhaltsam!' : combo >= 3 ? 'Läuft!' : 'Richtig! ✓'}</Text>}
               </Animated.View>)}
 
               {plan.mode === 'choice' && (
@@ -488,19 +488,19 @@ export function Practice({ deck, givePoints, onClose }: { deck: VocabDeck; giveP
               {answered && (!answered.ok || answered.typo) && (
                 <View style={{ gap: 6 }}>
                   {!answered.ok && <Text style={[s.muted, { textAlign: 'center' }]}>Kein Problem, die kommt gleich nochmal.</Text>}
-                  {!!answered.note && <Text style={[s.text, { textAlign: 'center' }]}>🤖 {answered.note}</Text>}
+                  {!!answered.note && <Text style={[s.text, { textAlign: 'center' }]}>{answered.note}</Text>}
                   {!answered.ok && typed.trim() && !claimed && <Button ghost title={givePoints ? '✋ Meins stimmt doch, Eltern fragen' : '✋ Stimmt doch (als richtig zählen)'} onPress={givePoints ? claim : overrule} />}
                   {claimed && <Text style={[s.muted, { textAlign: 'center' }]}>Mama oder Papa schauen drüber. Wenn deine Antwort stimmt, zählt sie ab dann als richtig.</Text>}
                   {!answered.ok && !deck.prepId && (hint || hintBusy) && (
                     <View style={{ backgroundColor: '#fff7e0', borderRadius: 18, padding: 16, gap: 6 }}>
-                      <Text style={{ fontWeight: '800', color: C.fg }}>💡 Merkhilfe</Text>
+                      <Text style={{ fontWeight: '800', color: C.fg }}>Merkhilfe</Text>
                       {hint ? (
                         <>
                           <Pressable onPress={() => L.speech && canSpeak() && speak(hint.ex, L.speech)} accessibilityLabel="Beispielsatz vorlesen">
-                            <Text style={{ fontSize: 17, fontWeight: '700', color: C.fg }}>{hint.ex}{L.speech && canSpeak() ? '  🔊' : ''}</Text>
+                            <Text style={{ fontSize: 17, fontWeight: '700', color: C.fg }}>{hint.ex}</Text>
                           </Pressable>
                           <Text style={{ fontSize: 15, color: C.muted }}>{hint.de}</Text>
-                          {!!hint.memo && <Text style={{ fontSize: 15, color: C.fg, marginTop: 4 }}>🧠 {hint.memo}</Text>}
+                          {!!hint.memo && <Text style={{ fontSize: 15, color: C.fg, marginTop: 4 }}>{hint.memo}</Text>}
                         </>
                       ) : <Text style={{ color: C.muted }}>Wird erstellt …</Text>}
                     </View>
@@ -563,7 +563,7 @@ function Done({ reward, right, total, bestCombo, givePoints, free, onAgain, onCl
   const pop = useRef(new Animated.Value(0.3)).current;
   useEffect(() => { Animated.spring(pop, { toValue: 1, friction: 4, tension: 80, useNativeDriver: false }).start(); }, [pop]);
   const lines: [string, string][] = [];
-  if (givePoints && reward.points > 0) lines.push(['⭐', `+${reward.points} Punkte`]);
+  if (givePoints && reward.points > 0) lines.push(['★', `+${reward.points} Punkte`]);
   if (reward.streakBonus > 0) lines.push(['🎁', `+${reward.streakBonus} Bonus für ${reward.streak} Tage am Stück`]);
   if (givePoints && reward.streak > 0) lines.push(['🔥', reward.streakUp ? `${reward.streak} Tage am Stück!` : `${reward.streak} ${reward.streak === 1 ? 'Tag' : 'Tage'} Serie`]);
   if (reward.levelUp) lines.push(['🚀', `Level ${reward.level} erreicht!`]);
@@ -630,7 +630,7 @@ export function VocabReset({ childIds }: { childIds: string[] }) {
   };
   if (!open) return (
     <View style={{ alignItems: 'center', gap: 4 }}>
-      <Pressable onPress={() => { setOpen(true); setDone(''); }} style={{ padding: 8 }}><Text style={{ color: C.muted, fontWeight: '700' }}>🔄 Vokabeln zurücksetzen</Text></Pressable>
+      <Pressable onPress={() => { setOpen(true); setDone(''); }} style={{ padding: 8 }}><Text style={{ color: C.muted, fontWeight: '700' }}>Vokabeln zurücksetzen</Text></Pressable>
       {!!done && <Text style={{ color: C.ok, fontWeight: '700', fontSize: 13 }}>{done}</Text>}
     </View>
   );
@@ -673,7 +673,7 @@ function LockCard({ name, limit, onUnlock }: { name: string; limit: number; onUn
   const [err, setErr] = useState(false);
   return (
     <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, gap: 8 }}>
-      <Text style={{ fontSize: 18, fontWeight: '800', color: C.fg }}>🌙 Genug für heute, {name}!</Text>
+      <Text style={{ fontSize: 18, fontWeight: '800', color: C.fg }}>Genug für heute, {name}!</Text>
       <Text style={{ color: C.fg }}>Du hast heute schon {limit} Wörter geübt. Dein Kopf braucht jetzt Pause, damit die Wörter über Nacht hängen bleiben. Komm morgen wieder!</Text>
       {!ask ? (
         <Pressable onPress={() => setAsk(true)} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Eltern: heute weiter üben lassen</Text></Pressable>
@@ -708,7 +708,7 @@ function VocabReport({ childId, name, limit }: { childId: string; name: string; 
   return (
     <View style={[s.card, { gap: 12 }]}>
       <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
-        <Text style={[s.h2, { flexShrink: 1 }]}>📊 So steht {name}</Text>
+        <Text style={[s.h2, { flexShrink: 1 }]}>So steht {name}</Text>
         <Text style={{ color: C.accent, fontWeight: '800' }}>{open ? 'Weniger ▲' : 'Mehr ▼'}</Text>
       </Pressable>
       <View style={{ flexDirection: 'row', height: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: C.line }}>
@@ -780,7 +780,7 @@ function VocabClaims({ childId, name }: { childId: string; name: string }) {
           <Text style={[s.text, { fontWeight: '800' }]}>{c.ask}</Text>
           <Text style={s.text}>Antwort von {name}: <Text style={{ fontWeight: '800', color: C.danger }}>{c.answer}</Text></Text>
           <Text style={s.muted}>Lösung im Buch: {c.solution}</Text>
-          {!!c.note && <Text style={[s.muted, { fontSize: 13 }]}>🤖 {c.note}</Text>}
+          {!!c.note && <Text style={[s.muted, { fontSize: 13 }]}>{c.note}</Text>}
           <View style={s.row}>
             <Button title="Stimmt, gilt ab jetzt" color={C.ok} style={{ paddingVertical: 7 }} onPress={() => decide(c, true)} />
             <Button ghost title="Ist falsch" style={{ paddingVertical: 7 }} onPress={() => decide(c, false)} />

@@ -128,7 +128,7 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
                 <View style={{ height: 10, backgroundColor: C.surface2, borderRadius: 99, overflow: 'hidden' }}>
                   <View style={{ height: '100%', width: `${goalPct}%`, backgroundColor: child.color }} />
                 </View>
-                <Text style={[s.muted, { fontSize: 12 }]}>{sparBal >= goal.cents ? 'Geschafft! 🎉' : `Noch ${euro(goal.cents - sparBal)}${sparMonth ? ` · ca. ${Math.ceil((goal.cents - sparBal) / sparMonth)} Monate` : ''}`}</Text>
+                <Text style={[s.muted, { fontSize: 12 }]}>{sparBal >= goal.cents ? 'Geschafft!' : `Noch ${euro(goal.cents - sparBal)}${sparMonth ? ` · ca. ${Math.ceil((goal.cents - sparBal) / sparMonth)} Monate` : ''}`}</Text>
                 <Pressable onPress={() => update(d => setAccount(d, child.id, a => ({ ...a, goal: undefined })))}><Text style={{ color: C.muted, fontWeight: '700', fontSize: 12 }}>Ziel entfernen</Text></Pressable>
               </>
             ) : p.id === 'invest' ? (
@@ -154,7 +154,7 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
         <View style={{ gap: 6, backgroundColor: '#fff7e0', borderRadius: 12, padding: 12 }}>
           {requests.map(q => (
             <View key={q.id} style={[s.row, { gap: 8 }]}>
-              <Text style={[s.text, { flex: 1 }]}>🙋 {euro(q.cents)} von {potName(q.from).name} nach {potName(q.to).name}{q.note ? ` („${q.note}“)` : ''}</Text>
+              <Text style={[s.text, { flex: 1 }]}>{euro(q.cents)} von {potName(q.from).name} nach {potName(q.to).name}{q.note ? ` („${q.note}“)` : ''}</Text>
               {parent ? (
                 <>
                   <Button title="Ja" onPress={() => update(d => setAccount(movePot(d, child.id, q.cents, q.from, q.to, q.note || 'Umbuchung'), child.id, a => ({ ...a, requests: (a.requests ?? []).filter(x => x.id !== q.id) })))} style={{ paddingVertical: 6 }} />
@@ -167,20 +167,20 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
       )}
 
       <View style={{ backgroundColor: '#fff7e0', borderRadius: 12, padding: 12 }}>
-        <Text style={[s.text, { fontSize: 15 }]}>💡 {tipFor(age, today())}</Text>
+        <Text style={[s.text, { fontSize: 15 }]}>{tipFor(age, today())}</Text>
       </View>
 
       <View style={[s.row, { gap: 8 }]}>
-        <Button ghost={mode !== 'ausgabe'} title="🛒 Ausgabe" onPress={() => { setMode('ausgabe'); setPot('aus'); }} style={{ paddingVertical: 8 }} />
+        <Button ghost={mode !== 'ausgabe'} title="Ausgabe" onPress={() => { setMode('ausgabe'); setPot('aus'); }} style={{ paddingVertical: 8 }} />
         <Button ghost={mode !== 'umbuchen'} title="↔️ Umbuchen" onPress={() => { setMode('umbuchen'); setFrom('aus'); setTo('spar'); }} style={{ paddingVertical: 8 }} />
         {parent && <Button ghost={mode !== 'plus'} title="➕ Geld dazu" onPress={() => { setMode('plus'); setPot('split'); }} style={{ paddingVertical: 8 }} />}
-        {!goal && <Button ghost={mode !== 'ziel'} title="🐷 Sparziel" onPress={() => setMode('ziel')} style={{ paddingVertical: 8 }} />}
+        {!goal && <Button ghost={mode !== 'ziel'} title="Sparziel" onPress={() => setMode('ziel')} style={{ paddingVertical: 8 }} />}
         {parent && <Button ghost={mode !== 'regel'} title="⚙️ Taschengeld" onPress={() => { setMode('regel'); setEvery(acc.allowance?.every ?? ((age ?? 9) >= 10 ? 'monat' : 'woche')); setAmount(acc.allowance ? String(acc.allowance.cents / 100).replace('.', ',') : ''); }} style={{ paddingVertical: 8 }} />}
       </View>
 
       {mode !== '' && (
         <View style={{ gap: 8, borderWidth: 2, borderColor: C.accent, borderRadius: 12, padding: 12 }}>
-          {mode === 'plus' && <Segmented value={plusKind} onChange={setPlusKind} options={[{ value: 'geschenk', label: '🎁 Geschenk' }, { value: 'verdient', label: '💪 Verdient' }]} />}
+          {mode === 'plus' && <Segmented value={plusKind} onChange={setPlusKind} options={[{ value: 'geschenk', label: 'Geschenk' }, { value: 'verdient', label: 'Verdient' }]} />}
           {mode === 'plus' && <Segmented value={pot} onChange={setPot} options={[{ value: 'split', label: 'Aufteilen' }, ...POTS.map(p => ({ value: p.id, label: `${p.icon} ${p.name}` }))]} />}
           {mode === 'ausgabe' && parent && <Segmented value={pot} onChange={setPot} options={POTS.map(p => ({ value: p.id, label: `Aus ${p.icon} ${p.name}` }))} />}
           {mode === 'umbuchen' && (

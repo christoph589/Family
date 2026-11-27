@@ -44,7 +44,7 @@ export function PushSetup({ meId }: { meId?: string }) {
   if (!supported() && isIos() && !standalone()) {
     return (
       <View style={[s.card, { gap: 6, padding: 14 }]}>
-        <Text style={[s.text, { fontWeight: '800' }]}>🔔 Erinnerungen aufs iPhone</Text>
+        <Text style={[s.text, { fontWeight: '800' }]}>Erinnerungen aufs iPhone</Text>
         <Text style={[s.muted, { fontSize: 13 }]}>Geht auf dem iPhone nur mit der App auf dem Home-Bildschirm: unten auf Teilen tippen, dann „Zum Home-Bildschirm“. Die App von dort öffnen und hier einschalten.</Text>
       </View>
     );
@@ -81,7 +81,7 @@ export function PushSetup({ meId }: { meId?: string }) {
   return (
     <View style={[s.card, { gap: 8, padding: 14 }]}>
       <View style={[s.row, { justifyContent: 'space-between' }]}>
-        <Text style={[s.text, { fontWeight: '800', flexShrink: 1 }]}>🔔 Erinnerungen auf diesem Gerät: {on ? 'an' : 'aus'}</Text>
+        <Text style={[s.text, { fontWeight: '800', flexShrink: 1 }]}>Erinnerungen auf diesem Gerät: {on ? 'an' : 'aus'}</Text>
         <View style={[s.row, { gap: 8 }]}>
           {on ? (<><Button ghost title="Test" onPress={test} /><Button ghost title="Aus" onPress={disable} /></>) : <Button title={busy ? '…' : 'Einschalten'} disabled={busy} onPress={enable} />}
         </View>

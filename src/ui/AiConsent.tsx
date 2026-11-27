@@ -28,7 +28,7 @@ export function AiConsent() {
     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#1a1530aa', paddingTop: 40, paddingHorizontal: 16 }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={[s.card, { maxWidth: 480, alignSelf: 'center', width: '100%' }]}>
-          <Text style={s.h2}>🤖 Fotos an die KI schicken?</Text>
+          <Text style={s.h2}>Fotos an die KI schicken?</Text>
           <Text style={s.text}>Damit Famelio Lernkarten, Probe-Arbeiten oder Vokabeln erstellen kann, gehen die Fotos an die KI von Anthropic (Claude, Server in den USA). Die KI nutzt sie nur für diese eine Aufgabe und lernt nicht daraus.</Text>
           <Text style={[s.text, { fontWeight: '700' }]}>Bitte beachten:</Text>
           <Text style={s.text}>• Nur Unterlagen fotografieren, möglichst ohne Namen, Adressen oder Noten anderer.{'\n'}• Fotos und Lernkarten bleiben in eurer Familie und werden nie mit anderen geteilt.{'\n'}• Famelio löscht die Fotos automatisch, sobald die Klassenarbeit oder das Thema vorbei ist.{'\n'}• Die KI kann Fehler machen. Bitte erzeugte Karten kurz prüfen.</Text>

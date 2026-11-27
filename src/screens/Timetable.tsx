@@ -107,7 +107,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
       const { plan, bells } = await readTimetable(f.src, child.name, child.grade);
       setEdit(plan);
       if (bells) setEb(bells);
-      setAiMsg('✅ Eingelesen. Bitte kurz prüfen, Zeiten ergänzen und dann speichern.');
+      setAiMsg('Eingelesen. Bitte kurz prüfen, Zeiten ergänzen und dann speichern.');
     } catch (e: any) {
       setAiMsg(AI_ERROR[e?.code] ?? 'Das Einlesen hat nicht geklappt. Bitte nochmal versuchen.');
     } finally { setReading(false); }
@@ -134,7 +134,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
       {kids.length > 1 && !edit ? (
         <View style={[{ margin: -20, marginBottom: 2, padding: 14, paddingHorizontal: 20, gap: 10, borderTopLeftRadius: 24, borderTopRightRadius: 24 }, grad(child.color, child.color + 'c0')]}>
           <View style={[s.row, { justifyContent: 'space-between' }]}>
-            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>📚 Stundenplan</Text>
+            <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>Stundenplan</Text>
             {parent && <Pressable onPress={startEdit} style={{ backgroundColor: '#ffffff33', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 7 }}><Text style={{ color: '#fff', fontWeight: '800' }}>{empty ? 'Eintragen' : '✏️ Bearbeiten'}</Text></Pressable>}
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -159,7 +159,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
       {parent && (edit || empty) && (
         <View style={{ gap: 6, backgroundColor: C.bg, borderRadius: 12, padding: 12 }}>
           <View style={[s.row, { gap: 10 }]}>
-            <Button ghost title="📷 Foto oder PDF einlesen" disabled={reading} onPress={upload} style={{ paddingVertical: 8 }} />
+            <Button ghost title="Foto oder PDF einlesen" disabled={reading} onPress={upload} style={{ paddingVertical: 8 }} />
             {reading && <ActivityIndicator color={child.color} />}
           </View>
           <Text style={[s.muted, { fontSize: 13 }]}>{reading ? 'Die KI liest den Stundenplan, das dauert etwa 20 Sekunden …' : aiMsg || 'Foto vom Stundenplan, Bildschirmfoto oder PDF. Die KI trägt die Fächer ein, du prüfst vor dem Speichern.'}</Text>

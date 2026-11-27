@@ -129,7 +129,7 @@ export function Family() {
           )}
           {open === r.id && (
             <View style={[s.row, { paddingLeft: 0 }]}>
-              <Button ghost title={r.photo ? 'Anderes Foto' : '📷 Foto hochladen'} onPress={() => pickImageFile().then(res => { if (res) { setCrop({ id: r.id, ...res }); setOpen(null); } })} />
+              <Button ghost title={r.photo ? 'Anderes Foto' : 'Foto hochladen'} onPress={() => pickImageFile().then(res => { if (res) { setCrop({ id: r.id, ...res }); setOpen(null); } })} />
               {r.photo && <Button ghost title="Foto entfernen" onPress={() => setPhoto(r.id, r.role, undefined)} />}
             </View>
           )}
@@ -219,7 +219,7 @@ export function Holiday() {
       {!!err && <Text style={{ color: C.danger }}>{err}</Text>}
       {auto?.on && !pick && (
         <View style={{ gap: 4 }}>
-          {autoNow && <Text style={[s.text, { fontWeight: '800' }]}>🏖️ Jetzt: {autoNow.name} bis {fmtDay(autoNow.to)}</Text>}
+          {autoNow && <Text style={[s.text, { fontWeight: '800' }]}>Jetzt: {autoNow.name} bis {fmtDay(autoNow.to)}</Text>}
           {next && <Text style={s.muted}>Nächste Ferien: {next.name}, {fmtDay(next.from)} bis {fmtDay(next.to)}</Text>}
           <Pressable onPress={() => setPick(true)}><Text style={{ color: C.accent, fontWeight: '700' }}>Bundesland ändern</Text></Pressable>
         </View>
@@ -229,7 +229,7 @@ export function Holiday() {
       <Text style={[s.label, { marginTop: 8 }]}>Von Hand</Text>
       {manual ? (
         <>
-          <Text style={[s.text, { fontWeight: '800' }]}>🏖️ Ferien {h?.until ? `bis einschließlich ${fmtDay(h.until)}` : 'ohne Enddatum'}</Text>
+          <Text style={[s.text, { fontWeight: '800' }]}>Ferien {h?.until ? `bis einschließlich ${fmtDay(h.until)}` : 'ohne Enddatum'}</Text>
           <Button ghost title="Ferien beenden" onPress={() => set(undefined)} />
         </>
       ) : (
@@ -279,7 +279,7 @@ function KidState({ child, onSave }: { child: Child; onSave: (st: string | undef
   return (
     <View style={{ gap: 6 }}>
       <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button">
-        <Text style={[s.muted, { fontSize: 13 }]}>🏫 Schule in: <Text style={{ fontWeight: '700', color: C.fg }}>{name(cur) ?? 'noch offen'}</Text>{child.state ? '' : fam ? ' (wie Familie)' : ''} · <Text style={{ color: C.accent, fontWeight: '700' }}>{open ? 'fertig' : 'ändern'}</Text></Text>
+        <Text style={[s.muted, { fontSize: 13 }]}>Schule in: <Text style={{ fontWeight: '700', color: C.fg }}>{name(cur) ?? 'noch offen'}</Text>{child.state ? '' : fam ? ' (wie Familie)' : ''} · <Text style={{ color: C.accent, fontWeight: '700' }}>{open ? 'fertig' : 'ändern'}</Text></Text>
       </Pressable>
       {open && (
         <View style={[s.row, { gap: 6 }]}>
@@ -307,7 +307,7 @@ export function AiPrivacy() {
   const n = (data.exams ?? []).reduce((a, e) => a + (e.photos?.length ?? 0), 0) + (data.topics ?? []).reduce((a, t) => a + (t.photos?.length ?? (t.photo ? 1 : 0)), 0);
   return (
     <View style={s.card}>
-      <Text style={s.h2}>🤖 KI und Fotos</Text>
+      <Text style={s.h2}>KI und Fotos</Text>
       <Text style={s.muted}>{c ? `Zugestimmt am ${new Date(c.at).toLocaleDateString('de-DE')}. Fotos gehen zur Auswertung an die KI von Anthropic (USA) und bleiben in eurer Familie.` : 'Noch nicht zugestimmt. Beim ersten Foto-Upload fragt Famelio nach.'}</Text>
       <Text style={s.muted}>Gespeicherte Fotos: {n}. Sie werden automatisch gelöscht, 7 Tage nach der Klassenarbeit bzw. 14 Tage nach dem Thema. Lernkarten und Ergebnisse bleiben.</Text>
       <View style={s.row}>
@@ -344,7 +344,7 @@ export function ParentPin() {
   );
   return (
     <View style={s.card}>
-      <Text style={s.h2}>🔒 Eltern-PIN ändern</Text>
+      <Text style={s.h2}>Eltern-PIN ändern</Text>
       <Text style={s.muted}>Mit dieser PIN melden sich alle Erwachsenen mit Admin-Rechten an. Oma, Opa und andere ohne Admin haben ihre eigene PIN, die stellst du oben bei der Person ein.</Text>
       <View style={[s.row, { alignItems: 'flex-end' }]}>
         {field('Bisherige PIN', old, setOld)}

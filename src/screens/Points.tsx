@@ -50,7 +50,7 @@ export function Points({ childIds, parent, admin = parent }: { childIds: string[
           const mine = (data.requests ?? []).filter(r => r.childId === k.id);
           return (
             <View key={k.id} style={[s.card, { flexGrow: 1, flexBasis: 320 }]}>
-              <PersonHead name={k.name} color={k.color} photo={k.photo} sub="Punktekonto" value={`⭐ ${p}`} />
+              <PersonHead name={k.name} color={k.color} photo={k.photo} sub="Punktekonto" value={`★ ${p}`} />
               {free !== p && <Text style={s.muted}>{p - free} P sind für Wünsche reserviert.</Text>}
               <Text style={s.label}>Einlösen</Text>
               {data.rewards.filter(r => !r.childId || r.childId === k.id).map(r => {
@@ -114,7 +114,7 @@ function RewardEditor() {
   return (
     <View style={[s.card, { gap: 10, borderWidth: 2, borderColor: C.accent }]}>
       <View style={[s.row, { justifyContent: 'space-between' }]}>
-        <Text style={s.h2}>🎁 Belohnungen</Text>
+        <Text style={s.h2}>Belohnungen</Text>
         <Button ghost title="Fertig" onPress={() => setOpen(false)} style={{ paddingVertical: 6 }} />
       </View>
       {data.rewards.map(r => (
@@ -193,13 +193,13 @@ function ResetPoints({ childIds }: { childIds: string[] }) {
     if (!parentPinOk(data, v)) { setBad(true); return; }
     const ids = targets.map(k => k.id);
     if (wipe) update(d => ({ ...d, ledger: d.ledger.filter(l => !ids.includes(l.childId)), requests: (d.requests ?? []).filter(r => !ids.includes(r.childId)) }));
-    else update(d => targets.reduce((x, k) => { const p = pointsOf(x, k.id); return p ? addPoints(x, k.id, -p, '🔄 Punkte auf 0 gesetzt') : x; }, d));
+    else update(d => targets.reduce((x, k) => { const p = pointsOf(x, k.id); return p ? addPoints(x, k.id, -p, 'Punkte auf 0 gesetzt') : x; }, d));
     setDone(`${targets.map(k => k.name).join(', ')}: auf 0 gesetzt${wipe ? ', Verlauf gelöscht' : ''}.`);
     close();
   };
   if (!open) return (
     <View style={{ alignItems: 'center', gap: 4 }}>
-      <Pressable onPress={() => { setOpen(true); setDone(''); }} style={{ padding: 8 }}><Text style={{ color: C.muted, fontWeight: '700' }}>🔄 Punkte zurücksetzen</Text></Pressable>
+      <Pressable onPress={() => { setOpen(true); setDone(''); }} style={{ padding: 8 }}><Text style={{ color: C.muted, fontWeight: '700' }}>Punkte zurücksetzen</Text></Pressable>
       {!!done && <Text style={{ color: C.ok, fontWeight: '700', fontSize: 13 }}>{done}</Text>}
     </View>
   );
@@ -234,13 +234,13 @@ function NewIdea({ childId, pending }: { childId: string; pending: Idea[] }) {
   const [text, setText] = useState('');
   return (
     <View style={{ gap: 8, backgroundColor: C.bg, borderRadius: 12, padding: 12 }}>
-      <Text style={[s.text, { fontWeight: '800' }]}>💡 Eigener Wunsch</Text>
+      <Text style={[s.text, { fontWeight: '800' }]}>Eigener Wunsch</Text>
       <Text style={[s.muted, { fontSize: 13 }]}>Was wünschst du dir? Mama oder Papa sagen dir, wie viele Punkte es kostet.</Text>
       <View style={[s.row, { flexWrap: 'nowrap' }]}>
         <TextInput style={[s.input, { flex: 1, backgroundColor: C.surface }]} value={text} onChangeText={setText} placeholder="z. B. Pizza-Abend, Übernachtungsparty" />
         <Button title="Senden" disabled={!text.trim()} onPress={() => { update(d => proposeIdea(d, childId, text)); setText(''); }} />
       </View>
-      {pending.map(i => <Text key={i.id} style={{ color: C.warn, fontWeight: '700' }}>⏳ {i.title}: wartet auf Mama oder Papa</Text>)}
+      {pending.map(i => <Text key={i.id} style={{ color: C.warn, fontWeight: '700' }}>{i.title}: wartet auf Mama oder Papa</Text>)}
     </View>
   );
 }
@@ -265,7 +265,7 @@ function IdeaRow({ idea }: { idea: Idea }) {
         <TextInput style={[s.input, { width: 90, backgroundColor: C.surface }]} value={cost} onChangeText={t => setCost(t.replace(/\D/g, '').slice(0, 5))} keyboardType="number-pad" placeholder="Punkte" accessibilityLabel="Punkte" />
       </View>
       <View style={[s.row, { gap: 8 }]}>
-        {([['kind', `Nur für ${kid?.name ?? 'das Kind'}`], ...(data && data.children.length > 1 ? [['alle', 'Für alle Kinder einzeln'], ['pot', '🎯 Gemeinsames Ziel']] : [])] as [typeof mode, string][]).map(([v, l]) => (
+        {([['kind', `Nur für ${kid?.name ?? 'das Kind'}`], ...(data && data.children.length > 1 ? [['alle', 'Für alle Kinder einzeln'], ['pot', 'Gemeinsames Ziel']] : [])] as [typeof mode, string][]).map(([v, l]) => (
           <Pressable key={v} onPress={() => setMode(v)} accessibilityRole="radio" accessibilityState={{ checked: mode === v }}
             style={[s.chip, { paddingVertical: 9, paddingHorizontal: 14, backgroundColor: mode === v ? C.accent : C.surface }]}>
             <Text style={{ fontWeight: '700', color: mode === v ? '#fff' : C.fg }}>{l}</Text>

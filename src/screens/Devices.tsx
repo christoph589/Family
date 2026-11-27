@@ -23,7 +23,7 @@ export function Devices({ link, onSignOut }: { link: DeviceLink; onSignOut: () =
   return (<>
     {link.role === 'eltern' && (
       <View style={s.card}>
-        <Text style={s.h2}>👫 Partner einladen</Text>
+        <Text style={s.h2}>Partner einladen</Text>
         <Text style={s.muted}>Dein Partner bekommt ein eigenes Konto (E-Mail, Google oder Apple) und sieht alles, was du siehst.</Text>
         <View style={s.row}>
           <Button title="Einladung senden" disabled={!invite} onPress={share} />
@@ -82,7 +82,7 @@ function DeviceList({ fid }: { fid: string }) {
       {list.map(d => (
         <View key={d.user_id} style={[s.row, { justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderColor: C.line }]}>
           <View style={{ flexShrink: 1 }}>
-            <Text style={[s.text, { fontWeight: '700' }]}>{d.role === 'eltern' ? '👤 ' : '📱 '}{label(d)}</Text>
+            <Text style={[s.text, { fontWeight: '700' }]}>{label(d)}</Text>
             <Text style={[s.muted, { fontSize: 12 }]}>
               seit {when(d.created_at)}{d.last_seen ? ` · zuletzt aktiv ${when(d.last_seen)}` : ''}{d.until ? ` · bis ${when(d.until)}` : ''}
             </Text>

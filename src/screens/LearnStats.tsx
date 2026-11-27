@@ -28,7 +28,7 @@ export function LearnStats({ ids, onGo }: { ids: string[]; onGo: (childId: strin
     <View style={{ gap: 12 }}>
       <View style={[s.card, { gap: 6, padding: 12 }]}>
         <View style={[s.row, { justifyContent: 'space-between', paddingHorizontal: 4 }]}>
-          <Text style={[s.text, { fontWeight: '800' }]}>📊 Wer hat wie viel gelernt</Text>
+          <Text style={[s.text, { fontWeight: '800' }]}>Wer hat wie viel gelernt</Text>
           <Segmented value={n} onChange={setN} options={[{ value: '7', label: '7 Tage' }, { value: '30', label: '30 Tage' }]} />
         </View>
         {rows.map(({ k, sum }) => (
@@ -132,7 +132,7 @@ function KidDetail({ kid, sum, prev, days, onGo }: { kid: Child; sum: Summary; p
 
       <View style={[s.row, { gap: 10, alignItems: 'stretch' }]}>
         <Pressable onPress={() => onGo('vokabeln')} style={{ flexGrow: 1, flexBasis: 150, backgroundColor: C.bg, borderRadius: 14, padding: 12, gap: 2 }}>
-          <Text style={s.label}>🔤 Vokabeln</Text>
+          <Text style={s.label}>Vokabeln</Text>
           <Text style={[s.text, { fontWeight: '800' }]}>{sum.words} abgefragt{sum.rounds ? ` · ${sum.rounds} ${sum.rounds === 1 ? 'Runde' : 'Runden'}` : ''}</Text>
           {acc !== null && <Text style={[s.text, { fontSize: 14 }]}>{acc} % beim ersten Mal richtig</Text>}
           <Trend now={acc} before={accPrev} />
@@ -140,7 +140,7 @@ function KidDetail({ kid, sum, prev, days, onGo }: { kid: Child; sum: Summary; p
           {sum.flash > 0 && <Text style={[s.muted, { fontSize: 12 }]}>Dazu {sum.flash} Lernkarten für Klassenarbeiten</Text>}
         </Pressable>
         <Pressable onPress={() => onGo('themen')} style={{ flexGrow: 1, flexBasis: 150, backgroundColor: C.bg, borderRadius: 14, padding: 12, gap: 2 }}>
-          <Text style={s.label}>📝 Tests</Text>
+          <Text style={s.label}>Tests</Text>
           <Text style={[s.text, { fontWeight: '800' }]}>{sum.tests.length} gemacht</Text>
           {und !== null && <Text style={[s.text, { fontSize: 14 }]}>{und} % verstanden</Text>}
           <Trend now={und} before={undPrev} />
@@ -193,8 +193,8 @@ function KidDetail({ kid, sum, prev, days, onGo }: { kid: Child; sum: Summary; p
       {(next.length > 0 || grades.length > 0) && (
         <View style={{ gap: 6 }}>
           <Text style={s.label}>Klassenarbeiten</Text>
-          {next.map(e => <Text key={e.id} style={[s.text, { fontSize: 14 }]}>📅 {e.subject}{e.title ? `: ${e.title}` : ''} <Text style={{ color: C.muted }}>am {dm(e.date!)}</Text></Text>)}
-          {grades.map(e => <Text key={e.id} style={[s.text, { fontSize: 14 }]}>🎓 {e.subject}{e.title ? `: ${e.title}` : ''} <Text style={{ fontWeight: '800' }}>Note {e.grade}</Text></Text>)}
+          {next.map(e => <Text key={e.id} style={[s.text, { fontSize: 14 }]}>{e.subject}{e.title ? `: ${e.title}` : ''} <Text style={{ color: C.muted }}>am {dm(e.date!)}</Text></Text>)}
+          {grades.map(e => <Text key={e.id} style={[s.text, { fontSize: 14 }]}>{e.subject}{e.title ? `: ${e.title}` : ''} <Text style={{ fontWeight: '800' }}>Note {e.grade}</Text></Text>)}
         </View>
       )}
 
