@@ -155,7 +155,7 @@ function TestResult({ t }: { t: { busy?: boolean; res?: TrainTest; err?: string 
   if (t.busy) return <Text style={s.muted}>Frage die Bahn …</Text>;
   if (t.err) return <Text style={{ color: C.danger, fontWeight: '700' }}>{t.err}</Text>;
   const r = t.res!;
-  if (!r.ok) return <Text style={{ color: C.danger, fontWeight: '700' }}>Keine brauchbare Antwort ({r.status ?? '?'}). {r.raw ? `Rohantwort: ${r.raw}` : ''}</Text>;
+  if (!r.ok) return <Text style={{ color: C.danger, fontWeight: '700' }}>Keine brauchbare Antwort ({r.status ?? '?'}) von {r.source ?? 'der Bahn'}. {r.raw ? `Rohantwort: ${r.raw.slice(0, 160)}` : r.count === 0 ? 'Die Abfahrtstafel ist leer.' : ''}</Text>;
   return (
     <View style={{ gap: 4 }}>
       <Text style={{ color: r.match ? C.ok : C.warn, fontWeight: '800' }}>
