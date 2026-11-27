@@ -50,9 +50,9 @@ export function DishIdeas({ onPlan, onClose }: { onPlan: (r: Recipe, date: strin
       });
       // Doppelte Sicherung: Gerichte, die zu einer Unverträglichkeit passen, gar nicht erst anzeigen
       const safe = got.filter(i => !hard(data, i).length);
-      if (!safe.length) throw { code: 'invalid_json' };
+      if (!safe.length) throw { code: 'all_conflict' };
       update(d => ({ ...d, dishIdeas: { at: new Date().toISOString(), items: [...safe, ...(d.dishIdeas?.items ?? [])].slice(0, 12) } }));
-    } catch (e: any) { setErr(AI_ERROR[e?.code] ?? 'Der Vorschlag hat nicht geklappt. Bitte nochmal versuchen.'); }
+    } catch (e: any) { setErr(e?.code === 'all_conflict' ? 'Alle Vorschläge passten nicht zu euren Unverträglichkeiten (z. B. Sahne bei Laktose) und wurden aussortiert. Bitte mit anderem Wunsch nochmal versuchen.' : e?.code === 'invalid_json' ? 'Die KI hat keine brauchbaren Rezepte geliefert. Bitte nochmal versuchen.' : AI_ERROR[e?.code] ?? 'Der Vorschlag hat nicht geklappt. Bitte nochmal versuchen.'); }
     setBusy(false);
   };
 
@@ -84,7 +84,7 @@ export function DishIdeas({ onPlan, onClose }: { onPlan: (r: Recipe, date: strin
           );
         })}
       </View>
-      <TextInput style={s.input} value={wish} onChangeText={setWish} placeholder="Eigener Wunsch (optional), z. B. etwas mit Kürbis" />
+      <TextInput style={s.input} value={wish} onChangeText={setWish} placeholder="Wunsch oder Zutaten (optional), z. B. Hackfleisch, Paprika" />
       <View style={s.row}>
         <Button title={busy ? 'KI denkt nach …' : items.length ? '✨ Weitere Ideen' : '✨ Ideen holen'} disabled={busy} onPress={ask} />
       </View>
