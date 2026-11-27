@@ -356,8 +356,8 @@ function cleanQuestion(x: any): Question | null {
     if (options.length >= 2 && options.includes(solution)) return { type: 'choice', q, solution, options, figure, ...paperOf(x) };
   }
   if (x?.type === 'table' && Array.isArray(x?.table?.rows)) {
-    const header = (Array.isArray(x.table.header) ? x.table.header : []).map((h: unknown) => str(h, 40)).slice(0, 8);
-    const rows: string[][] = x.table.rows.slice(0, 10).map((r: unknown) => (Array.isArray(r) ? r.map(c => str(c, 40)).slice(0, 8) : []));
+    const header = (Array.isArray(x.table.header) ? x.table.header : []).map((h: unknown) => str(h, 80)).slice(0, 8);
+    const rows: string[][] = x.table.rows.slice(0, 10).map((r: unknown) => (Array.isArray(r) ? r.map(c => str(c, 200)).slice(0, 8) : []));
     const blanks = rows.flat().filter(c => c === '?').length;
     if (blanks > 0 && solution.split('|').length === blanks) return { type: 'table', q, solution, table: { header, rows }, figure, ...paperOf(x) };
   }
