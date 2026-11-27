@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
-import { DeleteButton, parentPinOk } from '../ui/DeleteButton';
+import { DeleteButton } from '../ui/DeleteButton';
+import { usePinEntry } from '../data/pin';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
@@ -604,9 +605,8 @@ export function VocabReset({ childIds }: { childIds: string[] }) {
   const [open, setOpen] = useState(false);
   const [who, setWho] = useState<string>('alle');
   const [all, setAll] = useState(false);
-  const [pin, setPin] = useState('');
-  const [bad, setBad] = useState(false);
   const [done, setDone] = useState('');
+  const pin = usePinEntry('any', () => reset());
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const targets = who === 'alle' ? kids : kids.filter(k => k.id === who);
@@ -614,11 +614,8 @@ export function VocabReset({ childIds }: { childIds: string[] }) {
   const decks = (data.vocab ?? []).filter(d => ids.includes(d.childId) && !d.prepId);
   const books = (data.vocabBooks ?? []).filter(b => ids.includes(b.childId));
   const cards = decks.reduce((a, d) => a + d.cards.length, 0);
-  const close = () => { setOpen(false); setPin(''); setBad(false); };
-  const tryPin = (v: string) => {
-    setPin(v); setBad(false);
-    if (v.length < 4) return;
-    if (!parentPinOk(data, v)) { setBad(true); return; }
+  const close = () => { setOpen(false); pin.reset(); };
+  const reset = () => {
     update(d => {
       const stats = { ...(d.vocabStats ?? {}) };
       ids.forEach(id => delete stats[id]);
@@ -657,20 +654,19 @@ export function VocabReset({ childIds }: { childIds: string[] }) {
         {' '}Punkte und Lernkarten zu Klassenarbeiten bleiben. Das lässt sich nicht rückgängig machen. Zum Bestätigen die Eltern-PIN eingeben.
       </Text>
       <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}>
-        <TextInput style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="PIN"
-          accessibilityLabel="Eltern-PIN" onChangeText={x => tryPin(x.replace(/\D/g, '').slice(0, 4))} />
+        <TextInput style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin.pin} editable={!pin.busy} secureTextEntry keyboardType="number-pad" placeholder="PIN"
+          accessibilityLabel="Eltern-PIN" onChangeText={pin.onChange} />
         <Button ghost title="Abbrechen" onPress={close} />
       </View>
-      {bad && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>PIN stimmt nicht.</Text>}
+      {pin.busy && <Text style={[s.muted, { fontSize: 13 }]}>Prüfe …</Text>}
+      {!!pin.msg && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{pin.msg}</Text>}
     </View>
   );
 }
 
 function LockCard({ name, limit, onUnlock }: { name: string; limit: number; onUnlock: () => void }) {
-  const { data } = useFamily();
   const [ask, setAsk] = useState(false);
-  const [pin, setPin] = useState('');
-  const [err, setErr] = useState(false);
+  const pin = usePinEntry('any', () => onUnlock());
   return (
     <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, gap: 8 }}>
       <Text style={{ fontSize: 18, fontWeight: '800', color: C.fg }}>Genug für heute, {name}!</Text>
@@ -679,9 +675,10 @@ function LockCard({ name, limit, onUnlock }: { name: string; limit: number; onUn
         <Pressable onPress={() => setAsk(true)} style={{ alignSelf: 'flex-start', paddingVertical: 4 }}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Eltern: heute weiter üben lassen</Text></Pressable>
       ) : (
         <View style={[s.row, { gap: 8 }]}>
-          <TextInput autoFocus style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="PIN"
-            onChangeText={v => { const x = v.replace(/\D/g, '').slice(0, 4); setPin(x); setErr(false); if (x.length === 4) { if (parentPinOk(data, x)) onUnlock(); else { setErr(true); setPin(''); } } }} />
-          {err && <Text style={{ color: C.danger, fontWeight: '700' }}>PIN stimmt nicht.</Text>}
+          <TextInput autoFocus style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin.pin} editable={!pin.busy} secureTextEntry keyboardType="number-pad" placeholder="PIN"
+            onChangeText={pin.onChange} />
+          {pin.busy && <Text style={s.muted}>Prüfe …</Text>}
+          {!!pin.msg && <Text style={{ color: C.danger, fontWeight: '700', flexShrink: 1 }}>{pin.msg}</Text>}
         </View>
       )}
     </View>

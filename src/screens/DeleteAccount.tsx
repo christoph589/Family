@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { deleteMyAccount } from '../data/cloud';
 import { useFamily } from '../data/FamilyContext';
+import { checkPin, pinMessage } from '../data/pin';
 import { Button } from '../ui/Button';
 import { C, s } from '../ui/theme';
 
@@ -16,8 +17,9 @@ export function DeleteAccount({ onDone }: { onDone: () => void }) {
   if (!data) return null;
   const ready = pin.length === 4 && word.trim().toUpperCase() === 'LÖSCHEN';
   async function go() {
-    if (pin !== data!.family.parentPin) { setErr('Die Eltern-PIN stimmt nicht.'); setPin(''); return; }
     setBusy(true); setErr('');
+    const r = await checkPin(data!, pin, 'admin');
+    if (!r.ok) { setErr(r.reason === 'wrong' ? 'Die Eltern-PIN stimmt nicht.' : pinMessage(r)); setPin(''); setBusy(false); return; }
     try {
       await deleteMyAccount();
       if (typeof window !== 'undefined' && window.location) window.location.replace(window.location.pathname);

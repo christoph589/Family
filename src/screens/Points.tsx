@@ -8,7 +8,7 @@ import { PersonHead } from '../ui/Avatar';
 import { Pots } from './Pots';
 import { IconPicker } from '../ui/IconPicker';
 import { C, s } from '../ui/theme';
-import { parentPinOk } from '../ui/DeleteButton';
+import { usePinEntry } from '../data/pin';
 
 export function Points({ childIds, parent, admin = parent }: { childIds: string[]; parent: boolean; admin?: boolean }) {
   const { data, update } = useFamily();
@@ -179,18 +179,14 @@ function ResetPoints({ childIds }: { childIds: string[] }) {
   const { data, update } = useFamily();
   const [open, setOpen] = useState(false);
   const [who, setWho] = useState<string>('alle');
-  const [pin, setPin] = useState('');
-  const [bad, setBad] = useState(false);
   const [done, setDone] = useState('');
   const [wipe, setWipe] = useState(true);
+  const pin = usePinEntry('any', () => reset());
   if (!data) return null;
   const kids = data.children.filter(c => childIds.includes(c.id));
   const targets = who === 'alle' ? kids : kids.filter(k => k.id === who);
-  const close = () => { setOpen(false); setPin(''); setBad(false); };
-  const tryPin = (v: string) => {
-    setPin(v); setBad(false);
-    if (v.length < 4) return;
-    if (!parentPinOk(data, v)) { setBad(true); return; }
+  const close = () => { setOpen(false); pin.reset(); };
+  const reset = () => {
     const ids = targets.map(k => k.id);
     if (wipe) update(d => ({ ...d, ledger: d.ledger.filter(l => !ids.includes(l.childId)), requests: (d.requests ?? []).filter(r => !ids.includes(r.childId)) }));
     else update(d => targets.reduce((x, k) => { const p = pointsOf(x, k.id); return p ? addPoints(x, k.id, -p, 'Punkte auf 0 gesetzt') : x; }, d));
@@ -220,11 +216,12 @@ function ResetPoints({ childIds }: { childIds: string[] }) {
       </Pressable>
       <Text style={[s.muted, { fontSize: 13 }]}>{wipe ? 'Alle Buchungen, offene Wünsche und Einzahlungen in gemeinsame Ziele dieser Kinder werden gelöscht. Das lässt sich nicht rückgängig machen.' : 'Der Verlauf bleibt, es kommt nur eine Gegenbuchung dazu. Punkte in gemeinsamen Zielen bleiben im Topf.'} Zum Bestätigen die Eltern-PIN eingeben.</Text>
       <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}>
-        <TextInput style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin} secureTextEntry keyboardType="number-pad" placeholder="PIN"
-          accessibilityLabel="Eltern-PIN" onChangeText={x => tryPin(x.replace(/\D/g, '').slice(0, 4))} />
+        <TextInput style={[s.input, { width: 110, textAlign: 'center', letterSpacing: 6 }]} value={pin.pin} editable={!pin.busy} secureTextEntry keyboardType="number-pad" placeholder="PIN"
+          accessibilityLabel="Eltern-PIN" onChangeText={pin.onChange} />
         <Button ghost title="Abbrechen" onPress={close} />
       </View>
-      {bad && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>PIN stimmt nicht.</Text>}
+      {pin.busy && <Text style={[s.muted, { fontSize: 13 }]}>Prüfe …</Text>}
+      {!!pin.msg && <Text style={{ color: C.danger, fontWeight: '700', fontSize: 13 }}>{pin.msg}</Text>}
     </View>
   );
 }
