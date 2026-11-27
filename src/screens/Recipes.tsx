@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { DeleteButton } from '../ui/DeleteButton';
-import { ActivityIndicator, Linking, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from 'react-native';
 import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { peopleOf, today, uid } from '../data/logic';
 import { FamilyData, MealSlot, Recipe } from '../data/types';
 import { Avatar } from '../ui/Avatar';
+import { Icon, IconName } from '../ui/Icon';
 import { Button } from '../ui/Button';
 import { addDays, parse } from '../ui/CalViews';
 import { C, s } from '../ui/theme';
@@ -35,8 +36,8 @@ const IMPORT_ERROR: Record<string, string> = {
 };
 
 const norm = (t: string) => t.trim().toLowerCase();
-export const VOTES = [{ v: 2, icon: '❤️', label: 'Lieblingsessen' }, { v: 1, icon: '👍', label: 'Mag ich' }, { v: -1, icon: '👎', label: 'Lieber nicht' }];
-const iconOf = (v: number) => VOTES.find(x => x.v === v)?.icon ?? '';
+export const VOTES: { v: number; icon: IconName; label: string }[] = [{ v: 2, icon: 'heart', label: 'Lieblingsessen' }, { v: 1, icon: 'thumb', label: 'Mag ich' }, { v: -1, icon: 'thumbdown', label: 'Lieber nicht' }];
+const iconOf = (v: number): IconName => VOTES.find(x => x.v === v)?.icon ?? 'thumb';
 
 /** Punktzahl für das Ranking: Summe der Bewertungen */
 export const recipeScore = (r: Recipe) => Object.values(r.votes ?? {}).reduce((a, b) => a + b, 0);
@@ -51,7 +52,6 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
   const { data, update } = useFamily();
   const [adding, setAdding] = useState<boolean | 'shot' | 'link'>(false);
   const [ideas, setIdeas] = useState(false);
-  const narrow = useWindowDimensions().width < 600;
   const [edit, setEdit] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
   const [show, setShow] = useState<string | null>(null);
@@ -69,7 +69,7 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
     <View style={{ gap: 12 }}>
       <View style={[s.row, { justifyContent: 'space-between' }]}>
         <Text style={[s.muted, { flex: 1, minWidth: 200 }]}>
-          {parent ? 'Ganz oben steht, was die Familie am liebsten isst. Antippen zum Einplanen.' : 'Bewerte die Gerichte oder schlag ein neues vor. Mama und Papa sehen das Ranking und planen danach.'}
+          {parent ? 'Ganz oben steht, was die Familie am liebsten isst. Antippen zeigt Zutaten und Rezept.' : 'Bewerte die Gerichte oder schlag ein neues vor. Mama und Papa sehen das Ranking und planen danach.'}
         </Text>
         {!adding && parent && <Button ghost title="Vorschläge" accessibilityLabel="Neue Rezepte vorschlagen lassen" onPress={() => setIdeas(v => !v)} />}
         {!adding && parent && <Button ghost title="Aus Link" accessibilityLabel="Rezept von einer Webseite übernehmen" onPress={() => { setAdding('link'); setEdit(null); setIdeas(false); }} />}
@@ -84,65 +84,71 @@ export function Recipes({ meId, parent, onPlan, onShop }: { meId: string; parent
           <Text style={s.muted}>Noch keine Gerichte. Jedes Gericht aus dem Essensplan landet automatisch hier.</Text>
         </View>
       )}
-      {list.map((r, i) => {
-        const score = recipeScore(r);
+      {list.map(r => {
         const by = r.by ? people.find(p => p.id === r.by) : undefined;
         const voters = Object.entries(r.votes ?? {}).map(([id, v]) => ({ p: people.find(x => x.id === id), v })).filter(x => x.p);
         const last = lastCooked(data, r);
         const fresh = !!r.by && !last && !(data.meals ?? []).some(m => norm(m.title) === norm(r.title));
         if (edit === r.id) return <RecipeForm key={r.id} meId={meId} parent={parent} recipe={r} onDone={() => setEdit(null)} />;
+        const open = show === r.id;
+        const canEdit = parent || r.by === meId;
+        const sub = [last ? `zuletzt ${parse(last).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : 'noch nie im Plan', by && `von ${by.name}`, fresh && 'neu', r.ai && 'KI-Idee'].filter(Boolean).join(' · ');
         return (
-          <View key={r.id} style={[s.card, { padding: 12, gap: 8, borderWidth: 1, borderColor: C.line, borderRadius: 16, boxShadow: 'none', shadowOpacity: 0, elevation: 0 } as any]}>
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
-              <View style={{ width: 20, alignItems: 'center', paddingTop: 2 }}>
-                <Text style={{ fontWeight: '700', fontSize: 13, color: i < 3 && score > 0 ? C.accent : C.muted }}>{i + 1}</Text>
-              </View>
-              <DishTile title={r.title} photo={r.photo} ingredients={r.ingredients} style={{ width: 56, height: 56 }} emojiSize={26} />
-              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <Text style={[s.text, { fontWeight: '800', fontSize: 16.5 }]}>{r.title}{fresh && <Text style={{ fontSize: 12, color: C.accent }}>  NEU</Text>}{r.ai && <Text style={{ fontSize: 12, color: C.accent }}>  KI-Idee</Text>}</Text>
+          <View key={r.id} style={[s.card, { padding: 10, gap: 8, borderWidth: 1, borderColor: C.line, borderRadius: 16, boxShadow: 'none', shadowOpacity: 0, elevation: 0 } as any]}>
+            <Pressable onPress={() => setShow(open ? null : r.id)} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`${r.title}, Details ${open ? 'zuklappen' : 'aufklappen'}`}
+              style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+              <DishTile title={r.title} photo={r.photo} ingredients={r.ingredients} style={{ width: 52, height: 52 }} emojiSize={24} />
+              <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+                <Clip style={[s.text, { fontWeight: '800', fontSize: 16, lineHeight: 21 }]} lines={2}>{r.title}</Clip>
+                <Text style={[s.muted, { fontSize: 12.5, lineHeight: 17 }]} numberOfLines={1}>{sub}</Text>
                 <ConflictNote title={r.title} compact />
-                {r.ingredients.length > 0 && <Clip style={[s.muted, { fontSize: 13 }]} lines={1}>{r.ingredients.join(', ')}</Clip>}
-                <Text style={[s.muted, { fontSize: 12 }]}>
-                  {[by && `von ${by.name}`, last ? `zuletzt ${parse(last).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : 'noch nie im Plan'].filter(Boolean).join(' · ')}
-                </Text>
-                {voters.length > 0 && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
-                    {voters.map(({ p, v }) => (
-                      <View key={p!.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: C.surface2, borderRadius: 99, paddingRight: 6, padding: 2 }}>
-                        <Avatar name={p!.name} color={p!.color} photo={(p as any).photo} size={18} />
-                        <Text style={{ fontSize: 12 }}>{iconOf(v)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
               </View>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {VOTES.map(x => {
                 const on = r.votes?.[meId] === x.v;
+                const col = on ? (x.v === 2 ? C.danger : x.v === 1 ? C.accent : C.warn) : C.muted;
                 return (
                   <Pressable key={x.v} onPress={() => vote(r, x.v)} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${r.title}: ${x.label}`}
-                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 99, borderWidth: 1, borderColor: on ? C.accent : C.line, backgroundColor: on ? C.accentSoft : C.surface }}>
-                    <Text style={{ fontWeight: '700', fontSize: 13, color: C.fg }}>{x.icon}{parent ? '' : ` ${x.v === 2 ? 'Liebling' : x.v === 1 ? 'Mag ich' : 'Nein'}`}</Text>
+                    style={{ width: 38, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 99, borderWidth: 1, borderColor: on ? col : C.line, backgroundColor: on ? C.surface2 : C.surface }}>
+                    <Icon name={x.icon} size={18} color={col} fill={on} />
                   </Pressable>
                 );
               })}
-              {parent && <View style={{ flex: 1 }} />}
-              {parent && <Button title="Einplanen" accessibilityLabel={`${r.title} einplanen`} onPress={() => setPlan(plan === r.id ? null : r.id)} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: narrow ? 12 : 16 }} />}
-              {parent && r.ingredients.length > 0 && <Button ghost title="Einkauf" accessibilityLabel={`Zutaten für ${r.title} auf die Einkaufsliste`} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: 12 }}
-                onPress={() => { onShop(r); setMsg(`Zutaten für ${r.title} stehen auf der Einkaufsliste.`); }} />}
-              {(parent || r.by === meId) && <Button ghost title="Ändern" accessibilityLabel={`${r.title} bearbeiten`} style={{ paddingVertical: 6, minHeight: 38, paddingHorizontal: 12 }} onPress={() => { setEdit(r.id); setAdding(false); }} />}
+              {voters.length > 0 && (
+                <View style={{ flexDirection: 'row', marginLeft: 4, flexShrink: 1 }}>
+                  {voters.slice(0, 6).map(({ p, v }, k) => (
+                    <View key={p!.id} style={{ marginLeft: k ? -6 : 0 }}>
+                      <Avatar name={p!.name} color={p!.color} photo={(p as any).photo} size={22} />
+                      <View style={{ position: 'absolute', right: -3, bottom: -3, backgroundColor: C.surface, borderRadius: 99, padding: 1.5 }}>
+                        <Icon name={iconOf(v)} size={9} color={v === 2 ? C.danger : v === 1 ? C.accent : C.warn} fill stroke={1.4} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <View style={{ flex: 1 }} />
+              {parent && <Button title="Einplanen" accessibilityLabel={`${r.title} einplanen`} onPress={() => setPlan(plan === r.id ? null : r.id)} style={{ paddingVertical: 6, minHeight: 36, paddingHorizontal: 14 }} />}
+              <Pressable onPress={() => setShow(open ? null : r.id)} accessibilityRole="button" accessibilityLabel={`Mehr zu ${r.title}`}
+                style={{ width: 36, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 99, backgroundColor: open ? C.accentSoft : 'transparent' }}>
+                <Icon name="more" size={20} color={open ? C.accent : C.muted} />
+              </Pressable>
             </View>
-            {(r.steps || r.link) && (show === r.id ? (
-              <View style={{ gap: 6, backgroundColor: C.surface2, borderRadius: 14, padding: 12 }}>
+            {plan === r.id && <PlanPicker onPick={(date, slot) => { onPlan(r, date, slot); setPlan(null); setMsg(`${r.title} steht am ${parse(date).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'numeric' })} im Plan.`); }} />}
+            {open && (
+              <View style={{ gap: 8, backgroundColor: C.surface2, borderRadius: 14, padding: 12 }}>
                 {r.ingredients.length > 0 && <Text style={s.text}><Text style={{ fontWeight: '800' }}>Zutaten{'\n'}</Text>{r.ingredients.map(x => `• ${x}`).join('\n')}</Text>}
                 {r.steps && <Text style={s.text}><Text style={{ fontWeight: '800' }}>Zubereitung{'\n'}</Text>{r.steps}</Text>}
+                {!r.ingredients.length && !r.steps && <Text style={s.muted}>Noch kein Rezept hinterlegt.</Text>}
                 {r.link && <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => Linking.openURL(r.link!)}>Originalrezept öffnen</Text>}
                 {r.photoSrc && <Text style={[s.muted, { fontSize: 11 }]}>Bild: {r.photoSrc}</Text>}
-                <Text style={{ color: C.muted, fontWeight: '700' }} onPress={() => setShow(null)}>Zuklappen</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {parent && r.ingredients.length > 0 && <Button ghost title="Zutaten auf Einkaufsliste" accessibilityLabel={`Zutaten für ${r.title} auf die Einkaufsliste`} style={{ paddingVertical: 6, minHeight: 36, paddingHorizontal: 12 }}
+                    onPress={() => { onShop(r); setMsg(`Zutaten für ${r.title} stehen auf der Einkaufsliste.`); }} />}
+                  {canEdit && <Button ghost title="Ändern" accessibilityLabel={`${r.title} bearbeiten`} style={{ paddingVertical: 6, minHeight: 36, paddingHorizontal: 12 }} onPress={() => { setEdit(r.id); setAdding(false); }} />}
+                </View>
               </View>
-            ) : <Text style={{ color: C.accent, fontWeight: '700' }} onPress={() => setShow(r.id)}>Rezept ansehen</Text>)}
-            {plan === r.id && <PlanPicker onPick={(date, slot) => { onPlan(r, date, slot); setPlan(null); setMsg(`${r.title} steht am ${parse(date).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'numeric' })} im Plan.`); }} />}
+            )}
           </View>
         );
       })}
