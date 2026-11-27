@@ -406,7 +406,7 @@ export function SheetResult({ sheet, recheck }: { sheet: Worksheet; recheck?: Re
               <Text style={s.label}>{sheet.exam ? 'Aufgabe' : 'Frage'} {i + 1}</Text>
               <Text style={{ fontWeight: '800', fontSize: 13, color: ok ? C.ok : C.danger }}>{pts && got !== undefined ? `${String(got).replace('.', ',')} / ${pts[i]} P.` : ok ? '✓ richtig' : '✗ falsch'}</Text>
             </View>
-            <AnswerView q={q} answer={sheet.answers?.[i] ?? (sheet.scan ? '(auf Papier)' : '')} accepted={!!ok || (!!pts && got !== undefined && got >= pts[i])} cellOk={sheet.aiCheck?.cells?.[i]} />
+            <AnswerView q={q} answer={sheet.answers?.[i] ?? (sheet.scan ? '(auf Papier)' : '')} accepted={pts ? (sheet.aiCheck?.pts ? sheet.aiCheck.pts[i] >= pts[i] : got !== undefined ? got >= pts[i] : !!ok) : !!ok} cellOk={sheet.aiCheck?.cells?.[i]} />
           </View>
         );
       })}

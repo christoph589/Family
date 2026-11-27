@@ -161,12 +161,15 @@ export function TableGrid({ q, values, onCell, solution, accepted, cellOk }: { q
                 </View>
               );
               const lv = solution ? matchLevel(values[idx] ?? '', solution[idx] ?? '') : 'ok';
-              // Hat die KI oder haben die Eltern die Aufgabe als richtig bestätigt, zeigt jede Zelle ✓ (Abweichung nur als Hinweis)
-              const good = lv === 'ok' || !!accepted || !!cellOk?.[idx];
-              const hint = lv === 'ok' ? '' : good ? `Schreibweise: ${solution?.[idx]}` : lv === 'near' ? `fast richtig: ${solution?.[idx]}` : `richtig: ${solution?.[idx]}`;
+              // ✓/✗ nur bei echtem Urteil: Textvergleich stimmt, Aufgabe voll bestätigt, Einzelurteil der KI, oder eine Zahl passt nicht.
+              // Sonst (freie Formulierungen, Teilpunkte) neutral zeigen: nur die Musterlösung, kein rotes Kreuz.
+              const own = cellOk?.[idx];
+              const numeric = !!numUnit(solution?.[idx] ?? '');
+              const state: 'good' | 'bad' | 'near' | 'open' = lv === 'ok' || accepted ? 'good' : own !== undefined ? (own ? 'good' : 'bad') : lv === 'near' ? 'near' : numeric ? 'bad' : 'open';
+              const hint = state === 'good' ? (lv === 'ok' ? '' : `Schreibweise: ${solution?.[idx]}`) : state === 'near' ? `fast richtig: ${solution?.[idx]}` : state === 'bad' ? `richtig: ${solution?.[idx]}` : `Musterlösung: ${solution?.[idx]}`;
               return (
-                <View key={ci} style={[cell, { backgroundColor: good ? C.okSoft : lv === 'near' ? C.warnSoft : '#f8dcd8' }]}>
-                  <Text style={{ fontWeight: '700', color: C.fg, textAlign: 'center' }}>{solution ? (good ? '✓ ' : lv === 'near' ? '≈ ' : '✗ ') : ''}{values[idx] || '–'}</Text>
+                <View key={ci} style={[cell, { backgroundColor: state === 'good' ? C.okSoft : state === 'near' ? C.warnSoft : state === 'bad' ? '#f8dcd8' : C.surface2 }]}>
+                  <Text style={{ fontWeight: '700', color: C.fg, textAlign: 'center' }}>{solution ? (state === 'good' ? '✓ ' : state === 'near' ? '≈ ' : state === 'bad' ? '✗ ' : '') : ''}{values[idx] || '–'}</Text>
                   {!!hint && <Text style={{ fontSize: 12, color: C.muted, textAlign: 'center' }}>{hint}</Text>}
                 </View>
               );
