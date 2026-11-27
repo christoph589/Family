@@ -188,6 +188,43 @@ Antworte nur mit JSON: {"cards":[{"front":"...","back":"..."}]}`;
   return cards;
 }
 
+export interface GeneratedPack { intro: string; parts: { title: string; points: string[]; example?: { task: string; steps: string[] }; cards: { front: string; back: string }[] }[]; pitfalls: string[]; memo: string }
+/** Lernpaket zur Klassenarbeit in EINEM Aufruf: Merkzettel in Abschnitten, Beispiel mit Lösungsweg, Lernkarten je Abschnitt. */
+export async function generateStudyPack(e: { subject: string; title: string }, photos: string[], who: { name: string; grade?: string; schoolType?: string }, signal?: AbortSignal): Promise<GeneratedPack> {
+  const sample = await getSample();
+  if (!sample) throw { code: 'unavailable' };
+  const limits = await sample.limits().catch(() => ({} as { images?: { maxCount: number } }));
+  const images = (await loadPhotos(photos.slice(0, limits.images?.maxCount ?? 0))).map(dataUrlToBlob).filter((b): b is Blob => !!b);
+  const prompt = `Du bist eine geduldige Lehrkraft und Lerncoach. ${who.name}${who.grade ? ` (Klasse ${who.grade}${who.schoolType ? `, ${who.schoolType}` : ''})` : ''} schreibt bald eine Klassenarbeit und muss den Stoff ERST LERNEN. Erstelle ein Lernpaket.
+Fach: ${e.subject}. Thema: ${e.title}.
+${images.length ? `Dazu ${images.length} Foto(s) mit den Unterlagen (Heft, Arbeitsblätter, Buchseiten). Das Lernpaket deckt genau diesen Stoff ab, verteilt über alle Seiten. Nichts erfinden, was nicht dazugehört.` : 'Es gibt keine Fotos. Halte dich an den üblichen Stoff zu diesem Thema in dieser Klassenstufe.'}
+
+Aufbau:
+- "intro": ein Satz, worum es in der Arbeit geht, direkt an das Kind (du).
+- "parts": 3 bis 5 Lernabschnitte in sinnvoller Lernreihenfolge (Grundlagen zuerst). Jeder Abschnitt ist eine Tagesportion von etwa 15 Minuten.
+  - "title": 2 bis 5 Wörter, z. B. "Brüche kürzen".
+  - "points": 2 bis 5 Merksätze, das Wichtigste in einfacher Sprache, je höchstens 140 Zeichen. Regeln, Begriffe, Formeln.
+  - "example": eine Beispielaufgabe mit neuen Zahlen ("task") und dem Lösungsweg in 2 bis 5 kurzen Schritten ("steps"). Weglassen, wenn es im Abschnitt nichts zu rechnen oder anzuwenden gibt.
+  - "cards": 4 bis 7 Lernkarten. "front" ist eine klare Frage oder kleine Aufgabe (höchstens 120 Zeichen), "back" die kurze eindeutige Antwort (höchstens 80 Zeichen, Brüche als 3/4). Vom Wissen zum Anwenden. Keine zwei Karten mit derselben Antwort.
+- "pitfalls": 2 bis 4 typische Fehler in dieser Arbeit, je ein kurzer Satz ("Aufpassen: ...").
+- "memo": eine Eselsbrücke oder ein Merkspruch zum Thema, wenn es einen guten gibt, sonst leer.
+
+Sprache: kindgerecht für diese Klassenstufe, kurze Sätze, du-Form, ermutigend, ohne Babysprache. Keine Namen echter Personen aus den Fotos.
+
+Antworte nur mit JSON: {"intro":"...","parts":[{"title":"...","points":["..."],"example":{"task":"...","steps":["..."]},"cards":[{"front":"...","back":"..."}]}],"pitfalls":["..."],"memo":"..."}`;
+  const res = await sample.json<any>(prompt, { images: images.length ? images : undefined, signal, cache: false });
+  const list = (v: unknown, n: number, max: number) => (Array.isArray(v) ? v : []).map(x => str(x, max)).filter(Boolean).slice(0, n);
+  const seen = new Set<string>();
+  const parts = (Array.isArray(res?.parts) ? res.parts : []).slice(0, 6).map((p: any) => {
+    const ex = p?.example && str(p.example.task, 300) ? { task: str(p.example.task, 300), steps: list(p.example.steps, 6, 200) } : undefined;
+    const cards = (Array.isArray(p?.cards) ? p.cards : []).map((c: any) => ({ front: str(c?.front, 160), back: str(c?.back, 100) }))
+      .filter((c: { front: string; back: string }) => c.front && c.back && !seen.has(c.back.toLowerCase()) && (seen.add(c.back.toLowerCase()), true)).slice(0, 8);
+    return { title: str(p?.title, 60), points: list(p?.points, 6, 200), example: ex?.steps.length ? ex : undefined, cards };
+  }).filter((p: { title: string; points: string[]; cards: unknown[] }) => p.title && (p.points.length || p.cards.length));
+  if (!parts.length || parts.reduce((a: number, p: { cards: unknown[] }) => a + p.cards.length, 0) < 5) throw { code: 'invalid_json' };
+  return { intro: str(res?.intro, 240), parts, pitfalls: list(res?.pitfalls, 5, 200), memo: str(res?.memo, 200) };
+}
+
 export interface GeneratedExam { title: string; minutes: number; questions: Question[]; points: number[]; skills: string[] }
 /** Probe-Klassenarbeit aus allen Unterlagen, passend zu Klasse, Schulform und Bundesland. */
 export async function generateExam(e: { subject: string; title: string }, photos: string[], who: { name: string; grade?: string; schoolType?: string; state?: string }, signal?: AbortSignal): Promise<GeneratedExam> {

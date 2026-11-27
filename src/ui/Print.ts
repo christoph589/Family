@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { Question, Worksheet } from '../data/types';
+import { Question, StudyPack, Worksheet } from '../data/types';
 import { sanitizeSvg } from './Math';
 import { BRAND } from '../brand';
 
@@ -165,6 +165,24 @@ export function sheetHtml(sheet: Worksheet, o: { name: string; grade?: string; s
     ${top(sheet.exam ? `${sheet.questions.length} Aufgaben · ${total} Punkte` : `${sheet.questions.length} Aufgaben`)}${info}${score}${note}
     ${sheet.questions.map((q, i) => task(q, i, pts[i], mathy)).join('')}
     <div class="end">Viel Erfolg! 🍀 Wenn du fertig bist: alle Seiten in ${BRAND.name} fotografieren oder Mama oder Papa geben.</div>
+  </div>`);
+}
+
+/** Merkzettel zum Ausdrucken: alle Lernabschnitte mit Merksätzen und Beispiel, typische Fehler, Eselsbrücke. Ohne Kartenantworten. */
+export function packHtml(pack: StudyPack, o: { name: string; grade?: string; subject: string; title: string; date?: string }) {
+  const bar = `<div class="bar"><span style="flex:1">Merkzettel: im Druckmenü „Als PDF sichern“ oder Drucker wählen</span><button onclick="window.print()">Drucken / PDF</button></div>`;
+  const when = o.date ? new Date(o.date + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+  const parts = pack.parts.map((p, i) => `<section class="keep" style="padding:3mm 0;border-top:1px solid #dfe1ea">
+    <h2 style="margin:0 0 2mm">${i + 1}. ${esc(p.title)}</h2>
+    <ul class="tips" style="font-size:11pt">${p.points.map(x => `<li>${math(x)}</li>`).join('')}</ul>
+    ${p.example ? `<div class="note" style="display:block;margin:2mm 0 0"><b>Beispiel:</b> ${math(p.example.task)}<ol style="margin:1mm 0 0;padding-left:5mm">${p.example.steps.map(x => `<li>${math(x)}</li>`).join('')}</ol></div>` : ''}
+  </section>`).join('');
+  return doc(`Merkzettel ${esc(o.subject)}`, `${bar}<div class="page">
+    <div class="top"><div><div class="kind">Merkzettel zur Klassenarbeit</div><h1>${esc(o.title)}</h1><div class="subj">${esc(o.subject)} · ${esc(o.name)}${o.grade ? ` · Klasse ${esc(o.grade)}` : ''}</div></div>${when ? `<div class="badge">${esc(when)}</div>` : ''}</div>
+    ${pack.intro ? `<p>${math(pack.intro)}</p>` : ''}
+    ${parts}
+    ${pack.pitfalls.length ? `<div class="keep"><h2>Aufpassen</h2><ul class="tips" style="font-size:11pt">${pack.pitfalls.map(x => `<li>${math(x)}</li>`).join('')}</ul></div>` : ''}
+    ${pack.memo ? `<div class="note keep" style="margin-top:4mm"><div><b>Merkspruch:</b> ${math(pack.memo)}</div></div>` : ''}
   </div>`);
 }
 

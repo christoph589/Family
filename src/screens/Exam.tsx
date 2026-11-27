@@ -7,16 +7,18 @@ import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextIn
 import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { addPoints, currentGrade, examScore, finishCheck, regionOf, setSheet, today, uid, EXAM_PREP_POINTS } from '../data/logic';
-import { learnedShare, LEARN_GOAL, newCards } from '../data/vocab';
+import { learnedShare, LEARN_GOAL } from '../data/vocab';
 import { DeckEditor, Practice } from './Vocab';
 import { STATES } from '../data/holidays';
-import { AI_ERROR, generateCards, generateExam, getSample, gradePaper, spellCheckExam } from '../ai/generate';
+import { AI_ERROR, generateExam, getSample, gradePaper, spellCheckExam } from '../ai/generate';
 import { printHtml, sheetHtml } from '../ui/Print';
 import { CalEvent, EXAM_POINTS, ExamPrep, SCHOOL_TYPES, Worksheet } from '../data/types';
 import { Button, Segmented } from '../ui/Button';
 import { DateField } from '../ui/DateField';
 import { C, s } from '../ui/theme';
 import { collectPhotos } from './PhotoCollector';
+import { packRunning, startPack, StudySection } from './StudyPack';
+import { VocabDeck } from '../data/types';
 
 const MAX = 20;
 const fmt = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -69,7 +71,7 @@ export function ExamPrepScreen({ childIds, parent, meId, onSolve }: { childIds: 
           <Text style={[s.h2, { flex: 1 }]}>📝 Klassenarbeiten{active.length ? ` (${active.length})` : ''}</Text>
           <Pressable onPress={() => setHowto(x => !x)} style={{ padding: 6 }}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>{howto ? 'Schließen' : 'So geht\'s'}</Text></Pressable>
         </View>
-        {howto && <Text style={s.muted}>Alles hochladen, was drankommt: Heft, Arbeitsblätter, Buchseiten, auch über mehrere Tage, bis zu {MAX} Fotos. 1. Lernkarten aus den Unterlagen üben. 2. Wenn die meisten sitzen, gibt es eine Probe-Klassenarbeit auf dem Niveau von Klasse, Schulform und Bundesland. 3. Nach der echten Arbeit die Note eintragen.</Text>}
+        {howto && <Text style={s.muted}>Alles hochladen, was drankommt: Heft, Arbeitsblätter, Buchseiten, auch über mehrere Tage, bis zu {MAX} Fotos. 1. Die KI macht daraus sofort einen Merkzettel in kleinen Portionen, Lernkarten und einen Lernplan bis zum Termin. Jeden Tag steht auf Heute, was dran ist. 2. Wenn die meisten Karten sitzen, gibt es eine Probe-Klassenarbeit auf dem Niveau von Klasse, Schulform und Bundesland. 3. Nach der echten Arbeit die Note eintragen.</Text>}
         {!adding && <Button title="+ Klassenarbeit anlegen" onPress={() => setAdding(true)} />}
       </View>
       {adding && <PrepForm childIds={childIds} meId={meId} onDone={() => setAdding(false)} />}
@@ -175,6 +177,8 @@ function PrepForm({ childIds, meId, onDone }: { childIds: string[]; meId?: strin
       children: d.children.map(c => (c.id === childId && schoolType ? { ...c, schoolType } : c)),
       settings: region && !d.settings?.autoHoliday?.state ? { ...d.settings, region } : d.settings,
     }));
+    // Erst lernen: Lernpaket gleich im Hintergrund erstellen
+    if (photos.length || prep.title.length >= 10) startPack(prep, child ? { ...child, schoolType: schoolType || child.schoolType } : undefined, update as any);
     onDone();
   }
   return (
@@ -228,8 +232,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   const [msg, setMsg] = useState('');
   const [ask, setAsk] = useState(false);
   const [scoring, setScoring] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [cardBusy, setCardBusy] = useState(false);
+  const [playing, setPlaying] = useState<VocabDeck | null>(null);
   const ctl = useRef<AbortController | null>(null);
   useEffect(() => { let on = true; getSample().then(x => on && setAi(!!x)); return () => { on = false; }; }, []);
   const d = data!;
@@ -243,28 +246,22 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
   const deck = (d.vocab ?? []).find(v => v.id === prep.deckId);
   const share = deck ? learnedShare(deck) : 0;
   const learned = deck ? deck.cards.filter(c => c.box >= 1).length : 0;
+  // Neues Lernpaket (Merkzettel + Plan) oder ältere Klassenarbeit nur mit Karten
+  const usePack = !!prep.pack || !!prep.packJob || !deck;
   // Erst lernen, dann Probe-Arbeit. Ältere Vorbereitungen mit Probe-Arbeit bleiben offen.
   const locked = !prep.unlocked && !sheets.length && share < LEARN_GOAL;
   const setPrep = (f: (e: ExamPrep) => ExamPrep) => update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? f(e) : e)) }));
-  async function makeCards() {
-    setCardBusy(true); setMsg('');
-    ctl.current = new AbortController();
-    try {
-      const cards = await generateCards(prep, prep.photos, { name: child?.name ?? '', grade: child ? currentGrade(child) : undefined, schoolType: child?.schoolType }, ctl.current.signal);
-      const id = uid();
-      update(x => ({ ...x,
-        vocab: [{ id, childId: prep.childId, title: `${prep.subject}: ${prep.title}`.slice(0, 80), lang: 'Andere', cards: newCards(cards), createdAt: new Date().toISOString(), prepId: prep.id }, ...(x.vocab ?? []).filter(v => v.id !== prep.deckId)],
-        exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, deckId: id } : e)) }));
-    } catch (e: any) { if (e?.code !== 'cancelled') setMsg(AI_ERROR[e?.code] ?? 'Die KI ist gerade nicht erreichbar. Bitte nochmal versuchen.'); }
-    setCardBusy(false);
-  }
   function setGrade(g: number) {
     update(x => addPoints({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, grade: g } : e)) }, prep.childId, EXAM_POINTS[g], `${prep.subject}: Note ${g}`));
   }
 
   async function addPhotos() {
     const p = await pickPhotos(MAX - prep.photos.length, 'Unterlagen fotografieren').catch(() => []);
-    if (p.length) update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, photos: [...e.photos, ...p].slice(0, MAX) } : e)) }));
+    if (!p.length) return;
+    const photos = [...prep.photos, ...p].slice(0, MAX);
+    update(x => ({ ...x, exams: (x.exams ?? []).map(e => (e.id === prep.id ? { ...e, photos: [...e.photos, ...p].slice(0, MAX) } : e)) }));
+    // Noch kein Lernpaket: jetzt erstellen. Mit Lernpaket zeigt der Lernen-Schritt einen Hinweis auf die neuen Fotos.
+    if (!prep.pack && !packRunning(prep) && !sheets.length) startPack({ ...prep, photos }, child, update as any);
   }
   async function make() {
     setBusy(true); setMsg('');
@@ -335,30 +332,31 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
       </View>
 
       <View style={{ gap: 12, paddingHorizontal: 16 }}>
-        {/* Schritt 1: Lernkarten */}
-        {!sheets.length && !(n !== null && n < 0 && !deck) && (
-          <Step n={1} title="Lernkarten üben" on={stepNow === 1}>
-            {deck ? (<>
+        {/* Schritt 1: Lernen (Merkzettel, Lernplan, Karten) */}
+        {(prep.pack ? !past : !sheets.length) && !(n !== null && n < 0 && !deck) && (
+          <Step n={1} title={usePack ? 'Lernen' : 'Lernkarten üben'} on={stepNow === 1}
+            note={deck ? `${learned} von ${deck.cards.length} Karten sitzen${share >= LEARN_GOAL ? ' · Probe-Arbeit ist frei' : ` · ab ${Math.ceil(deck.cards.length * LEARN_GOAL)} gibt es die Probe-Arbeit`}` : undefined}>
+            {usePack ? (
+              <StudySection prep={prep} child={child} deck={deck} parent={parent} ai={ai} hasSheet={sheets.length > 0} checked={!!last} onPractice={setPlaying} />
+            ) : deck ? (<>
               <View style={{ height: 10, borderRadius: 5, backgroundColor: C.line, overflow: 'hidden' }}>
                 <View style={{ height: '100%', width: `${Math.round(share * 100)}%`, backgroundColor: share >= LEARN_GOAL ? C.ok : C.accent }} />
               </View>
-              <Text style={[s.muted, { fontSize: 13 }]}>{learned} von {deck.cards.length} Karten sitzen{share >= LEARN_GOAL ? ' · Probe-Arbeit ist frei 🎉' : ` · ab ${Math.ceil(deck.cards.length * LEARN_GOAL)} gibt es die Probe-Arbeit`}</Text>
               <View style={s.row}>
-                <Button title="📚 Üben" onPress={() => setPlaying(true)} style={btnS} />
-                {parent && !cardBusy && <Button ghost title="✏️ Karten prüfen" onPress={() => setEditCards(true)} style={btnS} />}
-                {parent && !cardBusy && ai && <Button ghost title="Neu erstellen" onPress={makeCards} style={btnS} />}
+                <Button title="Üben" onPress={() => setPlaying(deck)} style={btnS} />
               </View>
-              <Text style={[s.muted, { fontSize: 12 }]}>Die KI kann sich irren. {parent ? 'Bitte die Karten kurz durchsehen.' : 'Wenn dir eine Karte komisch vorkommt, frag Mama oder Papa.'}</Text>
+              {parent && ai && <Pressable onPress={() => startPack(prep, child, update as any)}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Merkzettel und Lernplan dazu erstellen (Karten werden neu gemacht)</Text></Pressable>}
+            </>) : null}
+            {deck && (<>
+              {parent && <View style={s.row}><Button ghost title="Karten prüfen" onPress={() => setEditCards(x => !x)} style={btnS} />{usePack && <Button ghost title="Alle Karten üben" onPress={() => setPlaying(deck)} style={btnS} />}</View>}
+              {!parent && usePack && <Pressable onPress={() => setPlaying(deck)}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Alle Karten auf einmal üben</Text></Pressable>}
+              <Text style={[s.muted, { fontSize: 12 }]}>Die KI kann sich irren. {parent ? 'Bitte Merkzettel und Karten kurz durchsehen.' : 'Wenn dir etwas komisch vorkommt, frag Mama oder Papa.'}</Text>
               {editCards && <DeckEditor deck={deck} childId={prep.childId} parent onDone={() => setEditCards(false)} />}
-            </>) : (<>
-              <Text style={[s.muted, { fontSize: 13 }]}>Die KI macht aus den Unterlagen Lernkarten. Wenn die meisten sitzen, gibt es die Probe-Arbeit.</Text>
-              {ai && !cardBusy && <Button title="📚 Lernkarten erstellen" disabled={!prep.photos.length && prep.title.length < 10} onPress={makeCards} style={btnS} />}
             </>)}
-            {cardBusy && <Busy text="Die KI schreibt Lernkarten. Das dauert etwa eine Minute." onCancel={() => ctl.current?.abort()} />}
             {locked && parent && <Pressable onPress={() => setPrep(e => ({ ...e, unlocked: true }))}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Probe-Arbeit jetzt schon freigeben</Text></Pressable>}
           </Step>
         )}
-        {playing && deck && <Practice deck={deck} givePoints={!parent} onClose={() => setPlaying(false)} />}
+        {playing && <Practice deck={playing} givePoints={!parent} onClose={() => setPlaying(null)} />}
 
         {/* Schritt 2: Probe-Arbeit */}
         {(!locked || sheets.length > 0) && (
@@ -386,7 +384,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
             {waiting && (scanning
               ? <Busy text={`Die KI korrigiert die Fotos vor. Das dauert etwa eine Minute.${parent ? '' : ' Du kannst die App schließen.'}`} />
               : <Text style={[s.text, { fontSize: 14 }]}>{parent ? 'Abgegeben. Oben unter „Zum Prüfen“ bestätigen.' : 'Abgegeben. Mama oder Papa schauen drüber.'}</Text>)}
-            {!open && !waiting && !busy && !cardBusy && ai && !locked && (
+            {!open && !waiting && !busy && !packRunning(prep) && ai && !locked && (
               <Button title={sheets.length ? 'Neue Probe-Arbeit' : 'Probe-Arbeit erstellen'} disabled={!prep.photos.length && prep.title.length < 10} onPress={make} style={btnS} />
             )}
             {!sheets.length && <Text style={[s.muted, { fontSize: 12 }]}>Gibt nach dem Prüfen {EXAM_PREP_POINTS} Punkte. Am besten 3 bis 5 Tage vorher, dann bleibt Zeit für die Schwachstellen.</Text>}
