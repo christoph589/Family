@@ -2,12 +2,14 @@ import { Platform, StyleSheet } from 'react-native';
 
 // Farben (Design „freundlich und weich“): warmes helles Grau, gedecktes Grün als einziger Akzent, Pastell nur sparsam
 export const C = {
-  bg: '#f3f1ec', surface: '#ffffff', surface2: '#eeece6', fg: '#23262b', muted: '#7d828a', line: '#ece9e3',
-  accent: '#3a7d74', accent2: '#d9693f', accentSoft: '#e4f0ee',
+  bg: '#fbf8f1', surface: '#ffffff', surface2: '#f1ede3', fg: '#1f2a27', muted: '#7a837f', line: '#eee8da',
+  accent: '#1f6f63', accent2: '#d9693f', accentSoft: '#d9efe9', deep: '#17564d', sun: '#ffc94d', sunSoft: '#ffe9a8', sunInk: '#4a3300',
   ok: '#2f8f5b', okSoft: '#dcf1e5', warn: '#b8741a', warnSoft: '#fbf0d9', danger: '#d1443c',
 };
 /** Sanfte Kachelfarben für Icons und Zeitangaben */
-export const TINT = ['#e4f0ee', '#fbe9dc', '#e9e6f6', '#fdf1cf'];
+export const TINT = ['#d9efe9', '#fbe3d3', '#e9e6f6', '#fdf1cf'];
+/** Satte Kachelfarben (Gerichte, Aufgabenarten) */
+export const STRONG = ['#e5533d', '#ffc94d', '#4fa36a', '#3d7bd1', '#e8923a', '#8e63c7'];
 
 export const FONT = Platform.OS === 'web' ? "'Plus Jakarta Sans', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif" : undefined;
 const shadow = (y: number, blur: number, a: number) => (Platform.OS === 'web'
@@ -21,7 +23,7 @@ export const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   pad: { padding: 18, gap: 18, maxWidth: 1100, width: '100%', alignSelf: 'center' },
   card: { backgroundColor: C.surface, borderRadius: 20, padding: 20, gap: 12, ...SHADOW.sm },
-  h1: { fontSize: 28, fontWeight: '700', color: C.fg, letterSpacing: -0.5 },
+  h1: { fontSize: 28, fontWeight: '800', color: C.fg, letterSpacing: -0.5 },
   h2: { fontSize: 19, fontWeight: '700', color: C.fg, letterSpacing: -0.3 },
   label: { fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 0.2 },
   muted: { color: C.muted, fontSize: 14, lineHeight: 20 },

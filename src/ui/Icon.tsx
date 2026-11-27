@@ -1,6 +1,6 @@
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-export type IconName = 'home' | 'cal' | 'book' | 'star' | 'wallet' | 'food' | 'heart' | 'search' | 'check' | 'cart' | 'chev' | 'user';
+export type IconName = 'home' | 'cal' | 'book' | 'star' | 'wallet' | 'food' | 'heart' | 'search' | 'check' | 'cart' | 'chev' | 'user' | 'brush' | 'clock';
 
 /** Einfache Linien-Icons (statt Emojis) für Navigation und Listen. */
 export function Icon({ name, size = 22, color = '#23262b', stroke = 1.8, fill }: { name: IconName; size?: number; color?: string; stroke?: number; fill?: boolean }) {
@@ -18,6 +18,8 @@ export function Icon({ name, size = 22, color = '#23262b', stroke = 1.8, fill }:
       {name === 'search' && <><Circle cx="11" cy="11" r="7" {...p} /><Path d="M20 20l-4-4" {...p} /></>}
       {name === 'check' && <Path d="M5 12l5 5 9-10" {...p} />}
       {name === 'cart' && <><Path d="M3 4h3l2.5 11h9.5L20 8H7" {...p} /><Circle cx="9.5" cy="19" r="1.3" {...p} /><Circle cx="17" cy="19" r="1.3" {...p} /></>}
+      {name === 'brush' && <Path d="M5 20c3 0 4-2 4-4l8-9-3-3-9 8c-2 1-3 3-3 6z" {...p} />}
+      {name === 'clock' && <><Circle cx="12" cy="12" r="9" {...p} /><Path d="M12 7v5l3 2" {...p} /></>}
       {name === 'chev' && <Path d="M9 5l7 7-7 7" {...p} />}
       {name === 'user' && <><Circle cx="12" cy="8" r="4" {...p} /><Path d="M4 21c0-4 4-6 8-6s8 2 8 6" {...p} /></>}
     </Svg>
