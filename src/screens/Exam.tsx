@@ -72,7 +72,7 @@ export function ExamPrepScreen({ childIds, parent, meId, onSolve }: { childIds: 
           <Pressable onPress={() => setHowto(x => !x)} style={{ padding: 6 }}><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>{howto ? 'Schließen' : 'So geht\'s'}</Text></Pressable>
         </View>
         {howto && <Text style={s.muted}>Alles hochladen, was drankommt: Heft, Arbeitsblätter, Buchseiten, auch über mehrere Tage, bis zu {MAX} Fotos. 1. Die KI macht daraus sofort einen Merkzettel in kleinen Portionen, Lernkarten und einen Lernplan bis zum Termin. Jeden Tag steht auf Heute, was dran ist. 2. Wenn die meisten Karten sitzen, gibt es eine Probe-Klassenarbeit auf dem Niveau von Klasse, Schulform und Bundesland. 3. Nach der echten Arbeit die Note eintragen.</Text>}
-        {!adding && <Button title="+ Klassenarbeit anlegen" onPress={() => setAdding(true)} />}
+        {!adding && <Button ghost={list.length > 0} title="+ Klassenarbeit anlegen" onPress={() => setAdding(true)} />}
       </View>
       {adding && <PrepForm childIds={childIds} meId={meId} onDone={() => setAdding(false)} />}
       {active.map(e => <PrepCard key={e.id} prep={e} parent={parent} onSolve={onSolve} />)}
