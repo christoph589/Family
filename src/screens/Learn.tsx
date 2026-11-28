@@ -90,7 +90,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
           const icon = v === 'statistik' && narrow;
           return (
             <Pressable key={v} onPress={() => setPart(v)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }}
-              style={{ flex: icon ? 0 : 1, paddingHorizontal: icon ? 12 : 0, minWidth: icon ? 48 : 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
+              style={{ flex: icon ? 0 : 1, paddingHorizontal: icon ? 8 : 0, minWidth: icon ? 38 : 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
               <Text style={{ fontWeight: '800', fontSize: narrow ? 13 : 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{icon ? <Icon name="chart" size={20} color={on ? C.fg : C.muted} /> : label}</Text>
               {n > 0 && <View style={{ position: 'absolute', top: -2, right: narrow ? -3 : 2, minWidth: 16, paddingHorizontal: 4, height: 16, borderRadius: 8, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
             </Pressable>
@@ -111,8 +111,8 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
         <ReviewSheets childIds={allIds} />
         <ParentOverview ids={allIds} focus={focus} setFocus={setFocus} onGo={goTo} />
         <View style={[s.row, { gap: 8 }]}>
-          <Button ghost title="+ Thema anlegen" onPress={newTopic} />
-          <Button ghost title="+ Klassenarbeit anlegen" onPress={() => setPart('klassenarbeit')} />
+          <Button ghost title="+ Thema" style={{ flex: 1 }} onPress={newTopic} />
+          <Button ghost title="+ Klassenarbeit" style={{ flex: 1 }} onPress={() => setPart('klassenarbeit')} />
         </View>
       </>
     ) : <LearnToday childId={childIds[0]} onGo={goTo} onSolve={setSolveId} onNewTopic={newTopic} />;

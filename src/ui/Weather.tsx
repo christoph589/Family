@@ -13,7 +13,7 @@ export function WeatherCard({ admin }: { admin?: boolean }) {
   const { data } = useFamily();
   const place = data?.settings?.weather;
   const { tip, error } = useWeather(place);
-  if (!place) return admin ? <WeatherSetup intro /> : null;
+  if (!place) return null; // Einrichtung liegt unter Einstellungen › Familie › Wetter
   if (place.off) return null;
   if (!tip) return error ? <Text style={[s.muted, { fontSize: 12 }]}>🌦️ {error}</Text> : null;
   return (
@@ -73,7 +73,7 @@ export function WeatherSetup({ intro }: { intro?: boolean }) {
   };
   return (
     <View style={s.card}>
-      <Text style={s.h2}>🌦️ Wetter und Anziehtipp</Text>
+      <Text style={s.h2}>Wetter und Anziehtipp</Text>
       <Text style={s.muted}>
         {intro ? 'Zeigt auf Heute und an der Wand, was die Kinder anziehen sollen (Jacke, Mütze, Regenjacke). ' : ''}
         Ab 16 Uhr gilt der Tipp für morgen früh. Gespeichert wird nur euer Ort, kein Gerätestandort.

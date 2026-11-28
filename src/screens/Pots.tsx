@@ -1,3 +1,4 @@
+import { Icon } from '../ui/Icon';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Clip } from '../ui/Clip';
@@ -22,10 +23,13 @@ export function Pots({ childIds, parent, admin }: { childIds: string[]; parent: 
       {active.map(p => <PotCard key={p.id} pot={p} childIds={childIds} parent={parent} admin={admin} />)}
       {admin && (!adding
         ? <Pressable accessibilityRole="button" onPress={() => setAdding(true)}
-            style={({ pressed }) => [{ borderRadius: 24, borderWidth: 2, borderStyle: 'dashed', borderColor: C.accent + '66', padding: 18, alignItems: 'center', gap: 4, backgroundColor: pressed ? C.accentSoft : 'transparent' }]}>
-            <Text style={{ fontSize: 28 }}>🎯</Text>
-            <Text style={[s.text, { fontWeight: '800', color: C.accent }]}>Gemeinsames Ziel anlegen</Text>
-            <Text style={[s.muted, { textAlign: 'center' }]}>Alle Kinder sparen Punkte in einen Topf, z. B. für Freizeitpark, Kino-Abend oder ein Spiel für alle.</Text>
+            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.accent + '66', padding: 12, backgroundColor: pressed ? C.accentSoft : 'transparent' }]}>
+            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Icon name="target" size={22} color={C.accent} /></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[s.text, { fontWeight: '800', color: C.accent }]}>Gemeinsames Ziel anlegen</Text>
+              <Text style={[s.muted, { fontSize: 13 }]} numberOfLines={2}>Alle Kinder sparen Punkte in einen Topf.</Text>
+            </View>
+            <Icon name="plus" size={18} color={C.accent} />
           </Pressable>
         : <NewPot onDone={() => setAdding(false)} />)}
       {done.length > 0 && (

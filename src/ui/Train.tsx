@@ -90,7 +90,7 @@ export function TrainSetup() {
   const set = (p: Partial<Commute>) => setDraft(d => (d ? { ...d, ...p } : d));
   return (
     <View style={s.card}>
-      <Text style={s.h2}>🚆 Schulweg mit dem Zug</Text>
+      <Text style={s.h2}>Schulweg mit dem Zug</Text>
       <Text style={s.muted}>
         Die App prüft ab 45 Minuten vor Abfahrt alle 5 Minuten, ob der Zug pünktlich kommt, ausfällt oder das Gleis wechselt. Bei einer Änderung bekommen Kind und Eltern eine Push-Nachricht. Gespeichert werden nur Bahnhof, Zeit und Linie, keine Standortdaten.
       </Text>

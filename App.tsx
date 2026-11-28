@@ -18,6 +18,7 @@ import { Icon, IconName } from './src/ui/Icon';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
 import { PushSetup } from './src/ui/Push';
+import { Fold } from './src/ui/Fold';
 import { Popup } from './src/ui/Popup';
 import { DeleteAccount } from './src/screens/DeleteAccount';
 import { LegalLinks } from './src/ui/LegalLinks';
@@ -378,10 +379,10 @@ function Root() {
           </Pressable>
         )}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Family />}
-        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <ParentPin />}
-        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <WeatherSetup />}
-        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <TrainSetup />}
-        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <AiPrivacy />}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Fold title="Eltern-PIN" sub="PIN ändern" icon="user"><ParentPin /></Fold>}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Fold title="Wetter" sub="Ort und Anziehtipp" icon="clock"><WeatherSetup /></Fold>}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Fold title="Schulweg mit dem Zug" sub="Verspätungen prüfen" icon="cal"><TrainSetup /></Fold>}
+        {tab === 'aufgaben' && admin && showSec && section === 'familie' && <Fold title="KI und Fotos" sub="Einwilligung, Anbieter, Löschen" icon="book"><AiPrivacy /></Fold>}
         {tab === 'aufgaben' && admin && showSec && section === 'familie' && cloud && <SupportSetup familyId={cloud.link.familyId} />}
         {tab === 'aufgaben' && admin && showSec && section === 'aufgaben' && <Manage onReset={cloud ? undefined : () => { replace(null); setProfile(null); }} />}
         {tab === 'aufgaben' && admin && showSec && section === 'schule' && <Timetable childIds={childIds} parent />}
