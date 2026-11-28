@@ -67,6 +67,8 @@ export function guessBells(tt: TT): string[] {
   const max = Math.max(ROWS, ...Object.keys(known).map(Number).map(x => x + 1));
   return Array.from({ length: max }, (_, i) => fromMin(known[i] ?? Math.round((start + slot * (i + 1)) / 5) * 5));
 }
+/** Kurzform für schmale Spalten: lange Fächer auf 5 Zeichen kürzen. */
+const short = (l: string) => { const w = l.trim().split(/\s+/)[0] ?? ''; return w.length > 6 ? w.slice(0, 5) + '.' : w; };
 const fixTime = (t?: string) => (t && timeOk(t) ? t.padStart(5, '0') : undefined);
 
 /** Stundenplan je Kind: Schulbeginn, Schulende und Fächer pro Stunde. */
@@ -79,6 +81,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
   const [w, setW] = useState(0);
   const [reading, setReading] = useState(false);
   const [aiMsg, setAiMsg] = useState('');
+  const [pick, setPick] = useState<{ k: string; i: number } | null>(null);
   if (!data || !kids.length) return null;
   const child = kids.find(k => k.id === childId) ?? kids[0];
   const tt = edit ?? child.timetable ?? {};
@@ -126,7 +129,7 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
     update(d => ({ ...d, children: d.children.map((c: Child) => (c.id === child.id ? { ...c, timetable: clean, bells: bells.length ? bells : undefined } : c)) }));
     setEdit(null);
   };
-  const rows = Math.max(1, ...DAYS.map(([k]) => (tt[k]?.lessons ?? []).filter(Boolean).length ? (tt[k]?.lessons ?? []).length : 0));
+  const rows = Math.max(1, ...DAYS.map(([k]) => { const l = tt[k]?.lessons ?? []; let n = l.length; while (n > 0 && !l[n - 1]?.trim()) n--; return n; }));
   const empty = !DAYS.some(([k]) => tt[k]?.from || tt[k]?.lessons?.some(Boolean));
 
   return (
@@ -167,6 +170,43 @@ export function Timetable({ childIds, parent }: { childIds: string[]; parent: bo
       )}
       {empty && !edit ? (
         <Text style={s.muted}>{parent ? 'Noch leer. Trag Schulbeginn und Schulende ein, dann zeigt „Heute“ und der Kalender, wann Schule ist. Fächer sind optional.' : 'Noch kein Stundenplan. Mama oder Papa tragen ihn unter ⚙️ › Stundenplan ein.'}</Text>
+      ) : !edit ? (
+        <View style={{ gap: 6 }}>
+          <View style={{ flexDirection: 'row', gap: 3 }}>
+            <View style={{ width: 18, gap: 3, paddingTop: 22 }}>
+              <View style={{ height: 32 }} />
+              {Array.from({ length: rows }, (_, i) => <Text key={i} style={[s.muted, { height: 26, fontSize: 11, lineHeight: 26, textAlign: 'center' }]}>{i + 1}</Text>)}
+            </View>
+            {DAYS.map(([k, label]) => {
+              const d = tt[k] ?? {};
+              const isToday = k === todayWd;
+              return (
+                <View key={k} style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                  <Text style={{ fontWeight: '800', textAlign: 'center', color: isToday ? child.color : C.fg, height: 19, fontSize: 13 }}>{label}</Text>
+                  <View style={{ height: 32, borderRadius: 6, backgroundColor: isToday ? child.color + '22' : C.bg, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontWeight: '700', color: C.fg, fontSize: 10, lineHeight: 12 }} numberOfLines={2}>{d.from || d.to ? `${d.from ?? '?'}\n${d.to ?? '?'}` : 'frei'}</Text>
+                  </View>
+                  {Array.from({ length: rows }, (_, i) => {
+                    const l = d.lessons?.[i] ?? '';
+                    const sel = pick?.k === k && pick.i === i;
+                    return (
+                      <Pressable key={i} disabled={!l} onPress={() => setPick(sel ? null : { k, i })} accessibilityRole="button" accessibilityLabel={l ? `${label} ${i + 1}. Stunde ${l}` : `${label} ${i + 1}. Stunde frei`}
+                        style={{ height: 26, borderRadius: 6, backgroundColor: l ? (sel ? child.color : isToday ? child.color + '22' : C.bg) : 'transparent', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 1 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: sel ? '#fff' : C.fg, letterSpacing: -0.2 }} numberOfLines={1}>{short(l)}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              );
+            })}
+          </View>
+          {pick && tt[pick.k as '1']?.lessons?.[pick.i] ? (
+            <View style={{ backgroundColor: child.color + '18', borderRadius: 10, padding: 10 }}>
+              <Text style={{ fontWeight: '800', color: C.fg, fontSize: 15 }}>{tt[pick.k as '1']!.lessons![pick.i]}</Text>
+              <Text style={[s.muted, { fontSize: 13 }]}>{DAYS.find(([k]) => k === pick.k)?.[1]}, {pick.i + 1}. Stunde{child.bells?.[pick.i] ? `, bis ${child.bells[pick.i]} Uhr` : ''}</Text>
+            </View>
+          ) : <Text style={[s.muted, { fontSize: 12 }]}>Fach antippen für Details.</Text>}
+        </View>
       ) : (
         <ScrollView horizontal onLayout={e => setW(e.nativeEvent.layout.width)} contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
           <View style={{ gap: 6, paddingTop: 30, width: edit ? 70 : 30 }}>
