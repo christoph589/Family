@@ -34,6 +34,7 @@ const canSpeak = () => Platform.OS === 'web' && !!(globalThis as any).speechSynt
 
 export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: boolean; meId?: string }) {
   const { data, update } = useFamily();
+  const [how, setHow] = useState(false);
   const [childId, setChildId] = useState(childIds[0] ?? '');
   const [editing, setEditing] = useState<VocabDeck | 'new' | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
@@ -125,7 +126,8 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
             </View>
           );
         })}
-        <Text style={[s.muted, { fontSize: 13 }]}>So funktioniert’s: Der Trainer fragt in beide Richtungen und gemischt ab: auswählen und selbst schreiben. Je besser ein Wort sitzt, desto öfter wird geschrieben. Falsches kommt in der Runde nochmal, dann zum Schreiben. Was sitzt, kommt seltener dran (nach 1, 2, 4, 7, 14 Tagen). Pro Runde gibt es Punkte, höchstens {DAILY_CAP} am Tag, dazu Bonus für Tage am Stück.</Text>
+        <Pressable onPress={() => setHow(h => !h)} accessibilityRole="button"><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>{how ? 'So funktioniert’s ausblenden' : 'So funktioniert’s anzeigen'}</Text></Pressable>
+        {how && <Text style={[s.muted, { fontSize: 13 }]}>Der Trainer fragt in beide Richtungen und gemischt ab: auswählen und selbst schreiben. Je besser ein Wort sitzt, desto öfter wird geschrieben. Falsches kommt in der Runde nochmal, dann zum Schreiben. Was sitzt, kommt seltener dran (nach 1, 2, 4, 7, 14 Tagen). Pro Runde gibt es Punkte, höchstens {DAILY_CAP} am Tag, dazu Bonus für Tage am Stück.</Text>}
       </View>
 
       {deck && <Practice deck={deck} givePoints={!parent} onClose={() => setPlaying(null)} />}

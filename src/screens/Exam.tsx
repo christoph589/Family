@@ -4,6 +4,7 @@ import { PhotoImg } from '../ui/PhotoImg';
 import { DeleteButton } from '../ui/DeleteButton';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Icon } from '../ui/Icon';
 import { Clip } from '../ui/Clip';
 import { useFamily } from '../data/FamilyContext';
 import { addPoints, currentGrade, examScore, finishCheck, regionOf, setSheet, today, uid, EXAM_PREP_POINTS } from '../data/logic';
@@ -75,7 +76,7 @@ export function ExamPrepScreen({ childIds, parent, meId, onSolve }: { childIds: 
         {!adding && <Button ghost={list.length > 0} title="+ Klassenarbeit anlegen" onPress={() => setAdding(true)} />}
       </View>
       {adding && <PrepForm childIds={childIds} meId={meId} onDone={() => setAdding(false)} />}
-      {active.map(e => <PrepCard key={e.id} prep={e} parent={parent} onSolve={onSolve} />)}
+      {active.map(e => <PrepCard key={e.id} prep={e} parent={parent} onSolve={onSolve} compact={active.length > 1} />)}
       {!list.length && !adding && <Text style={[s.muted, { textAlign: 'center' }]}>Noch keine Klassenarbeit angelegt.</Text>}
       {done.length > 0 && (
         <View style={[s.card, { gap: 8 }]}>
@@ -224,8 +225,9 @@ function PrepForm({ childIds, meId, onDone }: { childIds: string[]; meId?: strin
   );
 }
 
-function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; onSolve?: (id: string) => void }) {
+function PrepCard({ prep, parent, onSolve, compact }: { prep: ExamPrep; parent: boolean; onSolve?: (id: string) => void; compact?: boolean }) {
   const { data, update } = useFamily();
+  const [folded, setFolded] = useState(!!compact);
   useSpellCheck(prep);
   const [ai, setAi] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -297,11 +299,12 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
     scanAndGrade(open, p, who, update as any, parent ? undefined : prep.childId);
   }
   const scanning = waiting?.scan && !waiting.scan.ai && !waiting.scan.error;
+  const shut = folded && !busy && !scanning;
 
   return (
     <View style={[s.card, { gap: 14, padding: 0, overflow: 'hidden' }]}>
-      {/* Kopf: Fach, Thema, Countdown */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingBottom: 0 }}>
+      {/* Kopf: Fach, Thema, Countdown. Antippen klappt die Karte auf oder zu. */}
+      <Pressable onPress={() => setFolded(f => !f)} accessibilityRole="button" accessibilityState={{ expanded: !shut }} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingBottom: shut ? 16 : 0 }}>
         <View style={{ width: 6, alignSelf: 'stretch', borderRadius: 3, backgroundColor: child?.color ?? C.accent }} />
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text style={{ fontSize: 12, fontWeight: '800', color: C.accent, letterSpacing: 0.6, textTransform: 'uppercase' }}>{prep.subject}</Text>
@@ -314,9 +317,12 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
             <Text style={{ fontSize: 11, color: C.muted, fontWeight: '700' }}>{n < 0 ? 'vorbei' : n === 0 ? 'heute' : n === 1 ? 'Tag' : 'Tage'}</Text>
           </View>
         )}
-      </View>
+        <Icon name="chev" size={18} color={C.muted} />
+      </Pressable>
 
       <FixHints prep={prep} parent={parent} />
+
+      {!shut && <>
 
       {/* Fortschritt in drei Schritten */}
       <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 6 }}>
@@ -416,6 +422,7 @@ function PrepCard({ prep, parent, onSolve }: { prep: ExamPrep; parent: boolean; 
         {prep.photos.length < MAX && !busy && <Button ghost title="+ Fotos" onPress={addPhotos} style={btnS} />}
         {!busy && <DeleteButton parent={parent} onDelete={remove} />}
       </View>
+      </>}
     </View>
   );
 }
