@@ -14,7 +14,6 @@ import { useFeedItems } from '../data/feeds';
 import { eventTarget, icloudDelete, icloudEvent, icloudSave, IcloudEvent, useIcloudItems } from '../data/icloud';
 import { DeleteButton } from '../ui/DeleteButton';
 import { LetterImport } from './Letter';
-import { PushSetup } from '../ui/Push';
 
 const parse = (d: string) => new Date(d + 'T12:00:00');
 
@@ -175,7 +174,6 @@ export function Calendar({ childIds, parent, meId }: { childIds: string[]; paren
       )}
       <CalViews mode={mode} anchor={anchor} itemsFor={itemsFor} onItemPress={(it, date) => setSel({ it, date })} onPickDay={d => { setAnchor(d); setMode('tag'); }}
         renderItem={it => <EventRow key={it.key} item={it} canDelete={parent && !/^[gtsbxi]/.test(it.key)} onDelete={() => update(dd => ({ ...dd, events: (dd.events ?? []).filter(e => e.id !== it.key) }))} />} />
-      <PushSetup meId={meId} />
 
       {parent && gState !== 'off' && (
         <View style={s.card}>
