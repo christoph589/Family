@@ -187,8 +187,8 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
             <Text style={s.label}>Themen{topics.length ? ` (${topics.length})` : ''}</Text>
             {msg && !showForm ? <Text style={{ color: C.ok, fontWeight: '700' }}>{msg}</Text> : null}
             {topics.length === 0 && <Text style={s.muted}>Noch keine Themen.</Text>}
-            {(allTopics ? topics : topics.slice(0, 5)).map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} onCreate={parent ? () => setEditing(t) : undefined} onSolve={parent ? undefined : id => setSolveId(id)} />)}
-            {topics.length > 5 && <Button ghost title={allTopics ? 'Weniger zeigen' : `Alle ${topics.length} Themen zeigen`} onPress={() => setAllTopics(x => !x)} />}
+            {(allTopics ? topics : topics.slice(0, 6)).map(t => <TopicRow key={t.id} topic={t} childName={data.children.find(c => c.id === t.childId)?.name ?? ''} onMsg={setMsg} onCreate={parent ? () => setEditing(t) : undefined} onSolve={parent ? undefined : id => setSolveId(id)} />)}
+            {topics.length > 6 && <Button ghost title={allTopics ? 'Weniger anzeigen' : `Mehr anzeigen (${topics.length - 6})`} onPress={() => setAllTopics(x => !x)} />}
           </View>
         </View>
         {parent && <DoneSheets childIds={childIds} exam={false} />}
@@ -324,36 +324,55 @@ function TopicRow({ topic, childName, onMsg, onCreate, onSolve }: { topic: Topic
     setBusy(false);
   }
 
+  const kid = data?.children.find(c => c.id === topic.childId);
+  const [open2, setOpen2] = useState(false);
+  const shown = open2 || busy || asking;
+  const chip = (text: string, fg: string, bg: string) => <Text style={{ color: fg, backgroundColor: bg, fontWeight: '700', fontSize: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, overflow: 'hidden' }} numberOfLines={1}>{text}</Text>;
+  const status = busy ? chip('Wird erstellt', C.accent, C.accentSoft)
+    : waiting ? chip('Abgegeben', C.warn, C.warnSoft)
+    : open ? chip(parent ? 'Beim Kind offen' : 'Test bereit', C.accent, C.accentSoft)
+    : u ? <UnderstandingChip u={u} />
+    : sheets.length ? null : chip('Kein Test', C.muted, C.surface2);
+  const small = { paddingVertical: 7, paddingHorizontal: 12 };
   return (
-    <View style={[s.row, { backgroundColor: C.bg, padding: 12, borderRadius: 12, flexWrap: 'nowrap', alignItems: 'flex-start' }]}>
-      {photosOf(topic).length ? (
-        <View>
-          <PhotoImg uri={photosOf(topic)[0]} style={{ width: 56, height: 56, borderRadius: 8 }} />
-          {photosOf(topic).length > 1 && <Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>{photosOf(topic).length} Seiten</Text>}
+    <View style={{ backgroundColor: C.bg, borderRadius: 14, overflow: 'hidden' }}>
+      <Pressable onPress={() => setOpen2(x => !x)} accessibilityRole="button" accessibilityState={{ expanded: shown }} accessibilityLabel={`${topic.subject}: ${topic.text}`}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 }}>
+        <View style={{ width: 6, alignSelf: 'stretch', borderRadius: 3, backgroundColor: kid?.color ?? C.line }} />
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text style={[s.text, { fontWeight: '800', fontSize: 15 }]} numberOfLines={shown ? undefined : 1}>{topic.subject}: {topic.text}</Text>
+          <View style={[s.row, { gap: 8, flexWrap: 'nowrap' }]}>
+            <Text style={[s.muted, { fontSize: 12, flexShrink: 1 }]} numberOfLines={1}>{childName} · {date}</Text>
+            {status}
+          </View>
         </View>
-      ) : null}
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[s.text, { fontWeight: '700' }]}>{topic.subject}: {topic.text}</Text>
-        <View style={[s.row, { gap: 8 }]}>
-          <Text style={[s.muted, { fontSize: 12 }]}>{by && by.id !== topic.childId ? `Für ${childName} · von ${by.name}` : by ? `Von ${childName} selbst` : `Für ${childName}`} · {date}</Text>
-          {u && <UnderstandingChip u={u} />}
+        <View style={{ transform: [{ rotate: shown ? '90deg' : '0deg' }] }}><Icon name="chev" size={18} color={C.muted} /></View>
+      </Pressable>
+      {shown && (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 8 }}>
+          {photosOf(topic).length ? (
+            <View style={[s.row, { gap: 8, alignItems: 'center' }]}>
+              <PhotoImg uri={photosOf(topic)[0]} style={{ width: 56, height: 56, borderRadius: 8 }} />
+              {photosOf(topic).length > 1 && <Text style={[s.muted, { fontSize: 12 }]}>{photosOf(topic).length} Seiten</Text>}
+            </View>
+          ) : null}
+          <Text style={[s.muted, { fontSize: 12 }]}>{by && by.id !== topic.childId ? `Für ${childName} · von ${by.name}` : by ? `Von ${childName} selbst` : `Für ${childName}`}</Text>
+          {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ flex: 1, color: C.accent, fontWeight: '700', fontSize: 13 }}>KI liest die Fotos und erstellt den Test. Das dauert meist 20 bis 60 Sekunden.</Text></View>}
+          {!busy && !sheets.length && !ai && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>{parent ? 'Die KI braucht die Verbindung mit dem Familienserver. Bis dahin „Selbst Fragen schreiben“.' : 'Wartet auf einen Test'}</Text>}
+          {open && parent && <Text style={[s.muted, { fontSize: 13 }]}>Test liegt bei {childName}, noch nicht gelöst.</Text>}
+          {waiting && <Text style={[s.muted, { fontSize: 13 }]}>{parent ? 'Abgegeben, oben prüfen.' : 'Abgegeben, Eltern schauen drüber.'}</Text>}
+          <View style={[s.row, { gap: 8 }]}>
+            {open && onSolve && !busy && <Button title="Test lösen" style={small} onPress={() => onSolve(open.id)} />}
+            {ai && !open && !waiting && !busy && <Button title={sheets.length ? 'Neuen Test erstellen' : 'Test erstellen'} style={small} onPress={makeTest} />}
+            {busy && <Button ghost title="Abbrechen" style={small} onPress={() => ctl.current?.abort()} />}
+            {ai && !busy && !asking && <Button ghost title="Frage stellen" style={small} onPress={() => setAsking(true)} />}
+            {parent && !busy && <Button ghost title="Selbst Fragen schreiben" style={small} onPress={onCreate} />}
+            {latest && <Button ghost title="Drucken" style={small} onPress={print} />}
+            {parent && !busy && <Button ghost title="Löschen" style={small} onPress={() => update(d => ({ ...d, topics: (d.topics ?? []).filter(x => x.id !== topic.id) }))} />}
+          </View>
+          {asking && <AskBox topic={topic} childName={childName} onClose={() => setAsking(false)} />}
         </View>
-        {busy && <View style={[s.row, { gap: 8 }]}><ActivityIndicator color={C.accent} /><Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>KI liest die Fotos und erstellt den Test. Das dauert meist 20 bis 60 Sekunden.</Text></View>}
-        {!busy && !sheets.length && !ai && <Text style={{ color: C.warn, fontWeight: '700', fontSize: 13 }}>{parent ? 'Noch kein Test. Die KI braucht die Verbindung mit dem Familienserver. Bis dahin „Selbst Fragen schreiben“.' : 'Wartet auf einen Test'}</Text>}
-        {open && !parent && !busy && <Text style={{ color: C.accent, fontWeight: '700', fontSize: 13 }}>Test ist bereit</Text>}
-        {open && parent && <Text style={[s.muted, { fontSize: 13 }]}>Test liegt bei {childName}, noch nicht gelöst</Text>}
-        {waiting && <Text style={[s.muted, { fontSize: 13 }]}>{parent ? 'Abgegeben, oben prüfen' : 'Abgegeben, Eltern schauen drüber'}</Text>}
-        <View style={[s.row, { marginTop: 6 }]}>
-          {open && onSolve && !busy && <Button title="Test lösen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => onSolve(open.id)} />}
-          {ai && !open && !waiting && !busy && <Button title={sheets.length ? 'Neuen Test erstellen' : 'Test erstellen'} style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={makeTest} />}
-          {busy && <Button ghost title="Abbrechen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => ctl.current?.abort()} />}
-          {ai && !busy && !asking && <Button ghost title="❓ Frage stellen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => setAsking(true)} />}
-          {parent && !busy && <Button ghost title="Selbst Fragen schreiben" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={onCreate} />}
-          {latest && <Button ghost title="Drucken" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={print} />}
-          {parent && <Button ghost title="Löschen" style={{ paddingVertical: 7, paddingHorizontal: 12 }} onPress={() => update(d => ({ ...d, topics: (d.topics ?? []).filter(x => x.id !== topic.id) }))} />}
-        </View>
-        {asking && <AskBox topic={topic} childName={childName} onClose={() => setAsking(false)} />}
-      </View>
+      )}
     </View>
   );
 }
@@ -381,7 +400,7 @@ function AskBox({ topic, childName, onClose }: { topic: Topic; childName: string
   }
   return (
     <View style={{ marginTop: 8, gap: 8, backgroundColor: C.accentSoft, borderRadius: 14, padding: 10 }}>
-      <Text style={[s.label, { color: C.accent }]}>❓ Frag nach, was du nicht verstanden hast</Text>
+      <Text style={[s.label, { color: C.accent }]}>Frag nach, was du nicht verstanden hast</Text>
       {log.map((x, i) => (
         <View key={i} style={{ gap: 4 }}>
           <Text style={[s.text, { fontWeight: '700', fontSize: 15 }]}>{x.q}</Text>
