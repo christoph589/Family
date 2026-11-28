@@ -17,6 +17,7 @@ import { Button, Segmented } from '../ui/Button';
 import { C, SHADOW, grad, s } from '../ui/theme';
 import { shrink } from './Learn';
 import { VocabBooks } from './VocabBook';
+import { Icon } from '../ui/Icon';
 
 const MAX_PHOTOS = 6;
 
@@ -57,7 +58,7 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
 
   return (
     <View style={{ gap: 16 }}>
-      {kids.length > 1 && <Segmented value={kid.id} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name }))} />}
+      {kids.length > 1 && <Segmented value={kid.id} onChange={setChildId} options={kids.map(c => ({ value: c.id, label: c.name, n: parent ? (data.vocabClaims ?? []).filter(x => x.childId === c.id).length : 0 }))} />}
 
       <View style={[{ borderRadius: 24, padding: 20, gap: 14 }, grad('#1f6f63', '#17564d'), SHADOW.md]}>
         <View style={[s.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
@@ -68,7 +69,7 @@ export function Vocab({ childIds, parent, meId }: { childIds: string[]; parent: 
             </Text>
           </View>
           <View style={{ alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 }}>
-            <Text style={{ fontSize: 28, opacity: streak ? 1 : 0.45 }}>🔥</Text>
+            <Icon name="flame" size={28} color="#fff" fill={!!streak} />
             <Text style={{ color: '#fff', fontWeight: '800' }}>{streak} {streak === 1 ? 'Tag' : 'Tage'}</Text>
           </View>
         </View>
