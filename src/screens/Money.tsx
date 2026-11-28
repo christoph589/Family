@@ -1,3 +1,4 @@
+import { Icon, IconName } from '../ui/Icon';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFamily } from '../data/FamilyContext';
@@ -10,11 +11,11 @@ import { C, s } from '../ui/theme';
 
 /** "3,50" oder "3.5" zu Cent, sonst null */
 const toCents = (t: string) => { const v = Number(t.replace(',', '.').trim()); return t.trim() && Number.isFinite(v) && v > 0 && v < 100000 ? Math.round(v * 100) : null; };
-const KIND_ICON: Record<MoneyTx['kind'], string> = { taschengeld: '💶', geschenk: '🎁', verdient: '💪', ausgabe: '🛒', korrektur: '✏️', umbuchung: '↔️', zins: '📈' };
-export const POTS: { id: MoneyPot; icon: string; name: string; hint: string }[] = [
-  { id: 'aus', icon: '🛒', name: 'Ausgeben', hint: 'Dein Bargeld, du entscheidest.' },
-  { id: 'spar', icon: '🐷', name: 'Sparen', hint: 'Für ein Ziel. Rausnehmen mit Eltern-OK.' },
-  { id: 'invest', icon: '📈', name: 'Investieren', hint: 'Wächst jeden Monat durch Zinsen.' },
+const KIND_ICON: Record<MoneyTx['kind'], IconName> = { taschengeld: 'wallet', geschenk: 'gift', verdient: 'star', ausgabe: 'cart', korrektur: 'brush', umbuchung: 'more', zins: 'chart' };
+export const POTS: { id: MoneyPot; name: string; hint: string }[] = [
+  { id: 'aus', name: 'Ausgeben', hint: 'Dein Bargeld, du entscheidest.' },
+  { id: 'spar', name: 'Sparen', hint: 'Für ein Ziel. Rausnehmen mit Eltern-OK.' },
+  { id: 'invest', name: 'Investieren', hint: 'Wächst jeden Monat durch Zinsen.' },
 ];
 const potName = (p: MoneyPot) => POTS.find(x => x.id === p)!;
 /** Stand von Investieren nach n Monaten mit Zinseszins und gleichbleibender Einzahlung */
@@ -60,13 +61,21 @@ function MoneyOverview({ kids }: { kids: Child[] }) {
               <Text style={[s.text, { fontWeight: '800', fontSize: 17, flexShrink: 1 }]} numberOfLines={1}>{child.name}</Text>
               <View style={[s.row, { gap: 6 }]}>
                 <Text style={{ fontWeight: '800', fontSize: 18, color: C.fg }}>{euro(balanceOf(data, child.id))}</Text>
-                <Text style={{ color: C.muted, fontSize: 22 }}>›</Text>
+                <Icon name="chev" size={18} color={C.muted} />
               </View>
             </View>
-            <Text style={[s.muted, { fontSize: 13 }]}>{bals.map(([p, v]) => `${p.icon} ${euro(v)}`).join('   ')}{acc.goal ? `   ·   Ziel: ${acc.goal.title}` : ''}</Text>
+            <View style={[s.row, { gap: 16, flexWrap: 'nowrap' }]}>
+              {bals.map(([p, v]) => (
+                <View key={p.id} style={{ flexShrink: 1 }}>
+                  <Text style={{ color: C.muted, fontSize: 11, fontWeight: '700' }} numberOfLines={1}>{p.name}</Text>
+                  <Text style={{ color: C.fg, fontSize: 14, fontWeight: '800' }} numberOfLines={1}>{euro(v)}</Text>
+                </View>
+              ))}
+            </View>
+            {acc.goal ? <Text style={[s.muted, { fontSize: 12 }]} numberOfLines={1}>Ziel: {acc.goal.title}</Text> : null}
             {reqs.map(q => (
               <View key={q.id} style={[s.row, { flexWrap: 'nowrap', backgroundColor: C.warnSoft, borderRadius: 14, padding: 10, gap: 8 }]}>
-                <Text style={[s.text, { flex: 1, fontSize: 14, fontWeight: '700' }]}>{euro(q.cents)} von {potName(q.from).icon} {potName(q.from).name} nach {potName(q.to).icon} {potName(q.to).name}{q.note ? ` · ${q.note}` : ''}</Text>
+                <Text style={[s.text, { flex: 1, fontSize: 14, fontWeight: '700' }]}>{euro(q.cents)} von {potName(q.from).name} nach {potName(q.to).name}{q.note ? ` · ${q.note}` : ''}</Text>
                 <Button title="Ja" onPress={() => update(d => setAccount(movePot(d, child.id, q.cents, q.from, q.to, q.note || 'Umbuchung'), child.id, a => ({ ...a, requests: (a.requests ?? []).filter(x => x.id !== q.id) })))} style={{ paddingVertical: 6, paddingHorizontal: 12, minHeight: 0 }} />
                 <Button ghost title="Nein" onPress={() => update(d => setAccount(d, child.id, a => ({ ...a, requests: (a.requests ?? []).filter(x => x.id !== q.id) })))} style={{ paddingVertical: 6, paddingHorizontal: 12, minHeight: 0 }} />
               </View>
@@ -120,7 +129,7 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
       <View style={[s.row, { gap: 8, alignItems: 'stretch' }]}>
         {POTS.map(p => (
           <View key={p.id} style={{ flexGrow: 1, flexBasis: 140, backgroundColor: C.bg, borderRadius: 14, padding: 12, gap: 4 }}>
-            <Text style={[s.text, { fontWeight: '800' }]}>{p.icon} {p.name}</Text>
+            <Text style={[s.text, { fontWeight: '800' }]}>{p.name}</Text>
             <Text style={{ fontSize: 22, fontWeight: '800', color: bals[p.id] < 0 ? C.danger : C.fg }}>{euro(bals[p.id])}</Text>
             {p.id === 'spar' && goal ? (
               <>
@@ -181,14 +190,14 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
       {mode !== '' && (
         <View style={{ gap: 8, borderWidth: 2, borderColor: C.accent, borderRadius: 12, padding: 12 }}>
           {mode === 'plus' && <Segmented value={plusKind} onChange={setPlusKind} options={[{ value: 'geschenk', label: 'Geschenk' }, { value: 'verdient', label: 'Verdient' }]} />}
-          {mode === 'plus' && <Segmented value={pot} onChange={setPot} options={[{ value: 'split', label: 'Aufteilen' }, ...POTS.map(p => ({ value: p.id, label: `${p.icon} ${p.name}` }))]} />}
-          {mode === 'ausgabe' && parent && <Segmented value={pot} onChange={setPot} options={POTS.map(p => ({ value: p.id, label: `Aus ${p.icon} ${p.name}` }))} />}
+          {mode === 'plus' && <Segmented value={pot} onChange={setPot} options={[{ value: 'split', label: 'Aufteilen' }, ...POTS.map(p => ({ value: p.id, label: `${p.name}` }))]} />}
+          {mode === 'ausgabe' && parent && <Segmented value={pot} onChange={setPot} options={POTS.map(p => ({ value: p.id, label: `Aus ${p.name}` }))} />}
           {mode === 'umbuchen' && (
             <>
               <Text style={s.label}>Von</Text>
-              <Segmented value={from} onChange={v => { setFrom(v); if (v === to) setTo(POTS.find(p => p.id !== v)!.id); }} options={POTS.map(p => ({ value: p.id, label: `${p.icon} ${p.name}` }))} />
+              <Segmented value={from} onChange={v => { setFrom(v); if (v === to) setTo(POTS.find(p => p.id !== v)!.id); }} options={POTS.map(p => ({ value: p.id, label: `${p.name}` }))} />
               <Text style={s.label}>Nach</Text>
-              <Segmented value={to} onChange={setTo} options={POTS.filter(p => p.id !== from).map(p => ({ value: p.id, label: `${p.icon} ${p.name}` }))} />
+              <Segmented value={to} onChange={setTo} options={POTS.filter(p => p.id !== from).map(p => ({ value: p.id, label: `${p.name}` }))} />
               {!parent && <Text style={[s.muted, { fontSize: 13 }]}>Umbuchen geht nur mit Eltern-OK. Deine Anfrage landet bei Mama oder Papa.</Text>}
             </>
           )}
@@ -229,10 +238,10 @@ function Account({ child, parent }: { child: Child; parent: boolean }) {
       {acc.tx.length === 0 && <Text style={s.muted}>Noch keine Buchungen.</Text>}
       {txs.map(t => (
         <View key={t.id} style={[s.row, { flexWrap: 'nowrap', borderBottomWidth: 1, borderBottomColor: C.line, paddingVertical: 6 }]}>
-          <Text style={{ fontSize: 18 }}>{KIND_ICON[t.kind]}</Text>
+          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Icon name={KIND_ICON[t.kind]} size={18} color={C.accent} /></View>
           <View style={{ flex: 1 }}>
             <Text style={[s.text, { fontSize: 14 }]}>{t.note}</Text>
-            <Text style={[s.muted, { fontSize: 12 }]}>{new Date(t.date + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} · {potName(txPot(t)).icon} {potName(txPot(t)).name}</Text>
+            <Text style={[s.muted, { fontSize: 12 }]}>{new Date(t.date + 'T12:00:00').toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })} · {potName(txPot(t)).name}</Text>
           </View>
           <Text style={{ fontWeight: '800', color: t.cents >= 0 ? C.ok : C.danger }}>{t.cents >= 0 ? '+' : ''}{euro(t.cents)}</Text>
           {parent && <Pressable accessibilityLabel="Buchung löschen" onPress={() => update(d => setAccount(d, child.id, a => ({ ...a, tx: a.tx.filter(x => x.id !== t.id) })))} style={{ paddingHorizontal: 6 }}><Text style={{ color: C.muted }}>✕</Text></Pressable>}

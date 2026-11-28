@@ -77,8 +77,8 @@ export function LearnToday({ childId, onGo, onSolve, onNewTopic }: { childId: st
         ))}
       </View>
       <View style={[s.row, { gap: 8 }]}>
-        <Button ghost title="+ Thema anlegen" onPress={onNewTopic} />
-        <Button ghost title="+ Klassenarbeit anlegen" onPress={() => onGo('klassenarbeit')} />
+        <Button ghost title="+ Thema" style={{ flex: 1 }} onPress={onNewTopic} />
+        <Button ghost title="+ Klassenarbeit" style={{ flex: 1 }} onPress={() => onGo('klassenarbeit')} />
       </View>
     </View>
   );

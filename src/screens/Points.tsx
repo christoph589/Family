@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { PersonHead } from '../ui/Avatar';
 import { Pots } from './Pots';
 import { IconPicker } from '../ui/IconPicker';
+import { Icon } from '../ui/Icon';
 import { C, s } from '../ui/theme';
 import { usePinEntry } from '../data/pin';
 
@@ -103,12 +104,12 @@ function RewardEditor() {
   const set = (id: string, f: (r: Reward) => Reward) => update(d => ({ ...d, rewards: d.rewards.map(r => (r.id === id ? f(r) : r)) }));
   if (!open) return (
     <Pressable onPress={() => setOpen(true)} style={[s.card, { flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
-      <Text style={{ fontSize: 22 }}>🎁</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={[s.text, { fontWeight: '800' }]}>Belohnungen und Preise ändern</Text>
-        <Text style={[s.muted, { fontSize: 13 }]}>{data.rewards.length} Belohnungen · Aufgabenpunkte unter ⚙️ › Aufgaben</Text>
+      <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Icon name="gift" size={22} color={C.accent} /></View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[s.text, { fontWeight: '800' }]}>Belohnungen ändern</Text>
+        <Text style={[s.muted, { fontSize: 13 }]}>{data.rewards.length} Belohnungen</Text>
       </View>
-      <Text style={{ color: C.muted, fontSize: 20 }}>›</Text>
+      <Icon name="chev" size={18} color={C.muted} />
     </Pressable>
   );
   return (
@@ -159,6 +160,8 @@ function Adjust({ childId }: { childId: string }) {
   const [why, setWhy] = useState('');
   const v = Number(n) || 0;
   const go = (sign: 1 | -1) => { update(d => addPoints(d, childId, sign * v, `${sign > 0 ? '➕' : '➖'} ${why.trim() || 'Von Hand'}`)); setN(''); setWhy(''); };
+  const [show, setShow] = useState(false);
+  if (!show) return <Button ghost title="Punkte von Hand geben oder abziehen" onPress={() => setShow(true)} />;
   return (
     <View style={{ gap: 8, backgroundColor: C.bg, borderRadius: 12, padding: 12 }}>
       <Text style={[s.text, { fontWeight: '800' }]}>Punkte von Hand</Text>

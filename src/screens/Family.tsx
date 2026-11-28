@@ -141,13 +141,13 @@ export function Family() {
           )}
         </View>
       ))}
-      <View style={s.row}>
-        <Button ghost title="+ Kind" onPress={() => { const id = uid(); setFocusId(id); update(d => {
+      <View style={[s.row, { flexWrap: 'nowrap', gap: 6 }]}>
+        <Button ghost style={{ flex: 1, paddingHorizontal: 6 }} title="+ Kind" onPress={() => { const id = uid(); setFocusId(id); update(d => {
           const starter = TEMPLATES.filter(t => ['Zähne putzen', 'Zimmer aufräumen'].includes(t.title)).map(t => ({ ...t, id: uid(), childId: id, active: true }));
           return { ...d, children: [...d.children, { id, name: '', color: freeColor(d, CHILD_COLORS) }], tasks: [...d.tasks, ...starter] };
         }); }} />
-        <Button ghost title="+ Elternteil" onPress={() => { const id = uid(); setFocusId(id); update(d => ({ ...d, parents: [...parentsOf(d), { id, name: '', color: freeColor(d, PARENT_COLORS) }] })); }} />
-        <Button ghost title="+ Oma, Opa, …" onPress={() => { const id = uid(); setFocusId(id); update(d => ({ ...d, parents: [...parentsOf(d), { id, name: '', admin: false, color: freeColor(d) }] })); }} />
+        <Button ghost style={{ flex: 1, paddingHorizontal: 6 }} title="+ Eltern" onPress={() => { const id = uid(); setFocusId(id); update(d => ({ ...d, parents: [...parentsOf(d), { id, name: '', color: freeColor(d, PARENT_COLORS) }] })); }} />
+        <Button ghost style={{ flex: 1, paddingHorizontal: 6 }} title="+ Oma/Opa" onPress={() => { const id = uid(); setFocusId(id); update(d => ({ ...d, parents: [...parentsOf(d), { id, name: '', admin: false, color: freeColor(d) }] })); }} />
       </View>
       <Text style={[s.muted, { fontSize: 13 }]}>Person antippen zum Bearbeiten. Termine und Aufgaben tragen die Farbe der Person.</Text>
     </View>
