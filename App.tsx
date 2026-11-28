@@ -17,6 +17,8 @@ import { Avatar } from './src/ui/Avatar';
 import { Icon, IconName } from './src/ui/Icon';
 import { CalendarLink } from './src/screens/CalendarLink';
 import { Devices } from './src/screens/Devices';
+import { PushSetup } from './src/ui/Push';
+import { Popup } from './src/ui/Popup';
 import { DeleteAccount } from './src/screens/DeleteAccount';
 import { LegalLinks } from './src/ui/LegalLinks';
 import { AiPrivacy, Family, Holiday, ParentPin } from './src/screens/Family';
@@ -138,6 +140,7 @@ function Root() {
   const [menu, setMenu] = useState(true); // Handy: erst Liste der Bereiche, dann ein Bereich
   const [askOut, setAskOut] = useState(false);
   const [profMenu, setProfMenu] = useState(false);
+  const [pushOpen, setPushOpen] = useState(false);
   // Vom Betreiber geschaltete Funktionen: beim Start und beim Zurückkommen in die App neu holen
   const flags = useFlags();
   const fidForFlags = cloud?.link.familyId;
@@ -318,6 +321,11 @@ function Root() {
                       <Text style={[s.text, { fontWeight: '700' }]}>Einstellungen</Text>
                     </Pressable>
                   )}
+                  {!admin && (
+                    <Pressable accessibilityRole="menuitem" onPress={() => { setProfMenu(false); setPushOpen(true); }} style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                      <Text style={[s.text, { fontWeight: '700' }]}>Erinnerungen</Text>
+                    </Pressable>
+                  )}
                   <Pressable accessibilityRole="menuitem" onPress={() => { setProfMenu(false); setProfile(null); setTab('heute'); }} style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
                     <Text style={[s.text, { fontWeight: '700' }]}>Person wechseln</Text>
                   </Pressable>
@@ -327,6 +335,7 @@ function Root() {
           </View>
         </View>
       </View>
+      {pushOpen && <Popup onClose={() => setPushOpen(false)}><PushSetup meId={profile.id} /><Button ghost title="Schließen" onPress={() => setPushOpen(false)} /></Popup>}
       <ScrollView ref={scroller} contentContainerStyle={[s.pad, { paddingTop: 6, paddingBottom: 120 }]}>
         {saveError && <Text style={{ color: C.danger, fontWeight: '700' }}>{saveError}</Text>}
         {tab === 'heute' && <Today childIds={childIds} parent={parent} meId={profile.id} admin={admin} />}
@@ -382,6 +391,7 @@ function Root() {
         {tab === 'aufgaben' && admin && showSec && section === 'ferien' && <Holiday />}
         {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && isOn('sync', flags) && <IcloudSetup />}
         {tab === 'aufgaben' && admin && showSec && section === 'kalender' && cloud && <CalendarLink link={cloud.link} />}
+        {tab === 'aufgaben' && admin && showSec && section === 'geraete' && cloud && <PushSetup meId={profile.id} />}
         {tab === 'aufgaben' && admin && showSec && section === 'geraete' && cloud && <Devices link={cloud.link} onSignOut={cloud.unlink} />}
         {tab === 'aufgaben' && admin && cloud && (
           <View style={{ marginTop: 18, alignItems: 'center', gap: 8 }}>
