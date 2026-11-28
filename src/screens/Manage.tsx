@@ -54,8 +54,8 @@ export function Manage({ onReset }: { onReset?: () => void }) {
                 const on = has(t);
                 return (
                   <Pressable key={i} disabled={on} onPress={() => addTemplate(t)}
-                    style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99, borderWidth: 1, borderColor: on ? C.line : C.accent, backgroundColor: on ? C.surface2 : C.surface, opacity: on ? 0.6 : 1 }}>
-                    <Text style={{ color: C.fg, fontWeight: '600' }}>{t.icon} {t.title}{t.time ? ` (${t.time === 'mittags' ? 'nach der Schule' : t.time})` : ''} · {t.points} P</Text>
+                    style={{ maxWidth: '100%', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: on ? C.line : C.accent, backgroundColor: on ? C.surface2 : C.surface, opacity: on ? 0.6 : 1 }}>
+                    <Text numberOfLines={1} style={{ color: C.fg, fontWeight: '600', flexShrink: 1 }}>{t.icon} {t.title}{t.time ? ` (${t.time === 'mittags' ? 'nach der Schule' : t.time})` : ''} · {t.points} P</Text>
                   </Pressable>
                 );
               })}
