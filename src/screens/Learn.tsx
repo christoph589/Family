@@ -75,7 +75,8 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
   }
 
   const narrow = width < 560;
-  const vocabDue = childIds.reduce((n, id) => n + dueCount(data, id), 0);
+  // Eltern: offene Einsprüche (nur das können sie erledigen); Kind: fällige Vokabeln
+  const vocabDue = parent ? (data.vocabClaims ?? []).filter(c => allIds.includes(c.childId)).length : childIds.reduce((n, id) => n + dueCount(data, id), 0);
   // Zahl am Reiter „Heute“: Kind = was wartet, Eltern = was zu prüfen ist
   const sheetsOf = (data.worksheets ?? []).filter(w => allIds.includes(w.childId));
   const todayN = parent ? sheetsOf.filter(w => w.status === 'abgegeben').length
@@ -91,8 +92,7 @@ export function Learn({ childIds, parent, meId, admin }: { childIds: string[]; p
             <Pressable key={v} onPress={() => setPart(v)} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: on }}
               style={{ flex: icon ? 0 : 1, paddingHorizontal: icon ? 12 : 0, minWidth: icon ? 48 : 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 9, borderRadius: 11, backgroundColor: on ? C.surface : 'transparent', ...(on ? SHADOW.sm : {}) }}>
               <Text style={{ fontWeight: '800', fontSize: narrow ? 13 : 14, color: on ? C.fg : C.muted }} numberOfLines={1}>{icon ? <Icon name="chart" size={20} color={on ? C.fg : C.muted} /> : label}</Text>
-              {n > 0 && v === 'vokabeln' && narrow && <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: C.accent2 }} />}
-              {n > 0 && !(v === 'vokabeln' && narrow) && <View style={{ minWidth: 18, paddingHorizontal: 4, height: 18, borderRadius: 9, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
+              {n > 0 && <View style={{ position: 'absolute', top: -2, right: narrow ? -3 : 2, minWidth: 16, paddingHorizontal: 4, height: 16, borderRadius: 8, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{n > 99 ? '99+' : n}</Text></View>}
             </Pressable>
           );
         })}

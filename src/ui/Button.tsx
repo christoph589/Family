@@ -8,13 +8,16 @@ export function Button({ title, onPress, ghost, color, disabled, style, accessib
     </Pressable>
   );
 }
-export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string; n?: number }[]; onChange: (v: T) => void }) {
   return (
     <View style={[s.row, { backgroundColor: C.surface2, padding: 4, borderRadius: 12, gap: 4, flexShrink: 1, maxWidth: '100%' }]}>
       {options.map(o => (
         <Pressable key={o.value} onPress={() => onChange(o.value)} accessibilityRole="tab" accessibilityState={{ selected: value === o.value }}
           style={{ paddingHorizontal: 11, paddingVertical: 8, borderRadius: 9, backgroundColor: value === o.value ? C.accent : 'transparent' }}>
-          <Text style={{ fontWeight: '700', fontSize: 14, color: value === o.value ? '#fff' : C.fg }}>{o.label}</Text>
+          <View style={[s.row, { gap: 6, alignItems: 'center' }]}>
+            <Text style={{ fontWeight: '700', fontSize: 14, color: value === o.value ? '#fff' : C.fg }}>{o.label}</Text>
+            {!!o.n && o.n > 0 && <View style={{ minWidth: 18, paddingHorizontal: 4, height: 18, borderRadius: 9, backgroundColor: C.accent2, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>{o.n > 99 ? '99+' : o.n}</Text></View>}
+          </View>
         </Pressable>
       ))}
     </View>
